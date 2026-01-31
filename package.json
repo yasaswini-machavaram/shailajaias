@@ -1,24 +1,16 @@
 {
   "name": "shailaja-ias",
   "private": true,
+  "packageManager": "pnpm@9.0.0",
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types"
+    "dev:all": "turbo run dev --no-daemon",
+    "build:all": "turbo run build",
+    "lint:all": "turbo run lint",
+    "check-types:all": "turbo run check-types",
+    "preinstall": "npx only-allow pnpm"
   },
   "devDependencies": {
-    "prettier": "^3.7.4",
-    "turbo": "^2.7.4",
-    "typescript": "5.9.2"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "packageManager": "npm@10.9.2",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ]
+    "tsx": "^4.21.0",
+    "turbo": "^2.7.4"
+  }
 }
