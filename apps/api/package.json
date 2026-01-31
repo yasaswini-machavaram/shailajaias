@@ -9,9 +9,10 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
+    "@repo/types": "workspace:*",
     "cors": "^2.8.5",
-    "@repo/types": "workspace:*"
+    "dotenv": "^17.2.3",
+    "express": "^4.19.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
