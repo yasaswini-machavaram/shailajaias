@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "scripts": {
-    "dev:all": "turbo run dev --no-daemon",
+    "dev:all": "turbo run dev --filter=api --filter=client --no-daemon",
     "build:all": "turbo run build",
     "lint:all": "turbo run lint",
     "check-types:all": "turbo run check-types",

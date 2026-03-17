@@ -9,20 +9,32 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@repo/types": "workspace:*",
+    "@tiptap/extension-highlight": "^3.19.0",
+    "@tiptap/extension-image": "^3.19.0",
+    "@tiptap/extension-link": "^3.19.0",
+    "@tiptap/extension-placeholder": "^3.19.0",
+    "@tiptap/extension-subscript": "^3.19.0",
+    "@tiptap/extension-superscript": "^3.19.0",
+    "@tiptap/extension-text-align": "^3.19.0",
+    "@tiptap/extension-underline": "^3.19.0",
+    "@tiptap/pm": "^3.19.0",
+    "@tiptap/react": "^3.19.0",
+    "@tiptap/starter-kit": "^3.19.0",
     "next": "14.1.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "@repo/types": "workspace:*"
+    "react-pdf": "^7.7.3"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "autoprefixer": "^10",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.1.0",
-    "tailwindcss": "^3.4.1",
     "postcss": "^8",
-    "autoprefixer": "^10",
+    "tailwindcss": "^3.4.1",
     "typescript": "^5"
   }
 }
