@@ -81,5 +81,8 @@ const QuizSchema = new Schema<IQuiz>(
     }
 );
 
+// Add text index for search
+QuizSchema.index({ title: 'text', tags: 'text' });
+
 export const Quiz = mongoose.model<IQuiz>('Quiz', QuizSchema);
 export default Quiz;

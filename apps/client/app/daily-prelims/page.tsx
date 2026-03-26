@@ -1,35 +1,60 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import DatePicker from '@/components/DatePicker';
 import TagChips from '@/components/TagChips';
 import RichTextRenderer from '@/components/RichTextRenderer';
-import { getArticlesByDate, formatDate, type Article } from '@/lib/api';
+import { getArticlesByDate, getAdjacentDates, formatDate, type Article } from '@/lib/api';
+import { useRef } from 'react';
 
-export default function DailyPrelimsPage() {
-    const [selectedDate, setSelectedDate] = useState(new Date());
+function DailyPrelimsInner() {
+    const searchParams = useSearchParams();
+    const [selectedDate, setSelectedDate] = useState(() => {
+        const paramDate = searchParams.get('date');
+        if (paramDate) return paramDate;
+        return new Date().toISOString().split('T')[0];
+    });
     const [articles, setArticles] = useState<Article[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
+    const [adjacentDates, setAdjacentDates] = useState<{ previous: string | null; next: string | null }>({ previous: null, next: null });
+    const pendingIndex = useRef<number | null>(null);
 
+    // Update URL when date changes
     useEffect(() => {
-        fetchArticles();
+        const url = new URL(window.location.href);
+        url.searchParams.set('date', selectedDate);
+        window.history.replaceState(null, '', url.toString());
     }, [selectedDate]);
 
-    const fetchArticles = async () => {
-        setIsLoading(true);
-        try {
-            const data = await getArticlesByDate('daily_prelims', formatDate(selectedDate));
-            setArticles(data);
-            setCurrentIndex(0);
-        } catch (error) {
-            console.error('Failed to fetch articles:', error);
-            setArticles([]);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    useEffect(() => {
+        const fetchAll = async () => {
+            setIsLoading(true);
+            try {
+                const [articlesData, datesData] = await Promise.all([
+                    getArticlesByDate('daily_prelims', selectedDate),
+                    getAdjacentDates('daily_prelims', selectedDate)
+                ]);
+                setArticles(articlesData);
+                setAdjacentDates(datesData);
+
+                if (pendingIndex.current !== null) {
+                    setCurrentIndex(pendingIndex.current === -1 ? articlesData.length - 1 : pendingIndex.current);
+                    pendingIndex.current = null;
+                } else {
+                    setCurrentIndex(0);
+                }
+            } catch (error) {
+                console.error('Failed to fetch data:', error);
+                setArticles([]);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchAll();
+    }, [selectedDate]);
 
     const currentArticle = articles[currentIndex];
 
@@ -37,12 +62,20 @@ export default function DailyPrelimsPage() {
         if (currentIndex > 0) {
             setCurrentIndex(currentIndex - 1);
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (adjacentDates.previous) {
+            pendingIndex.current = -1; // Last article of previous day
+            setSelectedDate(adjacentDates.previous.split('T')[0]);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
 
     const goToNext = () => {
         if (currentIndex < articles.length - 1) {
             setCurrentIndex(currentIndex + 1);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (adjacentDates.next) {
+            pendingIndex.current = 0; // First article of next day
+            setSelectedDate(adjacentDates.next.split('T')[0]);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
@@ -56,7 +89,10 @@ export default function DailyPrelimsPage() {
                         Current Affairs → <span className="ca-breadcrumb-active">Daily Prelims</span>
                     </p>
                     <div className="ca-header-row">
-                        <DatePicker selectedDate={selectedDate} onDateChange={setSelectedDate} />
+                        <DatePicker 
+                            selectedDate={new Date(selectedDate)} 
+                            onDateChange={(date) => setSelectedDate(date.toISOString().split('T')[0])} 
+                        />
                         {articles.length > 0 && (
                             <span className="ca-counter">
                                 {currentIndex + 1} / {articles.length}
@@ -116,7 +152,7 @@ export default function DailyPrelimsPage() {
 
                         {/* CTA Buttons */}
                         <div className="ca-cta-section">
-                            <Link href="/daily-quiz" className="ca-cta-card">
+                            <Link href={`/daily-quiz?date=${selectedDate}`} className="ca-cta-card">
                                 <div className="ca-cta-icon ca-cta-icon--quiz">📝</div>
                                 <div className="ca-cta-content">
                                     <h3 className="ca-cta-title">Practice MCQs from today&apos;s CA</h3>
@@ -125,7 +161,7 @@ export default function DailyPrelimsPage() {
                                 <span className="ca-cta-arrow">›</span>
                             </Link>
 
-                            <Link href="/daily-mains" className="ca-cta-card">
+                            <Link href={`/daily-mains?date=${selectedDate}`} className="ca-cta-card">
                                 <div className="ca-cta-icon ca-cta-icon--mains">✏️</div>
                                 <div className="ca-cta-content">
                                     <h3 className="ca-cta-title">Read Mains Analysis</h3>
@@ -139,14 +175,14 @@ export default function DailyPrelimsPage() {
                         <div className="ca-nav">
                             <button
                                 onClick={goToPrev}
-                                disabled={currentIndex === 0}
+                                disabled={!adjacentDates.previous && currentIndex === 0}
                                 className="ca-nav-btn ca-nav-btn--prev"
                             >
                                 ‹ Previous Article
                             </button>
                             <button
                                 onClick={goToNext}
-                                disabled={currentIndex === articles.length - 1}
+                                disabled={!adjacentDates.next && currentIndex === articles.length - 1}
                                 className="ca-nav-btn ca-nav-btn--next"
                             >
                                 Next Article ›
@@ -156,5 +192,13 @@ export default function DailyPrelimsPage() {
                 ) : null}
             </main>
         </div>
+    );
+}
+
+export default function DailyPrelimsPage() {
+    return (
+        <Suspense fallback={<div className="ca-loading"><div className="ca-spinner" /></div>}>
+            <DailyPrelimsInner />
+        </Suspense>
     );
 }

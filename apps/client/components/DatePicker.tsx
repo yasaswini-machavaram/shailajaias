@@ -68,7 +68,7 @@ export default function DatePicker({ selectedDate, onDateChange }: DatePickerPro
             {/* Date Display */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:border-amber-500 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:border-[#D97706] transition-colors"
             >
                 <span className="font-medium">{formatDate(selectedDate)}</span>
                 <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -97,7 +97,7 @@ export default function DatePicker({ selectedDate, onDateChange }: DatePickerPro
                         value={selectedDate.toISOString().split('T')[0]}
                         max={new Date().toISOString().split('T')[0]}
                         onChange={handleInputChange}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#D97706] focus:border-transparent"
                     />
                 </div>
             )}

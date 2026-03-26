@@ -7,6 +7,8 @@ import {
     deleteArticle,
     getArticlesByDate,
     getArticlesByType,
+    getDistinctTags,
+    getAdjacentDates,
 } from '../controllers/article.controller.js';
 import { protect, adminOnly } from '../middlewares/auth.middleware.js';
 
@@ -17,15 +19,22 @@ const router: ReturnType<typeof Router> = Router();
 // @access  Public
 router.get('/', getArticles);
 
-// @route   GET /api/articles/by-date
-// @desc    Get articles by date range
-// @access  Public
 router.get('/by-date', getArticlesByDate);
+ 
+// @route   GET /api/articles/adjacent-dates
+// @desc    Get adjacent dates with articles
+// @access  Public
+router.get('/adjacent-dates', getAdjacentDates);
 
 // @route   GET /api/articles/by-type/:type
 // @desc    Get articles by type
 // @access  Public
 router.get('/by-type/:type', getArticlesByType);
+
+// @route   GET /api/articles/tags
+// @desc    Get distinct tags (optionally filtered by ?type=)
+// @access  Public
+router.get('/tags', getDistinctTags);
 
 // @route   GET /api/articles/:id
 // @desc    Get single article

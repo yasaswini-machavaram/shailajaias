@@ -61,5 +61,5 @@ const BurningIssueSchema = new Schema<IBurningIssue>(
 
 BurningIssueSchema.index({ date: -1 });
 
-export const BurningIssue = mongoose.model<IBurningIssue>('Magazine', BurningIssueSchema);
+export const BurningIssue = mongoose.model<IBurningIssue>('BurningIssue', BurningIssueSchema);
 export default BurningIssue;

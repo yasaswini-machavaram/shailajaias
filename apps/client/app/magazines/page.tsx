@@ -34,6 +34,7 @@ export default function MagazinesPage() {
     const [activeTab, setActiveTab] = useState<MagazineCategory>('prelims_monthly');
     const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([new Date().getFullYear()]));
     const [shareToast, setShareToast] = useState(false);
+    const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
     useEffect(() => {
         fetchMagazines();
@@ -96,6 +97,28 @@ export default function MagazinesPage() {
         }
     };
 
+    const handleDownload = async (mag: Magazine) => {
+        setDownloadingId(mag._id);
+        try {
+            const response = await fetch(getFullUrl(mag.pdfUrl));
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            // Sanitize title: remove characters not safe for filenames
+            const safeName = mag.title.replace(/[/\\:*?"<>|]/g, '_').trim();
+            link.download = `${safeName}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(objectUrl);
+        } catch (error) {
+            console.error('Download failed:', error);
+        } finally {
+            setDownloadingId(null);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 pb-24">
             {/* Header */}
@@ -116,8 +139,8 @@ export default function MagazinesPage() {
                                 key={cat.value}
                                 onClick={() => setActiveTab(cat.value)}
                                 className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${activeTab === cat.value
-                                    ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-                                    : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-blue-300 hover:text-blue-600'
+                                    ? 'bg-[#1E3A5F] text-white shadow-md'
+                                    : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-[#1E3A5F] hover:text-[#1E3A5F]'
                                     }`}
                             >
                                 {cat.label}
@@ -131,8 +154,9 @@ export default function MagazinesPage() {
             <div className="max-w-5xl mx-auto px-4 py-6">
                 {isLoading ? (
                     <div className="flex items-center justify-center py-16">
-                        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
+                        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#1E3A5F]"></div>
                     </div>
+
                 ) : magazines.length === 0 ? (
                     <div className="text-center py-16 text-gray-500">
                         <p className="text-5xl mb-4">📚</p>
@@ -149,7 +173,7 @@ export default function MagazinesPage() {
                                     className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors"
                                 >
                                     <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                        <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-sm">
+                                        <span className="w-8 h-8 rounded-lg bg-[#F5F5F5] text-[#1E3A5F] flex items-center justify-center text-sm">
                                             {year}
                                         </span>
                                         Year {year}
@@ -191,25 +215,30 @@ export default function MagazinesPage() {
                                                     <div className="flex items-center gap-3">
                                                         <a
                                                             href={`/magazines/reader?url=${encodeURIComponent(mag.pdfUrl)}&title=${encodeURIComponent(mag.title)}`}
-                                                            className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-xs font-semibold transition-colors"
+                                                            className="flex items-center gap-1.5 text-[#1E3A5F] hover:text-[#D97706] text-xs font-semibold transition-colors"
                                                         >
                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                                                             </svg>
                                                             Read
                                                         </a>
-                                                        <a
-                                                            href={getFullUrl(mag.pdfUrl)}
-                                                            download={`${mag.title}.pdf`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="flex items-center gap-1.5 text-gray-600 hover:text-gray-800 text-xs font-semibold transition-colors"
+                                                        <button
+                                                            onClick={() => handleDownload(mag)}
+                                                            disabled={downloadingId === mag._id}
+                                                            className="flex items-center gap-1.5 text-gray-600 hover:text-gray-800 text-xs font-semibold transition-colors disabled:opacity-50"
                                                         >
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                            </svg>
-                                                            Download
-                                                        </a>
+                                                            {downloadingId === mag._id ? (
+                                                                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                                                </svg>
+                                                            ) : (
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                                </svg>
+                                                            )}
+                                                            {downloadingId === mag._id ? 'Downloading...' : 'Download'}
+                                                        </button>
                                                         <button
                                                             onClick={() => handleShare(mag)}
                                                             className="flex items-center gap-1.5 text-gray-600 hover:text-gray-800 text-xs font-semibold transition-colors ml-auto"

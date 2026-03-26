@@ -3,7 +3,7 @@
  * Centralized client for fetching data from the Admin Portal API
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 // Types
 export interface Article {
@@ -91,9 +91,28 @@ export async function getArticlesByDate(
     date: string
 ): Promise<Article[]> {
     const { data } = await fetchApi<Article[]>(
-        `/api/articles?type=${type}&date=${date}`
+        `/api/articles/by-date?type=${type}&date=${date}`
     );
     return data || [];
+}
+
+export async function getAdjacentDates(
+    type: 'daily_prelims' | 'mains' | 'burning_issue',
+    date: string
+): Promise<{ previous: string | null; next: string | null }> {
+    const { data } = await fetchApi<{ previous: string | null; next: string | null }>(
+        `/api/articles/adjacent-dates?type=${type}&date=${date}`
+    );
+    return data || { previous: null, next: null };
+}
+
+export async function getAdjacentQuizDates(
+    date: string
+): Promise<{ previous: string | null; next: string | null }> {
+    const { data } = await fetchApi<{ previous: string | null; next: string | null }>(
+        `/api/quizzes/adjacent-dates?date=${date}`
+    );
+    return data || { previous: null, next: null };
 }
 
 export async function getArticleById(id: string): Promise<Article | null> {
@@ -125,8 +144,10 @@ export async function getQuizById(id: string): Promise<Quiz | null> {
 }
 
 // Burning Issue (image carousel) APIs
-export async function getBurningIssuesList(): Promise<BurningIssue[]> {
-    const { data } = await fetchApi<BurningIssue[]>('/api/burning-issues?limit=50');
+export async function getBurningIssuesList(date?: string): Promise<BurningIssue[]> {
+    let url = '/api/burning-issues?limit=50';
+    if (date) url += `&date=${date}`;
+    const { data } = await fetchApi<BurningIssue[]>(url);
     return data || [];
 }
 

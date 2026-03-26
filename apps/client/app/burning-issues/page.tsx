@@ -1,23 +1,100 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getBurningIssues, type Article } from '@/lib/api';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { getBurningIssues, getArticlesByDate, getBurningIssuesList, type Article, type BurningIssue, API_URL } from '@/lib/api';
 
-export default function BurningIssuesPage() {
-    const [issues, setIssues] = useState<Article[]>([]);
+interface StoryItem {
+    _id: string;
+    displayTitle: string;
+    displayImage?: string;
+    isGallery: boolean;
+    date: string;
+    content?: string;
+    images?: { url: string; order: number }[];
+    originalTopic?: string; // Added for gallery items
+}
+
+function BurningIssuesInner() {
+    const searchParams = useSearchParams();
+    const date = searchParams.get('date');
+    const id = searchParams.get('id');
+    const [issues, setIssues] = useState<StoryItem[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [isFullScreen, setIsFullScreen] = useState(false);
 
     useEffect(() => {
-        fetchIssues();
-    }, []);
+        const dateParam = searchParams.get('date');
+        fetchIssues(dateParam);
+    }, [searchParams]);
 
-    const fetchIssues = async () => {
+    const fetchIssues = async (date?: string | null) => {
         setIsLoading(true);
         try {
-            const data = await getBurningIssues(10);
-            setIssues(data);
+            let articleData: Article[] = [];
+            let galleryData: BurningIssue[] = [];
+
+            if (date) {
+                [articleData, galleryData] = await Promise.all([
+                    getArticlesByDate('burning_issue', date),
+                    getBurningIssuesList(date)
+                ]);
+            } else {
+                [articleData, galleryData] = await Promise.all([
+                    getBurningIssues(10),
+                    getBurningIssuesList()
+                ]);
+            }
+
+            // Flatten and combine
+            const combined: StoryItem[] = [];
+            
+            // Add Articles
+            articleData.forEach(a => {
+                if (id && a._id !== id) return;
+                combined.push({
+                    _id: a._id,
+                    displayTitle: a.title,
+                    displayImage: a.imageUrl,
+                    isGallery: false,
+                    date: a.date,
+                    content: a.content
+                });
+            });
+
+            // Add Gallery Stories (Flattened)
+            galleryData.forEach(g => {
+                if (id && g._id !== id) return;
+                const galleryImages = g.images || [];
+                if (galleryImages.length === 0) {
+                    combined.push({
+                        _id: g._id,
+                        displayTitle: g.topic,
+                        isGallery: true,
+                        date: g.date
+                    });
+                } else {
+                    galleryImages.forEach((img, idx) => {
+                        combined.push({
+                            _id: `${g._id}-${idx}`,
+                            displayTitle: g.topic,
+                            displayImage: img.url,
+                            isGallery: true,
+                            date: g.date,
+                            // Store the original topic as a heading for gallery slides
+                        });
+                    });
+                }
+            });
+
+            combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+            setIssues(combined);
+            if (date && combined.length > 0) {
+                setIsFullScreen(true);
+                setCurrentIndex(0);
+            }
         } catch (error) {
             console.error('Failed to fetch burning issues:', error);
             setIssues([]);
@@ -91,18 +168,20 @@ export default function BurningIssuesPage() {
                                 className={`relative aspect-[3/4] rounded-2xl overflow-hidden bg-gradient-to-br ${gradients[index % gradients.length]
                                     } group`}
                             >
-                                {issue.imageUrl && (
+                                {issue.displayImage && (
                                     <img
-                                        src={issue.imageUrl}
-                                        alt={issue.title}
+                                        src={issue.displayImage.startsWith('http') ? issue.displayImage : `${API_URL}${issue.displayImage}`}
+                                        alt={issue.displayTitle}
                                         className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity"
                                     />
                                 )}
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
                                 <div className="absolute bottom-0 left-0 right-0 p-4">
-                                    <p className="text-xs text-amber-300 font-medium mb-1">🔥 INSIGHTS</p>
+                                    <p className="text-xs text-amber-300 font-medium mb-1">
+                                        {issue.isGallery ? '🔥 GALLERY' : '📰 INSIGHTS'}
+                                    </p>
                                     <h3 className="text-white font-bold text-sm leading-tight line-clamp-3">
-                                        {issue.title}
+                                        {issue.displayTitle}
                                     </h3>
                                     <p className="text-gray-300 text-xs mt-2 flex items-center gap-1">
                                         ← Swipe Left
@@ -117,41 +196,87 @@ export default function BurningIssuesPage() {
             {/* Full Screen Story Viewer */}
             {isFullScreen && issues[currentIndex] && (
                 <div className="fixed inset-0 bg-black z-50 flex flex-col">
-                    {/* Progress Bar */}
-                    <div className="flex gap-1 p-2">
+                    {/* Header with Back Button */}
+                    <div className="absolute top-0 left-0 right-0 z-30 p-4 flex items-center justify-between text-white">
+                        <button
+                            onClick={closeStory}
+                            className="flex items-center gap-2 font-bold hover:text-amber-400 transition-colors"
+                        >
+                            <span className="text-2xl">‹</span>
+                            <span className="text-sm uppercase tracking-widest">Burning Issues</span>
+                        </button>
+                        <button
+                            onClick={closeStory}
+                            className="w-10 h-10 flex items-center justify-center text-white text-2xl"
+                        >
+                            ×
+                        </button>
+                    </div>
+
+                    {/* Progress Bar (Subtle) */}
+                    <div className="absolute top-14 left-0 right-0 z-30 px-4 flex gap-1.5 p-2">
                         {issues.map((_, idx) => (
                             <div
                                 key={idx}
-                                className={`h-1 flex-1 rounded-full ${idx <= currentIndex ? 'bg-white' : 'bg-white/30'
+                                className={`h-[3px] flex-1 rounded-full transition-all duration-300 ${idx === currentIndex ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,1)]' :
+                                        idx < currentIndex ? 'bg-white' : 'bg-white/30'
                                     }`}
                             />
                         ))}
                     </div>
 
-                    {/* Close Button */}
-                    <button
-                        onClick={closeStory}
-                        className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center text-white text-2xl z-10"
-                    >
-                        ×
-                    </button>
+                    {/* Background Strategy (Non-stretching) */}
+                    <div className="absolute inset-0 z-0 bg-gray-950 overflow-hidden">
+                        {issues[currentIndex].displayImage && (
+                            <>
+                                {/* Blurred Background Layer */}
+                                <img
+                                    src={issues[currentIndex].displayImage!.startsWith('http')
+                                        ? issues[currentIndex].displayImage!
+                                        : `${API_URL}${issues[currentIndex].displayImage}`}
+                                    className="w-full h-full object-cover blur-3xl opacity-30 scale-125 select-none"
+                                />
+                                {/* Aspect-ratio preserving foreground image */}
+                                <img
+                                    src={issues[currentIndex].displayImage!.startsWith('http')
+                                        ? issues[currentIndex].displayImage!
+                                        : `${API_URL}${issues[currentIndex].displayImage}`}
+                                    className="absolute inset-0 w-full h-full object-contain z-10 transition-all duration-500 ease-out select-none"
+                                />
+                            </>
+                        )}
+                        {/* Immersive Gradient Overlay - Focused at bottom for text */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-transparent to-transparent z-20" />
+                    </div>
 
-                    {/* Story Content */}
-                    <div
-                        className={`flex-1 flex items-center justify-center bg-gradient-to-br ${gradients[currentIndex % gradients.length]
-                            } p-8`}
-                    >
-                        <div className="max-w-lg text-center text-white">
-                            <p className="text-amber-300 font-medium mb-4">🔥 INSIGHTS</p>
-                            <h2 className="text-2xl md:text-3xl font-bold mb-6 leading-tight">
-                                {issues[currentIndex].title}
+                    {/* Story Content (Left Aligned, Bottom) */}
+                    <div className="flex-1 flex flex-col justify-end p-8 pb-16 relative z-10 text-left text-white pointer-events-none">
+                        <div className="max-w-xl w-full">
+                            <div className="mb-4">
+                                <span className="px-3 py-1 bg-amber-500 text-black text-[10px] font-black uppercase tracking-wider rounded-md shadow-lg">
+                                    {issues[currentIndex].isGallery ? 'Gallery Story' : 'Deep Insight'}
+                                </span>
+                            </div>
+                            
+                            <h2 className="text-3xl md:text-5xl font-black mb-6 leading-[1.1] tracking-tight font-headline drop-shadow-2xl">
+                                {issues[currentIndex].displayTitle}
                             </h2>
-                            <div
-                                className="text-lg text-white/90 leading-relaxed line-clamp-6"
-                                dangerouslySetInnerHTML={{
-                                    __html: issues[currentIndex].content.substring(0, 300) + '...'
-                                }}
-                            />
+                            
+                            {!issues[currentIndex].isGallery && (
+                                <div
+                                    className="text-lg md:text-xl text-white/90 leading-relaxed font-body drop-shadow-lg"
+                                    dangerouslySetInnerHTML={{
+                                        __html: (issues[currentIndex].content || '').substring(0, 500) + ((issues[currentIndex].content?.length || 0) > 500 ? '...' : '')
+                                    }}
+                                />
+                            )}
+                            
+                            <div className="mt-10 flex items-center gap-6">
+                                <div className="flex items-center gap-2 text-xs font-bold text-amber-500/80 uppercase tracking-widest">
+                                    <span className="w-8 h-[2px] bg-amber-500/50" />
+                                    {issues[currentIndex].isGallery ? 'Swipe for more photos' : 'Swipe for next story'}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -167,5 +292,13 @@ export default function BurningIssuesPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function BurningIssuesPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-gray-900 flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-500" /></div>}>
+            <BurningIssuesInner />
+        </Suspense>
     );
 }

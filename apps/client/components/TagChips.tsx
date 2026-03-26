@@ -22,7 +22,7 @@ export default function TagChips({ tags, onTagClick, linkToSearch = true }: TagC
         <div className="flex flex-wrap gap-2">
             {tags.map((tag) => {
                 const content = (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors cursor-pointer">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] hover:bg-[#FDE68A] transition-colors cursor-pointer">
                         #{tag}
                     </span>
                 );

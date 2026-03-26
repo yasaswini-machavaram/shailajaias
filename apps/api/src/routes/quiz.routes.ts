@@ -6,6 +6,7 @@ import {
     updateQuiz,
     deleteQuiz,
     importQuizFromExcel,
+    getAdjacentQuizDates,
 } from '../controllers/quiz.controller.js';
 import { protect, adminOnly } from '../middlewares/auth.middleware.js';
 import multer from 'multer';
@@ -32,6 +33,11 @@ const router: ReturnType<typeof Router> = Router();
 // @desc    Get all quizzes with filters
 // @access  Public
 router.get('/', getQuizzes);
+
+// @route   GET /api/quizzes/adjacent-dates
+// @desc    Get adjacent dates with quizzes
+// @access  Public
+router.get('/adjacent-dates', getAdjacentQuizDates);
 
 // @route   GET /api/quizzes/:id
 // @desc    Get single quiz with questions

@@ -7,7 +7,8 @@
     "build:all": "turbo run build",
     "lint:all": "turbo run lint",
     "check-types:all": "turbo run check-types",
-    "preinstall": "npx only-allow pnpm"
+    "preinstall": "npx only-allow pnpm",
+    "nuke": "kill -9 $(lsof -t -i:3000 -i:3001 -i:4000) || true && pnpm run dev:all"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

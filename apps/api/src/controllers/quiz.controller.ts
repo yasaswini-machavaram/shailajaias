@@ -7,7 +7,7 @@ import { parseQuizExcel } from '../services/excel.service.js';
 // @access  Public
 export const getQuizzes = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { tags, page = 1, limit = 10, date, includeQuestions } = req.query;
+        const { tags, page = 1, limit = 10, date, includeQuestions, search, year, month } = req.query;
 
         const query: Record<string, unknown> = {};
 
@@ -15,11 +15,28 @@ export const getQuizzes = async (req: Request, res: Response): Promise<void> => 
             query.tags = { $in: (tags as string).split(',') };
         }
 
+        if (search) {
+            query.$text = { $search: search as string };
+        }
+
         if (date) {
             const targetDate = new Date(date as string);
             const nextDate = new Date(targetDate);
             nextDate.setDate(nextDate.getDate() + 1);
             query.date = { $gte: targetDate, $lt: nextDate };
+        } else if (year || month) {
+            // Year / month date range filter
+            const y = year ? Number(year) : new Date().getFullYear();
+            if (month) {
+                const m = Number(month); // 1-based
+                const start = new Date(y, m - 1, 1);
+                const end = new Date(y, m, 1);
+                query.date = { $gte: start, $lt: end };
+            } else {
+                const start = new Date(y, 0, 1);
+                const end = new Date(y + 1, 0, 1);
+                query.date = { $gte: start, $lt: end };
+            }
         }
 
         const total = await Quiz.countDocuments(query);
@@ -189,6 +206,44 @@ export const deleteQuiz = async (req: Request, res: Response): Promise<void> => 
         res.json({ success: true, message: 'Quiz deleted' });
     } catch (error) {
         console.error('Delete quiz error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @desc    Get adjacent dates with quizzes
+// @route   GET /api/quizzes/adjacent-dates
+// @access  Public
+export const getAdjacentQuizDates = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { date } = req.query;
+        if (!date) {
+            res.status(400).json({ success: false, message: 'Date is required' });
+            return;
+        }
+
+        const targetDate = new Date(date as string);
+        const nextDay = new Date(targetDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+
+        // Find previous date (less than targetDate)
+        const prevQuiz = await Quiz.findOne({
+            date: { $lt: targetDate }
+        }).sort({ date: -1 });
+
+        // Find next date (greater than or equal to nextDay)
+        const nextQuiz = await Quiz.findOne({
+            date: { $gte: nextDay }
+        }).sort({ date: 1 });
+
+        res.json({
+            success: true,
+            data: {
+                previous: prevQuiz ? prevQuiz.date : null,
+                next: nextQuiz ? nextQuiz.date : null
+            }
+        });
+    } catch (error) {
+        console.error('Get adjacent quiz dates error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };

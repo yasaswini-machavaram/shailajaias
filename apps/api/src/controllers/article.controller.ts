@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { Article } from '../models/index.js';
+import { Article, Quiz } from '../models/index.js';
 import type { ArticleType } from '../models/index.js';
 
 // @desc    Get all articles with filters
@@ -7,7 +7,7 @@ import type { ArticleType } from '../models/index.js';
 // @access  Public
 export const getArticles = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { type, tags, page = 1, limit = 10, search } = req.query;
+        const { type, tags, page = 1, limit = 10, search, year, month } = req.query;
 
         const query: Record<string, unknown> = {};
 
@@ -21,6 +21,21 @@ export const getArticles = async (req: Request, res: Response): Promise<void> =>
 
         if (search) {
             query.$text = { $search: search as string };
+        }
+
+        // Year / month date range filter
+        if (year || month) {
+            const y = year ? Number(year) : new Date().getFullYear();
+            if (month) {
+                const m = Number(month); // 1-based
+                const start = new Date(y, m - 1, 1);
+                const end = new Date(y, m, 1);
+                query.date = { $gte: start, $lt: end };
+            } else {
+                const start = new Date(y, 0, 1);
+                const end = new Date(y + 1, 0, 1);
+                query.date = { $gte: start, $lt: end };
+            }
         }
 
         const total = await Article.countDocuments(query);
@@ -200,6 +215,30 @@ export const updateArticle = async (req: Request, res: Response): Promise<void> 
     }
 };
 
+// @desc    Get distinct tags (optionally filtered by type)
+// @route   GET /api/articles/tags
+// @access  Public
+export const getDistinctTags = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { type } = req.query;
+        let tags: any[] = [];
+
+        if (type === 'quiz') {
+            tags = await Quiz.distinct('tags');
+        } else {
+            const filter: Record<string, unknown> = {};
+            if (type) filter.type = type;
+            tags = await Article.distinct('tags', filter);
+        }
+
+        const sorted = (tags as string[]).filter(Boolean).sort();
+        res.json({ success: true, data: sorted });
+    } catch (error) {
+        console.error('Get distinct tags error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 // @desc    Delete article
 // @route   DELETE /api/articles/:id
 // @access  Private/Admin
@@ -216,6 +255,46 @@ export const deleteArticle = async (req: Request, res: Response): Promise<void> 
         res.json({ success: true, message: 'Article deleted' });
     } catch (error) {
         console.error('Delete article error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @desc    Get adjacent dates with articles
+// @route   GET /api/articles/adjacent-dates
+// @access  Public
+export const getAdjacentDates = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { date, type } = req.query;
+        if (!date || !type) {
+            res.status(400).json({ success: false, message: 'Date and type are required' });
+            return;
+        }
+
+        const targetDate = new Date(date as string);
+        const nextDay = new Date(targetDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+
+        // Find previous date (less than targetDate)
+        const prevArticle = await Article.findOne({
+            type: type as string,
+            date: { $lt: targetDate }
+        }).sort({ date: -1 });
+
+        // Find next date (greater than or equal to nextDay)
+        const nextArticle = await Article.findOne({
+            type: type as string,
+            date: { $gte: nextDay }
+        }).sort({ date: 1 });
+
+        res.json({
+            success: true,
+            data: {
+                previous: prevArticle ? prevArticle.date : null,
+                next: nextArticle ? nextArticle.date : null
+            }
+        });
+    } catch (error) {
+        console.error('Get adjacent dates error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };

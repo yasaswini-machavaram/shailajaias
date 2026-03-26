@@ -13,10 +13,19 @@ const UPLOADS_DIR = path.resolve(__dirname, '../../uploads');
 // @access  Public
 export const getBurningIssues = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { page = 1, limit = 20 } = req.query;
+        const { page = 1, limit = 20, date } = req.query;
+        const query: any = {};
 
-        const total = await BurningIssue.countDocuments();
-        const burningIssues = await BurningIssue.find()
+        if (date) {
+            const start = new Date(date as string);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(date as string);
+            end.setHours(23, 59, 59, 999);
+            query.date = { $gte: start, $lte: end };
+        }
+
+        const total = await BurningIssue.countDocuments(query);
+        const burningIssues = await BurningIssue.find(query)
             .sort({ date: -1, createdAt: -1 })
             .skip((Number(page) - 1) * Number(limit))
             .limit(Number(limit));

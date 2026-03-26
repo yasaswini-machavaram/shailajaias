@@ -22,8 +22,8 @@ export default function QuizOption({
     const getStyles = () => {
         if (!isAnswered) {
             return isSelected
-                ? 'border-amber-500 bg-amber-50'
-                : 'border-gray-200 bg-white hover:border-amber-300 hover:bg-amber-50';
+                ? 'border-[#D97706] bg-[#FFFBEB]'
+                : 'border-gray-200 bg-white hover:border-[#F59E0B] hover:bg-[#FFFBEB]';
         }
 
         if (isCorrect) {

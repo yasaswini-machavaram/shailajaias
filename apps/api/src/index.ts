@@ -12,6 +12,7 @@ import {
   quizRoutes,
   courseRoutes,
   uploadRoutes,
+  searchRoutes,
 } from "./routes/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -64,6 +65,7 @@ app.use('/api/magazines', magazineRoutes);
 app.use('/api/quizzes', quizRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/search', searchRoutes);
 
 // 404 handler
 app.use((_req, res) => {

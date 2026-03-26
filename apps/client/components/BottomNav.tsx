@@ -29,10 +29,11 @@ export default function BottomNav() {
                             key={item.href}
                             href={item.href}
                             className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${isActive
-                                    ? 'text-amber-600'
-                                    : 'text-gray-500 hover:text-gray-900'
+                                    ? 'text-[#D97706]'
+                                    : 'text-gray-500 hover:text-[#1E3A5F]'
                                 }`}
                         >
+
                             <span className="text-xl mb-0.5">{item.icon}</span>
                             <span className="text-xs font-medium">{item.label}</span>
                         </Link>

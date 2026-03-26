@@ -1,0 +1,14 @@
+# Project Style Guide: Shailaja IAS
+
+Whenever completing UI/UX tasks, you MUST prioritize the definitions in `apps/client/app/style.json`. This file contains the approved design system for Shailaja IAS.
+
+## Core Directives
+
+1. **Colors**: Use only the colors defined in `style.json` (Primary, Secondary, Semantic).
+2. **Typography**: Use the font families and sizes specified in the `typography` section.
+3. **Spacing**: Apply spacing tokens (xs through 4xl) for all margins and paddings.
+4. **Components**: Follow the component-specific styles (Buttons, Cards, Inputs, Tags).
+5. **Responsiveness**: Adhere to the defined layout breakpoints.
+
+## Reference Path
+ALWAYS check `@apps/client/app/style.json` before implementing new UI features or modifying existing styles.

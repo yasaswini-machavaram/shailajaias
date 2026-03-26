@@ -1,98 +1,105 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
-
-interface BurningIssue {
-    id: string;
-    title: string;
-    imageUrl: string;
-    date: string;
-}
+import { type BurningIssue, API_URL } from '@/lib/api';
 
 interface BurningIssuesGalleryProps {
     issues: BurningIssue[];
 }
 
-// Sample data for demonstration
-const sampleIssues: BurningIssue[] = [
-    {
-        id: '1',
-        title: "How India's New Labour Codes Will Reshape Work, Wages, and Workers' Rights",
-        imageUrl: '/images/burning/labour-codes.jpg',
-        date: '2026-01-30',
-    },
-    {
-        id: '2',
-        title: 'The Condition of Education 2026',
-        imageUrl: '/images/burning/education.jpg',
-        date: '2026-01-28',
-    },
-    {
-        id: '3',
-        title: 'Higher Education in India: Challenges and Opportunities',
-        imageUrl: '/images/burning/higher-education.jpg',
-        date: '2026-01-25',
-    },
-    {
-        id: '4',
-        title: 'The Future of Higher Education in India',
-        imageUrl: '/images/burning/future-education.jpg',
-        date: '2026-01-22',
-    },
-];
+export default function BurningIssuesGallery({ issues }: BurningIssuesGalleryProps) {
+    // If no issues, we create placeholders to match the grid requirements
+    const displayIssues = issues && issues.length > 0
+        ? issues.slice(0, 18)
+        : [];
 
-export default function BurningIssuesGallery({ issues = sampleIssues }: BurningIssuesGalleryProps) {
+    if (displayIssues.length === 0) {
+        return (
+            <div className="py-10 text-center text-gray-400 bg-white rounded-3xl border border-gray-50 italic text-sm">
+                No burning issues found.
+            </div>
+        );
+    }
+
     return (
-        <div className="w-full">
-            <div
-                className="flex gap-4 overflow-x-auto pb-4 hide-scrollbar scroll-snap-x"
-                style={{ scrollPaddingLeft: '1rem' }}
-            >
-                {issues.map((issue, index) => (
+        <div className="flex flex-wrap justify-center gap-3 md:gap-4">
+            {displayIssues.map((issue, index) => {
+                // Logic for Desktop (4 then 5 pattern)
+                const isDesktopFour = (index % 9) < 4;
+
+                // Logic for Mobile (2 then 3 pattern)
+                const isMobileTwo = (index % 5) < 2;
+
+                // Use first image or a gradient
+                const hasImage = issue.images && issue.images.length > 0;
+                const imageUrl = hasImage ? issue.images[0].url : null;
+
+                return (
                     <Link
-                        key={issue.id}
-                        href={`/burning-issues/${issue.id}`}
-                        className="flex-shrink-0 scroll-snap-start animate-fade-in-up"
-                        style={{ animationDelay: `${index * 100}ms` }}
+                        key={issue._id}
+                        href={`/burning-issues?id=${issue._id}&date=${issue.date.split('T')[0]}`}
+                        className={`
+                            relative aspect-[3/4.2] rounded-2xl overflow-hidden group shadow-sm border border-gray-100
+                            flex-shrink-0 transition-transform duration-300 hover:-translate-y-1.5 hover:shadow-xl
+                            
+                            /* Mobile: 2 items vs 3 items */
+                            ${isMobileTwo
+                                ? 'w-[calc(50%-0.5rem)]'
+                                : 'w-[calc(33.33%-0.6rem)]'
+                            }
+
+                            /* Desktop: 4 items (25%) vs 5 items (20%) */
+                            ${isDesktopFour
+                                ? 'md:w-[calc(25%-0.8rem)]'
+                                : 'md:w-[calc(20%-0.85rem)]'
+                            }
+                        `}
                     >
-                        <div className="relative w-44 h-60 rounded-2xl overflow-hidden group card-hover">
-                            {/* Placeholder gradient background */}
-                            <div className="absolute inset-0 bg-gradient-to-br from-[var(--primary)] via-amber-500 to-orange-600" />
+                        {/* Background Image or Gradient */}
+                        {imageUrl ? (
+                            <img
+                                src={imageUrl.startsWith('http') ? imageUrl : `${API_URL}${imageUrl}`}
+                                alt={issue.topic}
+                                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                            />
+                        ) : (
+                            <div className={`absolute inset-0 bg-gradient-to-br ${index % 3 === 0 ? 'from-slate-900 to-slate-800' :
+                                    index % 3 === 1 ? 'from-indigo-950 to-indigo-900' :
+                                        'from-gray-900 to-gray-800'
+                                }`}
+                            />
+                        )}
 
-                            {/* Overlay gradient for text readability */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                        {/* Overlay to darken image */}
+                        <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors" />
 
-                            {/* Swipe indicator */}
-                            {index === 0 && (
-                                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-full">
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        strokeWidth={2}
-                                        stroke="white"
-                                        className="w-3.5 h-3.5"
-                                    >
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
-                                    </svg>
-                                    <span className="text-white text-xs font-medium">SWIPE LEFT</span>
-                                </div>
-                            )}
-
-                            {/* Content */}
-                            <div className="absolute bottom-0 left-0 right-0 p-4">
-                                <h3 className="text-white text-sm font-semibold leading-tight line-clamp-3 group-hover:text-amber-200 transition-colors">
-                                    {issue.title}
-                                </h3>
+                        {/* Card Content Overlay */}
+                        <div className="absolute inset-0 p-3 md:p-4 flex flex-col justify-between z-10">
+                            <div className="space-y-1.5">
+                                <div className="h-[2.5px] w-8 bg-[#D97706] rounded-full shadow-[0_0_8px_rgba(217,119,6,0.8)]" />
+                                <p className="text-[9px] md:text-[10px] font-bold text-[#D97706] uppercase tracking-[0.12em] drop-shadow-md">Must Read</p>
                             </div>
 
-                            {/* Hover effect */}
-                            <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <div className="space-y-3">
+                                <h3 className="text-white text-[11px] md:text-[14px] font-bold leading-[1.2] line-clamp-4 uppercase tracking-tight drop-shadow-lg font-headline">
+                                    {issue.topic}
+                                </h3>
+
+                                <div className="pt-2.5 border-t border-white/20 flex items-center justify-between">
+                                    <p className="text-[8px] md:text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] group-hover:text-[#FEF3C7] transition-colors drop-shadow-md">
+                                        Swipe Left
+                                    </p>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#D97706] shadow-[0_0_10px_rgba(217,119,6,1)] animate-pulse" />
+                                </div>
+                            </div>
                         </div>
+
+
+                        {/* Interactive Border */}
+                        <div className="absolute inset-0 ring-1 ring-inset ring-white/10 group-hover:ring-white/30 transition-all rounded-2xl" />
                     </Link>
-                ))}
-            </div>
+                );
+            })}
         </div>
     );
 }
