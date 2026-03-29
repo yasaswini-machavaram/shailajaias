@@ -10,6 +10,7 @@ interface Question {
     options: string[];
     correctIndex: number;
     explanation: string;
+    subject?: string;
 }
 
 interface Quiz {
@@ -133,6 +134,11 @@ function DailyQuizInner() {
     const currentQuestion = currentQuiz?.questions[currentQuestionIndex];
     const totalQuestionsInQuiz = currentQuiz?.questions.length || 0;
 
+    const totalQuestionsForDay = quizzes.reduce((sum, quiz) => sum + quiz.questions.length, 0);
+    const overallQuestionIndex = 
+        quizzes.slice(0, currentIndex).reduce((sum, quiz) => sum + quiz.questions.length, 0) + 
+        currentQuestionIndex + 1;
+
     return (
         <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans">
             {/* Breadcrumbs & Header Space */}
@@ -169,9 +175,9 @@ function DailyQuizInner() {
                     </div>
 
                     {/* Progress Indicator */}
-                    {!isLoading && quizzes.length > 0 && (
+                    {!isLoading && quizzes.length > 0 && totalQuestionsForDay > 0 && (
                         <div className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm text-sm font-bold text-gray-700">
-                            {currentIndex + 1}/{quizzes.length}
+                            {overallQuestionIndex}/{totalQuestionsForDay}
                         </div>
                     )}
                 </div>
@@ -184,11 +190,16 @@ function DailyQuizInner() {
                                 {currentQuiz.setName}
                             </span>
                         )}
-                        {currentQuiz.tags.map((tag: string) => (
+                        {currentQuiz.tags?.map((tag: string) => (
                             <span key={tag} className="px-5 py-2 bg-[#1E3A5F] text-white text-xs font-bold rounded-full lowercase">
                                 {tag}
                             </span>
                         ))}
+                        {currentQuestion?.subject && (
+                            <span className="px-5 py-2 bg-amber-500 text-white text-xs font-bold rounded-full lowercase">
+                                {currentQuestion.subject}
+                            </span>
+                        )}
                     </div>
                 )}
             </div>
@@ -272,13 +283,13 @@ function DailyQuizInner() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
                                 </svg>
-                                Previous quiz
+                                Previous
                             </button>
                             <button
                                 onClick={goToNext}
                                 className="flex-1 max-w-[200px] flex items-center justify-center gap-2 px-6 py-4 bg-[#1E3A5F] rounded-xl text-white font-bold text-sm shadow-lg shadow-blue-900/10 hover:bg-[#2A4E7D] transition-all active:scale-[0.98]"
                             >
-                                Next quiz
+                                Next
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
                                 </svg>

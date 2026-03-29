@@ -6,16 +6,12 @@ import { useAuth } from '../../AuthContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-const tagOptions = [
-    'Polity', 'Economy', 'History', 'Geography', 'Science', 'Environment',
-    'Current Affairs', 'Ethics', 'International Relations', 'Society',
-];
-
 interface QuestionForm {
     question: string;
     options: string[];
     correctIndex: number;
     explanation: string;
+    subject?: string;
 }
 
 const emptyQuestion: QuestionForm = {
@@ -23,6 +19,7 @@ const emptyQuestion: QuestionForm = {
     options: ['', '', '', ''],
     correctIndex: 0,
     explanation: '',
+    subject: '',
 };
 
 export default function NewQuizPage() {
@@ -32,7 +29,6 @@ export default function NewQuizPage() {
     const [title, setTitle] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [setName, setSetName] = useState('');
-    const [tags, setTags] = useState<string[]>([]);
     const [questions, setQuestions] = useState<QuestionForm[]>([{ ...emptyQuestion }]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
@@ -62,10 +58,6 @@ export default function NewQuizPage() {
     const removeQuestion = (index: number) => {
         if (questions.length <= 1) return;
         setQuestions((prev) => prev.filter((_, i) => i !== index));
-    };
-
-    const toggleTag = (tag: string) => {
-        setTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -103,7 +95,7 @@ export default function NewQuizPage() {
                     date,
                     setName: setName || undefined,
                     questions,
-                    tags,
+                    tags: [], // Tags no longer supported at the quiz level
                 }),
             });
 
@@ -167,26 +159,6 @@ export default function NewQuizPage() {
                             placeholder="e.g., Set A"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
-                    </div>
-                </div>
-
-                {/* Tags */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-3">Tags</label>
-                    <div className="flex flex-wrap gap-2">
-                        {tagOptions.map((tag) => (
-                            <button
-                                key={tag}
-                                type="button"
-                                onClick={() => toggleTag(tag)}
-                                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${tags.includes(tag)
-                                        ? 'bg-amber-500 text-white'
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                    }`}
-                            >
-                                {tag}
-                            </button>
-                        ))}
                     </div>
                 </div>
 
@@ -267,8 +239,17 @@ export default function NewQuizPage() {
                             <textarea
                                 value={q.explanation}
                                 onChange={(e) => updateQuestion(qIdx, 'explanation', e.target.value)}
-                                placeholder="Enter explanation..."
+                                placeholder="Enter explanation text..."
                                 rows={2}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent mb-4"
+                            />
+                            
+                            {/* Subject */}
+                            <input
+                                type="text"
+                                value={q.subject || ''}
+                                onChange={(e) => updateQuestion(qIdx, 'subject', e.target.value)}
+                                placeholder="Enter subject name (e.g., Polity)"
                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                             />
                         </div>

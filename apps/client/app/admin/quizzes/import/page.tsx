@@ -6,11 +6,6 @@ import { useAuth } from '../../AuthContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-const tagOptions = [
-    'Polity', 'Economy', 'History', 'Geography', 'Science', 'Environment',
-    'Current Affairs', 'Ethics', 'International Relations', 'Society',
-];
-
 export default function ImportQuizPage() {
     const { token } = useAuth();
     const router = useRouter();
@@ -18,7 +13,6 @@ export default function ImportQuizPage() {
     const [title, setTitle] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [setName, setSetName] = useState('');
-    const [tags, setTags] = useState<string[]>([]);
     const [excelFile, setExcelFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [result, setResult] = useState<{ success: boolean; message: string; count?: number } | null>(null);
@@ -41,7 +35,6 @@ export default function ImportQuizPage() {
             formData.append('file', excelFile);
             formData.append('title', title);
             formData.append('date', date);
-            formData.append('tags', tags.join(','));
             if (setName) formData.append('setName', setName);
 
             const response = await fetch(`${API_URL}/api/quizzes/import-excel`, {
@@ -69,10 +62,6 @@ export default function ImportQuizPage() {
         }
     };
 
-    const toggleTag = (tag: string) => {
-        setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
-    };
-
     return (
         <div className="p-8 max-w-2xl">
             <div className="mb-8">
@@ -95,6 +84,7 @@ export default function ImportQuizPage() {
                                 <th className="pb-2">E</th>
                                 <th className="pb-2">F</th>
                                 <th className="pb-2">G</th>
+                                <th className="pb-2">H</th>
                             </tr>
                         </thead>
                         <tbody className="text-gray-700">
@@ -106,6 +96,7 @@ export default function ImportQuizPage() {
                                 <td>Option D</td>
                                 <td>Answer</td>
                                 <td>Explanation</td>
+                                <td>Subject</td>
                             </tr>
                         </tbody>
                     </table>
@@ -165,28 +156,6 @@ export default function ImportQuizPage() {
                             placeholder="e.g., Set A"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
-                    </div>
-                </div>
-
-                {/* Tags */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                        Tags
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                        {tagOptions.map((tag) => (
-                            <button
-                                key={tag}
-                                type="button"
-                                onClick={() => toggleTag(tag)}
-                                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${tags.includes(tag)
-                                    ? 'bg-amber-500 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                    }`}
-                            >
-                                {tag}
-                            </button>
-                        ))}
                     </div>
                 </div>
 

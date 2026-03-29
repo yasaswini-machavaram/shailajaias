@@ -5,6 +5,7 @@ export interface IQuestion {
     options: string[];
     correctIndex: number;
     explanation: string;
+    subject?: string;
 }
 
 export interface IQuiz extends Document {
@@ -37,6 +38,10 @@ const QuestionSchema = new Schema<IQuestion>(
         explanation: {
             type: String,
             required: [true, 'Explanation is required'],
+        },
+        subject: {
+            type: String,
+            trim: true,
         },
     },
     { _id: false }

@@ -33,7 +33,7 @@ export const parseQuizExcel = (buffer: Buffer): ParsedQuizData => {
                 continue;
             }
 
-            const [question, optionA, optionB, optionC, optionD, correctAnswer, explanation] = row;
+            const [question, optionA, optionB, optionC, optionD, correctAnswer, explanation, subject] = row as any[];
 
             if (!question?.trim()) {
                 continue; // Skip empty rows
@@ -58,6 +58,7 @@ export const parseQuizExcel = (buffer: Buffer): ParsedQuizData => {
                 ],
                 correctIndex,
                 explanation: explanation?.toString().trim() || '',
+                subject: subject?.toString().trim(),
             });
         }
 
