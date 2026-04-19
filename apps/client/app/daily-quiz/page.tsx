@@ -141,13 +141,8 @@ function DailyQuizInner() {
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans">
-            {/* Breadcrumbs & Header Space */}
-            <div className="max-w-4xl mx-auto w-full px-4 pt-6 pb-2">
-                <nav className="flex items-center text-xs font-medium mb-4">
-                    <span className="text-gray-400">Current Affairs</span>
-                    <span className="mx-2 text-gray-400 font-bold">›</span>
-                    <span className="text-[#1E3A5F] font-bold">Daily quiz</span>
-                </nav>
+            {/* Header Controls */}
+            <div className="max-w-4xl mx-auto w-full px-4 pt-2 pb-2">
 
                 <div className="flex items-center justify-between gap-4 mb-4">
                     {/* Date Picker Button-style */}
@@ -212,8 +207,32 @@ function DailyQuizInner() {
                     </div>
                 ) : quizzes.length === 0 ? (
                     <div className="text-center py-20">
-                        <p className="text-4xl mb-4">Empty</p>
-                        <p className="text-sm text-gray-500">No quizzes for this date.</p>
+                        <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-gray-100 flex items-center justify-center">
+                            <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                        </div>
+                        <p className="text-[#1E3A5F] font-bold text-lg mb-1">No quizzes for this date</p>
+                        <p className="text-sm text-gray-500 mb-6">
+                            {formatDateStr(date)}
+                        </p>
+                        {adjacentDates.previous && (
+                            <button
+                                onClick={() => {
+                                    pendingIndex.current = { qz: 0, qu: 0 };
+                                    setDate(adjacentDates.previous!.split('T')[0]);
+                                }}
+                                className="inline-flex items-center gap-2 px-6 py-3.5 bg-[#1E3A5F] text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-900/10 hover:bg-[#2A4E7D] transition-all active:scale-[0.98]"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+                                </svg>
+                                Go to latest quiz
+                                <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-md text-xs">
+                                    {new Date(adjacentDates.previous).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                </span>
+                            </button>
+                        )}
                     </div>
                 ) : currentQuiz && currentQuestion ? (
                     <div className="flex flex-col gap-8">

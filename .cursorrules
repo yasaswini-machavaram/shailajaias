@@ -1,3 +1,13 @@
+# AI Engineering Rules: Shailaja IAS
+
+## ⚡ MANDATORY SESSION START
+At the start of EVERY new conversation on this project, you MUST:
+1. Read `AI_DIARY.md` at the project root FIRST — this is your memory
+2. Follow `.agent/workflows/session_start.md` for the full protocol
+At the END of every session with meaningful code changes, UPDATE `AI_DIARY.md` changelog.
+
+---
+
 # Project Style Guide: Shailaja IAS
 
 Whenever completing UI/UX tasks, you MUST prioritize the definitions in `apps/client/app/style.json`. This file contains the approved design system for Shailaja IAS.

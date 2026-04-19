@@ -101,20 +101,13 @@ function DailyMainsInner() {
 
     return (
         <div className="min-h-screen bg-[#FAFAF8] pb-20">
-            {/* Header */}
-            <header className="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-200 z-40">
-                <div className="max-w-4xl mx-auto px-4 py-4">
-                    <div className="flex items-center justify-between mb-3">
-                        <h1 className="text-xl font-bold text-[#1E3A5F]">
-                            Current Affairs &gt; <span className="text-[#D97706]">Daily Mains</span>
-                        </h1>
-                    </div>
-                    <DatePicker 
-                        selectedDate={new Date(selectedDate)} 
-                        onDateChange={(date) => setSelectedDate(date.toISOString().split('T')[0])} 
-                    />
-                </div>
-            </header>
+            {/* DatePicker */}
+            <div className="max-w-4xl mx-auto px-4 pt-2 pb-2">
+                <DatePicker 
+                    selectedDate={new Date(selectedDate)} 
+                    onDateChange={(date) => setSelectedDate(date.toISOString().split('T')[0])} 
+                />
+            </div>
 
             {/* Content */}
             <main className="max-w-4xl mx-auto px-4 py-6">

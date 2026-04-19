@@ -44,25 +44,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] pb-24 font-body">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100 h-16 flex items-center px-4 md:px-8">
-        <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
-          <div className="w-8 md:hidden" />
-          <h1 className="text-[17px] md:text-[20px] font-bold text-[#1E3A5F] tracking-[0.05em] uppercase font-headline">
-            Current Affairs
-          </h1>
-          <button
-            onClick={() => router.push('/search')}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-white hover:shadow-sm border border-transparent hover:border-gray-100 transition-all group"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} className="w-5 h-5 stroke-gray-500 group-hover:stroke-[#D97706] transition-colors">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-            </svg>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
+      {/* Main Content — pt-16 accounts for global fixed Header */}
       <main className="pt-20 px-4 md:px-8 max-w-7xl mx-auto space-y-10">
 
         {/* Daily Updates Section */}
@@ -188,35 +170,9 @@ export default function Home() {
               );
             })}
           </div>
-
         </section>
 
       </main>
-
-
-      {/* Bottom Navigation for Mobile */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-gray-100 flex items-center justify-around h-[80px] px-2 md:hidden z-50">
-        {[
-          { icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', label: 'Home', href: '/' },
-          { icon: 'm21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z', label: 'Search', href: '/search' },
-          { icon: 'M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z', label: 'Quiz', href: '/daily-quiz' },
-          { icon: 'M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25', label: 'Books', href: '/magazines' },
-          { icon: 'M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z', label: 'User', href: '/profile' }
-        ].map((item, idx) => (
-          <button
-            key={idx}
-            onClick={() => router.push(item.href)}
-            className={`flex flex-col items-center gap-1.5 flex-1 transition-all group ${item.href === '/' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            <div className={`p-2 rounded-2xl transition-all duration-300 ${item.href === '/' ? 'bg-blue-50 shadow-sm' : 'group-hover:bg-slate-50'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={item.href === '/' ? 2.5 : 2} stroke="currentColor" className="w-5.5 h-5.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-              </svg>
-            </div>
-            <span className="text-[10px] font-black tracking-[0.05em] uppercase">{item.label}</span>
-          </button>
-        ))}
-      </nav>
     </div>
   );
 }

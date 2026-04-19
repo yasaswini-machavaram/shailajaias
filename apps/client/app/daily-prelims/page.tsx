@@ -81,26 +81,21 @@ function DailyPrelimsInner() {
     };
 
     return (
-        <div className="ca-page">
-            {/* Breadcrumb Header */}
-            <header className="ca-header">
-                <div className="ca-header-inner">
-                    <p className="ca-breadcrumb">
-                        Current Affairs → <span className="ca-breadcrumb-active">Daily Prelims</span>
-                    </p>
-                    <div className="ca-header-row">
-                        <DatePicker 
-                            selectedDate={new Date(selectedDate)} 
-                            onDateChange={(date) => setSelectedDate(date.toISOString().split('T')[0])} 
-                        />
-                        {articles.length > 0 && (
-                            <span className="ca-counter">
-                                {currentIndex + 1} / {articles.length}
-                            </span>
-                        )}
-                    </div>
+        <div className="ca-page pt-2">
+            {/* DatePicker & Counter */}
+            <div className="ca-header-inner">
+                <div className="ca-header-row">
+                    <DatePicker 
+                        selectedDate={new Date(selectedDate)} 
+                        onDateChange={(date) => setSelectedDate(date.toISOString().split('T')[0])} 
+                    />
+                    {articles.length > 0 && (
+                        <span className="ca-counter">
+                            {currentIndex + 1} / {articles.length}
+                        </span>
+                    )}
                 </div>
-            </header>
+            </div>
 
             {/* Content */}
             <main className="ca-main">

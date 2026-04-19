@@ -121,17 +121,9 @@ export default function MagazinesPage() {
 
     return (
         <div className="min-h-screen bg-gray-50 pb-24">
-            {/* Header */}
-            <div className="bg-white border-b border-gray-200 sticky top-0 z-20">
-                <div className="max-w-5xl mx-auto px-4 py-4">
-                    <h1 className="text-lg font-bold text-gray-900">
-                        Current Affairs &gt; Magazines
-                    </h1>
-                </div>
-            </div>
 
             {/* Category Tabs */}
-            <div className="bg-white border-b border-gray-200 sticky top-[57px] z-20">
+            <div className="bg-white border-b border-gray-200 sticky top-16 z-20">
                 <div className="max-w-5xl mx-auto px-4 py-3">
                     <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
                         {CATEGORIES.map((cat) => (

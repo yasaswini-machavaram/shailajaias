@@ -27,21 +27,20 @@ const TYPE_TABS: { label: string; value: FilterType }[] = [
     { label: 'Prelims', value: 'daily_prelims' },
     { label: 'Mains', value: 'mains' },
     { label: 'Burning Issues', value: 'burning_issue' },
-    { label: 'Test Series', value: 'quiz' },
 ];
 
-const TYPE_COLORS: Record<ArticleType, string> = {
+const TYPE_COLORS: Record<string, string> = {
     daily_prelims: 'bg-blue-100 text-blue-700',
     mains: 'bg-green-100 text-green-700',
     burning_issue: 'bg-orange-100 text-orange-700',
-    quiz: 'bg-purple-100 text-purple-700',
+    burning_issue_gallery: 'bg-orange-100 text-orange-700',
 };
 
-const TYPE_LABELS: Record<ArticleType, string> = {
+const TYPE_LABELS: Record<string, string> = {
     daily_prelims: 'Prelims',
     mains: 'Mains',
     burning_issue: 'Burning Issues',
-    quiz: 'Test Series',
+    burning_issue_gallery: 'Burning Issues',
 };
 
 function formatDisplayDate(dateStr: string) {
@@ -119,22 +118,16 @@ export default function SearchPage() {
             router.push(`/daily-prelims?date=${dateStr}`);
         } else if (article.type === 'mains') {
             router.push(`/daily-mains?date=${dateStr}`);
-        } else if (article.type === 'burning_issue') {
+        } else if (article.type === 'burning_issue' || (article as any).type === 'burning_issue_gallery') {
             router.push(`/burning-issues?id=${article._id}&date=${dateStr}`);
-        } else if (article.type === 'quiz') {
-            router.push(`/daily-quiz?date=${dateStr}`);
         }
     };
 
     return (
         <div className="min-h-screen bg-gray-50 pb-24">
-            {/* Header */}
-            <div className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
+            {/* Search Bar */}
+            <div className="bg-white border-b border-gray-200 sticky top-16 z-20 shadow-sm">
                 <div className="max-w-3xl mx-auto px-4 py-4">
-                    <h1 className="text-base font-bold text-[#1E3A5F] mb-3 font-headline">
-                        Current Affairs <span className="text-gray-400">›</span>{' '}
-                        <span className="text-[#D97706]">Search</span>
-                    </h1>
                     {/* Search Input */}
                     <div className="relative">
                         <svg
@@ -255,7 +248,7 @@ export default function SearchPage() {
                                         </p>
                                         <div className="flex items-center gap-2 mt-1">
                                             <p className="text-xs text-gray-400">{formatDisplayDate(article.date)}</p>
-                                            {article.tags[0] && (
+                                            {article.tags?.[0] && (
                                                 <>
                                                     <span className="text-gray-300">·</span>
                                                     <span className="text-xs text-gray-500">{article.tags[0]}</span>

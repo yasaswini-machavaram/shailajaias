@@ -50,7 +50,7 @@ export default function AdminMagazinesPage() {
     const [magazines, setMagazines] = useState<Magazine[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<MagazineCategory>('prelims_monthly');
-    const [filterYear, setFilterYear] = useState<number>(currentYear);
+    const [filterYear, setFilterYear] = useState<number | ''>('');
 
     // Form state
     const [showForm, setShowForm] = useState(false);
@@ -64,15 +64,17 @@ export default function AdminMagazinesPage() {
     const [editId, setEditId] = useState<string | null>(null);
 
     useEffect(() => {
-        fetchMagazines();
+        if (token) fetchMagazines();
     }, [token, activeTab, filterYear]);
 
     const fetchMagazines = async () => {
         if (!token) return;
         setIsLoading(true);
         try {
+            // Only append year param when a specific year is selected
+            const yearParam = filterYear !== '' ? `&year=${filterYear}` : '';
             const response = await fetch(
-                `${API_URL}/api/magazines/admin?category=${activeTab}&year=${filterYear}`,
+                `${API_URL}/api/magazines/admin?category=${activeTab}${yearParam}&limit=100`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             const data = await response.json();
@@ -214,7 +216,16 @@ export default function AdminMagazinesPage() {
             {/* Year Filter */}
             <div className="flex items-center gap-3 mb-6">
                 <span className="text-sm font-medium text-gray-600">Year:</span>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                    <button
+                        onClick={() => setFilterYear('')}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterYear === ''
+                            ? 'bg-gray-900 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                    >
+                        All Years
+                    </button>
                     {YEARS.map((year) => (
                         <button
                             key={year}

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-type ArticleSection = 'daily_prelims' | 'mains' | 'burning_issue' | 'quiz';
+type ArticleSection = 'daily_prelims' | 'mains' | 'burning_issue';
 
 interface Article {
     _id: string;
@@ -26,7 +26,6 @@ const SECTION_LABELS: Record<ArticleSection, string> = {
     daily_prelims: 'Prelims',
     mains: 'Mains',
     burning_issue: 'Burning Issues',
-    quiz: 'Test Series',
 };
 
 function formatDisplayDate(dateStr: string) {
@@ -65,15 +64,36 @@ export default function TopicsPage() {
     const fetchArticles = useCallback(async () => {
         setIsLoading(true);
         try {
-            let url = `${API_URL}/api/search?type=${section}&limit=${LIMIT}&page=${page}`;
-            if (selectedTag !== 'All') url += `&q=${encodeURIComponent(selectedTag)}`;
-            if (year) url += `&year=${year}`;
-            if (month) url += `&month=${MONTHS.indexOf(month) + 1}`;
-            const res = await fetch(url);
-            const data = await res.json();
-            if (data.success) {
-                setArticles(data.data);
-                setTotalPages(data.pagination?.pages || 1);
+            if (section === 'burning_issue') {
+                // Burning issues are in a separate collection
+                let url = `${API_URL}/api/burning-issues?limit=${LIMIT}&page=${page}`;
+                if (year) url += `&year=${year}`;
+                if (month) url += `&month=${MONTHS.indexOf(month) + 1}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.success) {
+                    // Map BurningIssue shape to Article shape for consistent display
+                    const mapped = (data.data || []).map((bi: any) => ({
+                        _id: bi._id,
+                        title: bi.topic,
+                        date: bi.date,
+                        tags: [],
+                        type: 'burning_issue' as ArticleSection,
+                    }));
+                    setArticles(mapped);
+                    setTotalPages(data.pagination?.pages || 1);
+                }
+            } else {
+                let url = `${API_URL}/api/search?type=${section}&limit=${LIMIT}&page=${page}`;
+                if (selectedTag !== 'All') url += `&q=${encodeURIComponent(selectedTag)}`;
+                if (year) url += `&year=${year}`;
+                if (month) url += `&month=${MONTHS.indexOf(month) + 1}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.success) {
+                    setArticles(data.data);
+                    setTotalPages(data.pagination?.pages || 1);
+                }
             }
         } catch {
             setArticles([]);
@@ -114,20 +134,11 @@ export default function TopicsPage() {
 
     return (
         <div className="min-h-screen bg-gray-50 pb-24">
-            {/* Header */}
-            <div className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
-                <div className="max-w-3xl mx-auto px-4 py-4">
-                    <h1 className="text-base font-bold text-gray-900">
-                        Current Affairs <span className="text-gray-400">›</span>{' '}
-                        <span className="text-blue-600">Browse by Topic</span>
-                    </h1>
-                </div>
-            </div>
 
             <div className="max-w-3xl mx-auto px-4">
                 {/* Prelims / Mains Toggle */}
                 <div className="flex gap-1 mt-5 bg-gray-200 rounded-2xl p-1 w-fit mx-auto overflow-x-auto max-w-full">
-                    {(['daily_prelims', 'mains', 'burning_issue', 'quiz'] as ArticleSection[]).map((s) => (
+                    {(['daily_prelims', 'mains', 'burning_issue'] as ArticleSection[]).map((s) => (
                         <button
                             key={s}
                             onClick={() => handleSectionChange(s)}

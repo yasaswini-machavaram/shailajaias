@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import BottomNav from "@/components/BottomNav";
+import Header from "@/components/Header";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -43,7 +45,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${playfair.variable} antialiased`}>
-
+        <Header />
+        <Breadcrumbs />
         {children}
         <BottomNav />
       </body>

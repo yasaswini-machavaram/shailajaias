@@ -27,6 +27,9 @@ export default function NewBurningIssuePage() {
     const handleFilesSelected = (files: FileList | null) => {
         if (!files) return;
 
+        // Clear any previous file-selection errors before processing new files
+        setError('');
+
         const newImages: ImagePreview[] = [];
         const errors: string[] = [];
 

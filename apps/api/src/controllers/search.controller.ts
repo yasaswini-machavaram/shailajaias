@@ -43,6 +43,22 @@ export const searchAll = async (req: Request, res: Response): Promise<void> => {
                 .skip(skip)
                 .limit(Number(limit));
             results = results.map(r => ({ ...r.toObject(), type: 'quiz' }));
+        } else if (type === 'burning_issue') {
+            // Burning issues are in a separate collection
+            const biQuery: any = {};
+            if (q) biQuery.topic = { $regex: q as string, $options: 'i' };
+            if (articleQuery.date) biQuery.date = articleQuery.date;
+            total = await BurningIssue.countDocuments(biQuery);
+            results = await BurningIssue.find(biQuery)
+                .sort({ date: -1 })
+                .skip(skip)
+                .limit(Number(limit));
+            results = results.map(r => ({
+                ...r.toObject(),
+                type: 'burning_issue_gallery',
+                title: (r as any).topic,
+                imageUrl: (r as any).images?.[0]?.url,
+            }));
         } else if (type && type !== 'all') {
             articleQuery.type = type;
             total = await Article.countDocuments(articleQuery);
