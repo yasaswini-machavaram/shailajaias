@@ -8,35 +8,63 @@ export const searchAll = async (req: Request, res: Response): Promise<void> => {
     try {
         const { q, type, year, month, page = 1, limit = 10 } = req.query;
         const skip = (Number(page) - 1) * Number(limit);
+        const searchTerm = (q as string || '').trim();
 
-        const articleQuery: any = {};
-        const quizQuery: any = {};
-
-        if (q) {
-            articleQuery.$text = { $search: q as string };
-            quizQuery.$text = { $search: q as string };
-        }
-
+        // Build date filter if year/month provided (UTC to avoid timezone drift)
+        const dateFilter: Record<string, unknown> = {};
         if (year || month) {
             const y = year ? Number(year) : new Date().getFullYear();
             if (month) {
                 const m = Number(month);
-                const start = new Date(y, m - 1, 1);
-                const end = new Date(y, m, 1);
-                articleQuery.date = { $gte: start, $lt: end };
-                quizQuery.date = { $gte: start, $lt: end };
+                const start = new Date(Date.UTC(y, m - 1, 1));
+                const end = new Date(Date.UTC(y, m, 1));
+                dateFilter.date = { $gte: start, $lt: end };
             } else {
-                const start = new Date(y, 0, 1);
-                const end = new Date(y + 1, 0, 1);
-                articleQuery.date = { $gte: start, $lt: end };
-                quizQuery.date = { $gte: start, $lt: end };
+                const start = new Date(Date.UTC(y, 0, 1));
+                const end = new Date(Date.UTC(y + 1, 0, 1));
+                dateFilter.date = { $gte: start, $lt: end };
             }
         }
+
+        /**
+         * Build search filter — searches ONLY title and tags, not content.
+         * Uses regex for precise matching (especially for tag clicks).
+         */
+        const buildArticleQuery = () => {
+            const q: Record<string, unknown> = { ...dateFilter };
+            if (searchTerm) {
+                q.$or = [
+                    { title: { $regex: searchTerm, $options: 'i' } },
+                    { tags: { $regex: searchTerm, $options: 'i' } },
+                ];
+            }
+            return q;
+        };
+
+        const buildQuizQuery = () => {
+            const q: Record<string, unknown> = { ...dateFilter };
+            if (searchTerm) {
+                q.$or = [
+                    { title: { $regex: searchTerm, $options: 'i' } },
+                    { tags: { $regex: searchTerm, $options: 'i' } },
+                ];
+            }
+            return q;
+        };
+
+        const buildBurningIssueQuery = () => {
+            const q: Record<string, unknown> = { ...dateFilter };
+            if (searchTerm) {
+                q.topic = { $regex: searchTerm, $options: 'i' };
+            }
+            return q;
+        };
 
         let results: any[] = [];
         let total = 0;
 
         if (type === 'quiz') {
+            const quizQuery = buildQuizQuery();
             total = await Quiz.countDocuments(quizQuery);
             results = await Quiz.find(quizQuery)
                 .sort({ date: -1 })
@@ -44,10 +72,7 @@ export const searchAll = async (req: Request, res: Response): Promise<void> => {
                 .limit(Number(limit));
             results = results.map(r => ({ ...r.toObject(), type: 'quiz' }));
         } else if (type === 'burning_issue') {
-            // Burning issues are in a separate collection
-            const biQuery: any = {};
-            if (q) biQuery.topic = { $regex: q as string, $options: 'i' };
-            if (articleQuery.date) biQuery.date = articleQuery.date;
+            const biQuery = buildBurningIssueQuery();
             total = await BurningIssue.countDocuments(biQuery);
             results = await BurningIssue.find(biQuery)
                 .sort({ date: -1 })
@@ -60,41 +85,43 @@ export const searchAll = async (req: Request, res: Response): Promise<void> => {
                 imageUrl: (r as any).images?.[0]?.url,
             }));
         } else if (type && type !== 'all') {
-            articleQuery.type = type;
+            // Specific article type (daily_prelims, mains, etc.)
+            const articleQuery = { ...buildArticleQuery(), type };
             total = await Article.countDocuments(articleQuery);
             results = await Article.find(articleQuery)
                 .sort({ date: -1 })
                 .skip(skip)
                 .limit(Number(limit));
         } else {
-            // "All" search
-            // This is complex with pagination across collections
-            // For now, let's fetch from both and merge, then slice
-            // Note: This is not ideal for large datasets but works for now
-            const [articles, quizzes, stories] = await Promise.all([
+            // "All" — merge articles, quizzes, and burning issues
+            const articleQuery = buildArticleQuery();
+            const quizQuery = buildQuizQuery();
+            const biQuery = buildBurningIssueQuery();
+
+            const [articles, quizzes, burningIssues] = await Promise.all([
                 Article.find(articleQuery).sort({ date: -1 }).limit(Number(limit) * Number(page)),
                 Quiz.find(quizQuery).sort({ date: -1 }).limit(Number(limit) * Number(page)),
-                BurningIssue.find({ 
-                    $or: [
-                        { topic: { $regex: q as string, $options: 'i' } }
-                    ]
-                }).sort({ date: -1 }).limit(Number(limit) * Number(page))
+                BurningIssue.find(biQuery).sort({ date: -1 }).limit(Number(limit) * Number(page)),
             ]);
 
             const merged = [
                 ...articles.map(a => a.toObject()),
                 ...quizzes.map(q => ({ ...q.toObject(), type: 'quiz' })),
-                ...stories.map(s => ({ 
-                    ...s.toObject(), 
+                ...burningIssues.map(s => ({
+                    ...s.toObject(),
                     type: 'burning_issue_gallery',
-                    title: (s as any).topic, // Map topic to title for consistent display
-                    imageUrl: (s as any).images?.[0]?.url 
+                    title: (s as any).topic,
+                    imageUrl: (s as any).images?.[0]?.url,
                 }))
             ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-            total = (await Article.countDocuments(articleQuery)) + 
-                    (await Quiz.countDocuments(quizQuery)) +
-                    (await BurningIssue.countDocuments({ topic: { $regex: q as string, $options: 'i' } }));
+            const [artCount, quizCount, biCount] = await Promise.all([
+                Article.countDocuments(articleQuery),
+                Quiz.countDocuments(quizQuery),
+                BurningIssue.countDocuments(biQuery),
+            ]);
+
+            total = artCount + quizCount + biCount;
             results = merged.slice(skip, skip + Number(limit));
         }
 

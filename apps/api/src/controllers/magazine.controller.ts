@@ -205,3 +205,34 @@ export const deleteMagazine = async (req: Request, res: Response): Promise<void>
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
+
+// @desc    Download magazine PDF (forces download via Content-Disposition)
+// @route   GET /api/magazines/download/:id
+// @access  Public
+export const downloadMagazine = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const magazine = await Magazine.findById(req.params.id);
+        if (!magazine) {
+            res.status(404).json({ success: false, message: 'Magazine not found' });
+            return;
+        }
+
+        const filePath = path.join(UPLOADS_DIR, magazine.pdfKey);
+        if (!fs.existsSync(filePath)) {
+            res.status(404).json({ success: false, message: 'PDF file not found' });
+            return;
+        }
+
+        // Sanitize title for filename
+        const safeName = magazine.title.replace(/[/\\:*?"<>|]/g, '_').trim();
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`);
+
+        const stream = fs.createReadStream(filePath);
+        stream.pipe(res);
+    } catch (error) {
+        console.error('Download magazine error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};

@@ -113,6 +113,7 @@ function DailyQuizInner() {
             day: 'numeric',
             month: 'long',
             year: 'numeric',
+            timeZone: 'UTC',
         });
     };
 
@@ -147,7 +148,16 @@ function DailyQuizInner() {
                 <div className="flex items-center justify-between gap-4 mb-4">
                     {/* Date Picker Button-style */}
                     <div className="relative group">
-                        <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm hover:border-gray-300 transition-all cursor-pointer">
+                        <div
+                            className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm hover:border-gray-300 transition-all cursor-pointer"
+                            onClick={() => {
+                                // Make the entire container open the date picker
+                                const input = document.getElementById('quiz-date-input') as HTMLInputElement;
+                                if (input) {
+                                    try { input.showPicker(); } catch { input.focus(); }
+                                }
+                            }}
+                        >
                             <span className="text-[#1E3A5F]">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -155,6 +165,7 @@ function DailyQuizInner() {
                             </span>
                             <div className="relative">
                                 <input
+                                    id="quiz-date-input"
                                     type="date"
                                     value={date}
                                     onChange={(e) => setDate(e.target.value)}
@@ -229,7 +240,7 @@ function DailyQuizInner() {
                                 </svg>
                                 Go to latest quiz
                                 <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-md text-xs">
-                                    {new Date(adjacentDates.previous).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                    {new Date(adjacentDates.previous).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}
                                 </span>
                             </button>
                         )}

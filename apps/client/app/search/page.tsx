@@ -1,20 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchEngine } from '@/hooks/useSearchEngine';
+import type { ArticleMeta } from '@/lib/search-engine';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-type ArticleType = 'daily_prelims' | 'mains' | 'burning_issue' | 'quiz';
-type FilterType = 'all' | ArticleType;
-
-interface Article {
-    _id: string;
-    title: string;
-    date: string;
-    tags: string[];
-    type: ArticleType;
-}
+type FilterType = 'all' | 'daily_prelims' | 'mains' | 'burning_issue' | 'quiz';
 
 const MONTHS = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -34,6 +25,7 @@ const TYPE_COLORS: Record<string, string> = {
     mains: 'bg-green-100 text-green-700',
     burning_issue: 'bg-orange-100 text-orange-700',
     burning_issue_gallery: 'bg-orange-100 text-orange-700',
+    quiz: 'bg-purple-100 text-purple-700',
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -41,86 +33,92 @@ const TYPE_LABELS: Record<string, string> = {
     mains: 'Mains',
     burning_issue: 'Burning Issues',
     burning_issue_gallery: 'Burning Issues',
+    quiz: 'Quiz',
 };
 
 function formatDisplayDate(dateStr: string) {
     const d = new Date(dateStr);
-    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 const LIMIT = 10;
 
-export default function SearchPage() {
+function SearchPageInner() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const { engine, isLoading: engineLoading, error: engineError } = useSearchEngine();
+
     const [query, setQuery] = useState('');
+    const [activeTag, setActiveTag] = useState<string | null>(null);
     const [typeFilter, setTypeFilter] = useState<FilterType>('all');
     const [year, setYear] = useState('');
     const [month, setMonth] = useState('');
-    const [articles, setArticles] = useState<Article[]>([]);
-    const [totalPages, setTotalPages] = useState(1);
-    const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
-    const [isLoading, setIsLoading] = useState(false);
-    const [hasSearched, setHasSearched] = useState(false);
-    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const fetchResults = useCallback(async (q: string, type: FilterType, y: string, m: string, p: number) => {
-        setIsLoading(true);
-        setHasSearched(true);
-        try {
-            let url = `${API_URL}/api/search?limit=${LIMIT}&page=${p}`;
-            if (q.trim()) url += `&q=${encodeURIComponent(q.trim())}`;
-            if (type !== 'all') url += `&type=${type}`;
-            if (y) url += `&year=${y}`;
-            if (m) url += `&month=${MONTHS.indexOf(m) + 1}`;
-            const res = await fetch(url);
-            const data = await res.json();
-            if (data.success) {
-                setArticles(data.data);
-                setTotalPages(data.pagination?.pages || 1);
-                setTotal(data.pagination?.total || 0);
-            }
-        } catch {
-            setArticles([]);
-        } finally {
-            setIsLoading(false);
+    // Read URL params on mount
+    useEffect(() => {
+        const q = searchParams.get('q');
+        const tag = searchParams.get('tag');
+        if (tag) {
+            setActiveTag(tag);
+        } else if (q && !query) {
+            setQuery(q);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Debounced search on query change
+    // Reset page when filters change
     useEffect(() => {
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => {
-            if (query.trim() || typeFilter !== 'all' || year || month) {
-                setPage(1);
-                fetchResults(query, typeFilter, year, month, 1);
-            }
-        }, 400);
-        return () => {
-            if (debounceRef.current) clearTimeout(debounceRef.current);
+        setPage(1);
+    }, [query, activeTag, typeFilter, year, month]);
+
+    // ─── Client-side search (zero API calls) ────────────────────────────────
+    const searchResults = useMemo<ArticleMeta[]>(() => {
+        if (!engine) return [];
+
+        const filters = {
+            type: typeFilter !== 'all' ? typeFilter : undefined,
+            year: year ? Number(year) : undefined,
+            month: month ? MONTHS.indexOf(month) + 1 : undefined,
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [query, typeFilter, year, month]);
 
-    // Re-fetch on page change
-    useEffect(() => {
-        if (hasSearched) {
-            fetchResults(query, typeFilter, year, month, page);
+        // Tag search — O(1) lookup
+        if (activeTag) {
+            return engine.searchByTag(activeTag, filters);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page]);
 
-    const resetPage = () => setPage(1);
+        // Title keyword search — O(k) with 3-char minimum
+        if (query.trim().length >= 3) {
+            return engine.searchByTitle(query, filters);
+        }
 
-    const handleArticleClick = (article: Article) => {
+        return [];
+    }, [engine, query, activeTag, typeFilter, year, month]);
+
+    // Paginate results client-side
+    const totalPages = Math.max(1, Math.ceil(searchResults.length / LIMIT));
+    const paginatedResults = searchResults.slice((page - 1) * LIMIT, page * LIMIT);
+    const hasSearched = activeTag !== null || query.trim().length >= 3;
+
+    const handleArticleClick = (article: ArticleMeta) => {
         const dateStr = article.date.split('T')[0];
         if (article.type === 'daily_prelims') {
             router.push(`/daily-prelims?date=${dateStr}`);
         } else if (article.type === 'mains') {
             router.push(`/daily-mains?date=${dateStr}`);
-        } else if (article.type === 'burning_issue' || (article as any).type === 'burning_issue_gallery') {
+        } else if (article.type === 'burning_issue' || article.type === 'burning_issue_gallery') {
             router.push(`/burning-issues?id=${article._id}&date=${dateStr}`);
+        } else if (article.type === 'quiz') {
+            router.push(`/daily-quiz?date=${dateStr}`);
         }
+    };
+
+    const clearTag = () => {
+        setActiveTag(null);
+        // Also clear the URL param
+        const url = new URL(window.location.href);
+        url.searchParams.delete('tag');
+        window.history.replaceState(null, '', url.toString());
     };
 
     return (
@@ -128,33 +126,60 @@ export default function SearchPage() {
             {/* Search Bar */}
             <div className="bg-white border-b border-gray-200 sticky top-16 z-20 shadow-sm">
                 <div className="max-w-3xl mx-auto px-4 py-4">
+                    {/* Active Tag Badge */}
+                    {activeTag && (
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-sm text-gray-500">Showing results for tag:</span>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#FEF3C7] text-[#92400E] rounded-full text-sm font-semibold border border-[#FDE68A]">
+                                #{activeTag}
+                                <button
+                                    onClick={clearTag}
+                                    className="ml-1 text-[#92400E]/60 hover:text-[#92400E] transition"
+                                    aria-label="Clear tag filter"
+                                >
+                                    ×
+                                </button>
+                            </span>
+                        </div>
+                    )}
+
                     {/* Search Input */}
-                    <div className="relative">
-                        <svg
-                            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
-                        </svg>
-                        <input
-                            type="text"
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search articles, topics, keywords…"
-                            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#D97706] bg-gray-50"
-                            autoFocus
-                        />
-                        {query && (
-                            <button
-                                onClick={() => { setQuery(''); setArticles([]); setHasSearched(false); }}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    {!activeTag && (
+                        <div className="relative">
+                            <svg
+                                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
                             >
-                                ×
-                            </button>
-                        )}
-                    </div>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
+                            </svg>
+                            <input
+                                type="text"
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                placeholder="Search by title keyword (min. 3 characters)…"
+                                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#D97706] bg-gray-50"
+                                autoFocus
+                            />
+                            {query && (
+                                <button
+                                    onClick={() => setQuery('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                    ×
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* 3-character hint */}
+                    {!activeTag && query.trim().length > 0 && query.trim().length < 3 && (
+                        <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                            <span>💡</span>
+                            Type at least 3 characters to search by title
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -164,7 +189,7 @@ export default function SearchPage() {
                     {TYPE_TABS.map(tab => (
                         <button
                             key={tab.value}
-                            onClick={() => { setTypeFilter(tab.value); resetPage(); }}
+                            onClick={() => setTypeFilter(tab.value)}
                             className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap border transition-all ${typeFilter === tab.value
                                     ? 'bg-[#1E3A5F] text-white border-[#1E3A5F] shadow-sm'
                                     : 'bg-white text-gray-600 border-gray-300 hover:border-[#1E3A5F] hover:text-[#1E3A5F]'
@@ -180,7 +205,7 @@ export default function SearchPage() {
                     <span className="text-sm text-gray-500 font-medium">Filter by:</span>
                     <select
                         value={year}
-                        onChange={(e) => { setYear(e.target.value); resetPage(); }}
+                        onChange={(e) => setYear(e.target.value)}
                         className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#D97706]"
                     >
                         <option value="">All Years</option>
@@ -188,7 +213,7 @@ export default function SearchPage() {
                     </select>
                     <select
                         value={month}
-                        onChange={(e) => { setMonth(e.target.value); resetPage(); }}
+                        onChange={(e) => setMonth(e.target.value)}
                         className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#D97706]"
                     >
                         <option value="">All Months</option>
@@ -197,16 +222,19 @@ export default function SearchPage() {
                 </div>
 
                 {/* Results Count */}
-                {hasSearched && !isLoading && (
+                {hasSearched && !engineLoading && (
                     <p className="text-xs text-gray-500 mt-3">
-                        {total} result{total !== 1 ? 's' : ''} found
-                        {query.trim() && <> for <span className="font-semibold text-gray-700">&ldquo;{query}&rdquo;</span></>}
+                        {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found
+                        {query.trim().length >= 3 && <> for <span className="font-semibold text-gray-700">&ldquo;{query}&rdquo;</span></>}
+                        {activeTag && <> for tag <span className="font-semibold text-gray-700">#{activeTag}</span></>}
+                        <span className="text-gray-300 ml-2">·</span>
+                        <span className="ml-2 text-green-600">⚡ Instant (from index)</span>
                     </p>
                 )}
 
                 {/* Results */}
                 <div className="mt-3 space-y-3">
-                    {isLoading ? (
+                    {engineLoading ? (
                         <div className="space-y-3">
                             {[1, 2, 3, 4, 5].map(n => (
                                 <div key={n} className="animate-pulse bg-white rounded-xl p-4 border border-gray-100">
@@ -218,20 +246,26 @@ export default function SearchPage() {
                                 </div>
                             ))}
                         </div>
+                    ) : engineError ? (
+                        <div className="text-center py-16 text-red-400">
+                            <p className="text-4xl mb-3">⚠️</p>
+                            <p className="font-medium text-red-600">Failed to load search index</p>
+                            <p className="text-sm mt-1">{engineError}</p>
+                        </div>
                     ) : !hasSearched ? (
                         <div className="text-center py-20 text-gray-400">
                             <p className="text-5xl mb-4">🔍</p>
                             <p className="font-medium text-gray-600">Search across all content</p>
-                            <p className="text-sm mt-1">Type a keyword, topic or article name</p>
+                            <p className="text-sm mt-1">Type a keyword (min. 3 characters) or click a tag on any article</p>
                         </div>
-                    ) : articles.length === 0 ? (
+                    ) : paginatedResults.length === 0 ? (
                         <div className="text-center py-16 text-gray-400">
                             <p className="text-4xl mb-3">😕</p>
                             <p className="font-medium text-gray-600">No results found</p>
                             <p className="text-sm mt-1">Try a different keyword or filter</p>
                         </div>
                     ) : (
-                        articles.map((article) => (
+                        paginatedResults.map((article) => (
                             <button
                                 key={article._id}
                                 onClick={() => handleArticleClick(article)}
@@ -239,8 +273,8 @@ export default function SearchPage() {
                             >
                                 <div className="flex items-start gap-3">
                                     {/* Type Badge */}
-                                    <span className={`flex-shrink-0 mt-0.5 px-2.5 py-1 rounded-lg text-xs font-bold ${TYPE_COLORS[article.type]}`}>
-                                        {TYPE_LABELS[article.type]}
+                                    <span className={`flex-shrink-0 mt-0.5 px-2.5 py-1 rounded-lg text-xs font-bold ${TYPE_COLORS[article.type] || 'bg-gray-100 text-gray-700'}`}>
+                                        {TYPE_LABELS[article.type] || article.type}
                                     </span>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-semibold text-[#1E3A5F] text-sm leading-snug group-hover:text-[#D97706] transition-colors line-clamp-2">
@@ -266,7 +300,7 @@ export default function SearchPage() {
                 </div>
 
                 {/* Pagination */}
-                {totalPages > 1 && hasSearched && !isLoading && (
+                {totalPages > 1 && hasSearched && !engineLoading && (
                     <div className="flex items-center justify-center gap-2 mt-8">
                         <button
                             onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -307,5 +341,17 @@ export default function SearchPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function SearchPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-500" />
+            </div>
+        }>
+            <SearchPageInner />
+        </Suspense>
     );
 }

@@ -10,6 +10,7 @@ import {
     createMagazine,
     updateMagazine,
     deleteMagazine,
+    downloadMagazine,
 } from '../controllers/magazine.controller.js';
 import { protect, adminOnly } from '../middlewares/auth.middleware.js';
 
@@ -47,6 +48,10 @@ router.get('/', getMagazines);
 
 // @route   GET /api/magazines/admin
 router.get('/admin', protect, adminOnly, getAdminMagazines);
+
+// @route   GET /api/magazines/download/:id
+// @desc    Download magazine PDF as file (forces Content-Disposition: attachment)
+router.get('/download/:id', downloadMagazine);
 
 // @route   GET /api/magazines/:id
 router.get('/:id', getMagazine);

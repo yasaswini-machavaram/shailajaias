@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface DatePickerProps {
     selectedDate: Date;
@@ -27,6 +27,7 @@ export default function DatePicker({ selectedDate, onDateChange }: DatePickerPro
             day: 'numeric',
             month: 'short',
             year: 'numeric',
+            timeZone: 'UTC',
         });
     };
 
@@ -93,6 +94,12 @@ export default function DatePicker({ selectedDate, onDateChange }: DatePickerPro
             {isOpen && (
                 <div className="absolute top-full left-0 mt-2 p-2 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
                     <input
+                        ref={(el) => {
+                            // Auto-open the native calendar picker when popup mounts
+                            if (el) {
+                                try { el.showPicker(); } catch { el.focus(); }
+                            }
+                        }}
                         type="date"
                         value={selectedDate.toISOString().split('T')[0]}
                         max={new Date().toISOString().split('T')[0]}

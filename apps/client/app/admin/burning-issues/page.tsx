@@ -128,6 +128,7 @@ export default function BurningIssuesAdminPage() {
                                 <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">{issue.topic}</h3>
                                 <p className="text-sm text-gray-500">
                                     {new Date(issue.date).toLocaleDateString('en-IN', {
+                                        timeZone: 'UTC',
                                         day: 'numeric',
                                         month: 'short',
                                         year: 'numeric',

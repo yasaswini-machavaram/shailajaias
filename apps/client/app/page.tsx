@@ -39,6 +39,7 @@ export default function Home() {
 
   const resources = [
     { title: 'Magazines', href: '/magazines', icon: '/images/icons/magazines.png' },
+    { title: 'CA Videos', href: '/ca-videos', icon: '/images/icons/ca_videos.png' },
     { title: 'Browse Topic', href: '/topics', icon: '/images/icons/browse_topic.png' },
   ];
 
@@ -81,7 +82,7 @@ export default function Home() {
           <h2 className="text-[11px] font-bold text-[#64748B] mb-4 tracking-[0.2em] uppercase">
             Resources
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {resources.map((item, idx) => (
               <button
                 key={idx}

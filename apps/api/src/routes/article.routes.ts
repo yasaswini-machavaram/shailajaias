@@ -9,8 +9,26 @@ import {
     getArticlesByType,
     getDistinctTags,
     getAdjacentDates,
+    importArticlesFromExcel,
 } from '../controllers/article.controller.js';
 import { protect, adminOnly } from '../middlewares/auth.middleware.js';
+import multer from 'multer';
+
+// Configure multer for Excel file upload
+const upload = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: (req, file, cb) => {
+        if (
+            file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+            file.mimetype === 'application/vnd.ms-excel'
+        ) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only Excel files are allowed'));
+        }
+    },
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+});
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -40,6 +58,11 @@ router.get('/tags', getDistinctTags);
 // @desc    Get single article
 // @access  Public
 router.get('/:id', getArticle);
+
+// @route   POST /api/articles/import-excel
+// @desc    Import articles from Excel file
+// @access  Private/Admin
+router.post('/import-excel', protect, adminOnly, upload.single('file'), importArticlesFromExcel);
 
 // @route   POST /api/articles
 // @desc    Create article

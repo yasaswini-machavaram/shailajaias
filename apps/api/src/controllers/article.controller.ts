@@ -1,6 +1,8 @@
 import type { Request, Response } from 'express';
 import { Article, Quiz } from '../models/index.js';
 import type { ArticleType } from '../models/index.js';
+import { parseArticleExcel } from '../services/article-excel.service.js';
+import { invalidateSearchIndexCache } from './search-index.controller.js';
 
 // @desc    Get all articles with filters
 // @route   GET /api/articles
@@ -20,22 +22,36 @@ export const getArticles = async (req: Request, res: Response): Promise<void> =>
         }
 
         if (search) {
-            query.$text = { $search: search as string };
+            const term = search as string;
+            query.$or = [
+                { title: { $regex: term, $options: 'i' } },
+                { tags: { $regex: term, $options: 'i' } },
+            ];
         }
 
-        // Year / month date range filter
+        // Year / month date range filter (UTC to avoid timezone drift)
         if (year || month) {
             const y = year ? Number(year) : new Date().getFullYear();
             if (month) {
                 const m = Number(month); // 1-based
-                const start = new Date(y, m - 1, 1);
-                const end = new Date(y, m, 1);
+                const start = new Date(Date.UTC(y, m - 1, 1));
+                const end = new Date(Date.UTC(y, m, 1));
                 query.date = { $gte: start, $lt: end };
             } else {
-                const start = new Date(y, 0, 1);
-                const end = new Date(y + 1, 0, 1);
+                const start = new Date(Date.UTC(y, 0, 1));
+                const end = new Date(Date.UTC(y + 1, 0, 1));
                 query.date = { $gte: start, $lt: end };
             }
+        }
+
+        // Single-date exact filter (for admin date picker)
+        const { date } = req.query;
+        if (date && !year && !month) {
+            const dateStr = date as string; // YYYY-MM-DD
+            const [dy, dm, dd] = dateStr.split('-').map(Number);
+            const startUtc = new Date(Date.UTC(dy, dm - 1, dd));
+            const endUtc = new Date(Date.UTC(dy, dm - 1, dd + 1));
+            query.date = { $gte: startUtc, $lt: endUtc };
         }
 
         const total = await Article.countDocuments(query);
@@ -71,16 +87,20 @@ export const getArticlesByDate = async (req: Request, res: Response): Promise<vo
         const query: Record<string, unknown> = {};
 
         if (date) {
-            // Single date
-            const targetDate = new Date(date as string);
-            const nextDate = new Date(targetDate);
-            nextDate.setDate(nextDate.getDate() + 1);
-            query.date = { $gte: targetDate, $lt: nextDate };
+            // Single date — parse as UTC to avoid timezone drift
+            // "2026-04-18" → UTC midnight April 18 to UTC midnight April 19
+            const dateStr = date as string; // YYYY-MM-DD
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const startUtc = new Date(Date.UTC(y, m - 1, d));
+            const endUtc = new Date(Date.UTC(y, m - 1, d + 1));
+            query.date = { $gte: startUtc, $lt: endUtc };
         } else if (startDate && endDate) {
-            // Date range
+            // Date range — also use UTC
+            const [sy, sm, sd] = (startDate as string).split('-').map(Number);
+            const [ey, em, ed] = (endDate as string).split('-').map(Number);
             query.date = {
-                $gte: new Date(startDate as string),
-                $lte: new Date(endDate as string)
+                $gte: new Date(Date.UTC(sy, sm - 1, sd)),
+                $lte: new Date(Date.UTC(ey, em - 1, ed, 23, 59, 59, 999))
             };
         }
 
@@ -164,10 +184,15 @@ export const createArticle = async (req: Request, res: Response): Promise<void> 
         const { type, title, date, tags, content, keywords, imageUrl, source } = req.body;
         const user = (req as Request & { user: { _id: string } }).user;
 
+        // Parse date as UTC midnight to avoid timezone drift
+        const dateStr = date as string; // YYYY-MM-DD from frontend
+        const [dy, dm, dd] = dateStr.split('-').map(Number);
+        const articleDate = new Date(Date.UTC(dy, dm - 1, dd));
+
         const article = await Article.create({
             type,
             title,
-            date: new Date(date),
+            date: articleDate,
             tags: tags || [],
             content,
             keywords: keywords || [],
@@ -175,6 +200,9 @@ export const createArticle = async (req: Request, res: Response): Promise<void> 
             source,
             createdBy: user._id,
         });
+
+        // Invalidate search index cache so new article appears in search
+        invalidateSearchIndexCache();
 
         res.status(201).json({ success: true, data: article });
     } catch (error) {
@@ -199,7 +227,11 @@ export const updateArticle = async (req: Request, res: Response): Promise<void> 
         // Update fields
         if (type) article.type = type;
         if (title) article.title = title;
-        if (date) article.date = new Date(date);
+        if (date) {
+            const dateStr = date as string;
+            const [dy, dm, dd] = dateStr.split('-').map(Number);
+            article.date = new Date(Date.UTC(dy, dm - 1, dd)) as any;
+        }
         if (tags) article.tags = tags;
         if (content) article.content = content;
         if (keywords) article.keywords = keywords;
@@ -207,6 +239,9 @@ export const updateArticle = async (req: Request, res: Response): Promise<void> 
         if (source !== undefined) article.source = source;
 
         await article.save();
+
+        // Invalidate search index cache so updated article reflects in search
+        invalidateSearchIndexCache();
 
         res.json({ success: true, data: article });
     } catch (error) {
@@ -252,6 +287,9 @@ export const deleteArticle = async (req: Request, res: Response): Promise<void> 
 
         await article.deleteOne();
 
+        // Invalidate search index cache so deleted article disappears from search
+        invalidateSearchIndexCache();
+
         res.json({ success: true, message: 'Article deleted' });
     } catch (error) {
         console.error('Delete article error:', error);
@@ -270,9 +308,10 @@ export const getAdjacentDates = async (req: Request, res: Response): Promise<voi
             return;
         }
 
-        const targetDate = new Date(date as string);
-        const nextDay = new Date(targetDate);
-        nextDay.setDate(nextDay.getDate() + 1);
+        const dateStr = date as string; // YYYY-MM-DD
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const targetDate = new Date(Date.UTC(y, m - 1, d));
+        const nextDay = new Date(Date.UTC(y, m - 1, d + 1));
 
         // Find previous date (less than targetDate)
         const prevArticle = await Article.findOne({
@@ -295,6 +334,59 @@ export const getAdjacentDates = async (req: Request, res: Response): Promise<voi
         });
     } catch (error) {
         console.error('Get adjacent dates error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @desc    Import articles from Excel file
+// @route   POST /api/articles/import-excel
+// @access  Private/Admin
+export const importArticlesFromExcel = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const file = req.file;
+        if (!file) {
+            res.status(400).json({ success: false, message: 'Please upload an Excel file' });
+            return;
+        }
+
+        // Parse Excel file
+        const parseResult = parseArticleExcel(file.buffer);
+
+        if (parseResult.articles.length === 0) {
+            res.status(400).json({
+                success: false,
+                message: 'No valid articles found in Excel file',
+                errors: parseResult.errors,
+                skipped: parseResult.skipped,
+            });
+            return;
+        }
+
+        const user = (req as Request & { user: { _id: string } }).user;
+
+        // Bulk insert articles as daily_prelims
+        const articlesToInsert = parseResult.articles.map((article) => ({
+            ...article,
+            type: 'daily_prelims' as const,
+            createdBy: user._id,
+        }));
+
+        const inserted = await Article.insertMany(articlesToInsert);
+
+        // Invalidate search index cache so imported articles appear in search
+        invalidateSearchIndexCache();
+
+        res.status(201).json({
+            success: true,
+            data: {
+                imported: inserted.length,
+                skipped: parseResult.skipped,
+            },
+            message: `Successfully imported ${inserted.length} articles`,
+            warnings: parseResult.errors.length > 0 ? parseResult.errors : undefined,
+        });
+    } catch (error) {
+        console.error('Import articles error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };

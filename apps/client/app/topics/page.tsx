@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSearchEngine } from '@/hooks/useSearchEngine';
+import type { ArticleMeta } from '@/lib/search-engine';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -30,49 +32,35 @@ const SECTION_LABELS: Record<ArticleSection, string> = {
 
 function formatDisplayDate(dateStr: string) {
     const d = new Date(dateStr);
-    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 export default function TopicsPage() {
     const router = useRouter();
+    const { engine, isLoading: engineLoading } = useSearchEngine();
+
     const [section, setSection] = useState<ArticleSection>('daily_prelims');
-    const [tags, setTags] = useState<string[]>([]);
     const [selectedTag, setSelectedTag] = useState<string>('All');
     const [year, setYear] = useState<string>('');
     const [month, setMonth] = useState<string>('');
-    const [articles, setArticles] = useState<Article[]>([]);
-    const [totalPages, setTotalPages] = useState(1);
     const [page, setPage] = useState(1);
-    const [isLoading, setIsLoading] = useState(true);
-    const [tagsLoading, setTagsLoading] = useState(true);
-    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const LIMIT = 10;
 
-    // Fetch available tags whenever section changes
-    useEffect(() => {
-        setTagsLoading(true);
-        setSelectedTag('All');
-        fetch(`${API_URL}/api/articles/tags?type=${section}`)
-            .then(r => r.json())
-            .then(d => {
-                if (d.success) setTags(d.data as string[]);
-            })
-            .catch(() => setTags([]))
-            .finally(() => setTagsLoading(false));
-    }, [section]);
+    // ─── Burning Issues: still from API (separate collection) ───────────
+    const [biArticles, setBiArticles] = useState<Article[]>([]);
+    const [biTotalPages, setBiTotalPages] = useState(1);
+    const [biLoading, setBiLoading] = useState(false);
 
-    const fetchArticles = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            if (section === 'burning_issue') {
-                // Burning issues are in a separate collection
-                let url = `${API_URL}/api/burning-issues?limit=${LIMIT}&page=${page}`;
-                if (year) url += `&year=${year}`;
-                if (month) url += `&month=${MONTHS.indexOf(month) + 1}`;
-                const res = await fetch(url);
-                const data = await res.json();
+    useEffect(() => {
+        if (section !== 'burning_issue') return;
+        setBiLoading(true);
+        let url = `${API_URL}/api/burning-issues?limit=${LIMIT}&page=${page}`;
+        if (year) url += `&year=${year}`;
+        if (month) url += `&month=${MONTHS.indexOf(month) + 1}`;
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
                 if (data.success) {
-                    // Map BurningIssue shape to Article shape for consistent display
                     const mapped = (data.data || []).map((bi: any) => ({
                         _id: bi._id,
                         title: bi.topic,
@@ -80,68 +68,84 @@ export default function TopicsPage() {
                         tags: [],
                         type: 'burning_issue' as ArticleSection,
                     }));
-                    setArticles(mapped);
-                    setTotalPages(data.pagination?.pages || 1);
+                    setBiArticles(mapped);
+                    setBiTotalPages(data.pagination?.pages || 1);
                 }
-            } else {
-                let url = `${API_URL}/api/search?type=${section}&limit=${LIMIT}&page=${page}`;
-                if (selectedTag !== 'All') url += `&q=${encodeURIComponent(selectedTag)}`;
-                if (year) url += `&year=${year}`;
-                if (month) url += `&month=${MONTHS.indexOf(month) + 1}`;
-                const res = await fetch(url);
-                const data = await res.json();
-                if (data.success) {
-                    setArticles(data.data);
-                    setTotalPages(data.pagination?.pages || 1);
-                }
-            }
-        } catch {
-            setArticles([]);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [section, selectedTag, year, month, page]);
+            })
+            .catch(() => setBiArticles([]))
+            .finally(() => setBiLoading(false));
+    }, [section, year, month, page]);
 
+    // ─── Tags from engine (O(1) — no API call) ─────────────────────────
+    const tags = useMemo(() => {
+        if (!engine || section === 'burning_issue') return [];
+        return engine.getAllTags(section);
+    }, [engine, section]);
+
+    // ─── Articles from engine (tag filter — O(1) or full list) ──────────
+    // ─── Articles from engine (tag filter or all) ────────────────────────
+    const engineArticles = useMemo(() => {
+        if (!engine || section === 'burning_issue') return [];
+
+        const filters = {
+            type: section,
+            year: year ? Number(year) : undefined,
+            month: month ? MONTHS.indexOf(month) + 1 : undefined,
+        };
+
+        if (selectedTag !== 'All') {
+            // Tag search — O(1) lookup via Inverted Index
+            return engine.searchByTag(selectedTag, filters);
+        }
+
+        // "All" selected — get all articles of this type
+        return engine.getAll(filters);
+    }, [engine, section, selectedTag, year, month]);
+
+    // Determine which articles to display
+    const isBurningIssue = section === 'burning_issue';
+    const displaySource = isBurningIssue ? biArticles : engineArticles;
+
+    // Client-side pagination
+    const totalItems = displaySource.length;
+    const displayTotalPages = isBurningIssue ? biTotalPages : Math.max(1, Math.ceil(totalItems / LIMIT));
+    const articles = isBurningIssue
+        ? biArticles
+        : displaySource.slice((page - 1) * LIMIT, page * LIMIT);
+    const isLoading = isBurningIssue ? biLoading : engineLoading;
+
+    // Reset page on filter change
     useEffect(() => {
         setPage(1);
     }, [section, selectedTag, year, month]);
 
+    // Reset tag when section changes
     useEffect(() => {
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => {
-            fetchArticles();
-        }, 300);
-        return () => {
-            if (debounceRef.current) clearTimeout(debounceRef.current);
-        };
-    }, [fetchArticles]);
+        setSelectedTag('All');
+        setYear('');
+        setMonth('');
+    }, [section]);
 
-    const handleArticleClick = (article: Article) => {
+    const handleArticleClick = (article: Article | ArticleMeta) => {
         const dateStr = article.date.split('T')[0];
         let path = '/daily-prelims';
         if (article.type === 'mains') path = '/daily-mains';
-        if (article.type === 'burning_issue' || (article as any).type === 'burning_issue') path = '/burning-issues';
-        if (article.type === 'quiz' || (article as any).type === 'quiz') path = '/daily-quiz';
+        if (article.type === 'burning_issue' || article.type === 'burning_issue_gallery') path = '/burning-issues';
+        if (article.type === 'quiz') path = '/daily-quiz';
         const idStr = article._id;
         router.push(`${path}?id=${idStr}&date=${dateStr}`);
-    };
-
-    const handleSectionChange = (s: ArticleSection) => {
-        setSection(s);
-        setYear('');
-        setMonth('');
     };
 
     return (
         <div className="min-h-screen bg-gray-50 pb-24">
 
             <div className="max-w-3xl mx-auto px-4">
-                {/* Prelims / Mains Toggle */}
+                {/* Prelims / Mains / Burning Issues Toggle */}
                 <div className="flex gap-1 mt-5 bg-gray-200 rounded-2xl p-1 w-fit mx-auto overflow-x-auto max-w-full">
                     {(['daily_prelims', 'mains', 'burning_issue'] as ArticleSection[]).map((s) => (
                         <button
                             key={s}
-                            onClick={() => handleSectionChange(s)}
+                            onClick={() => setSection(s)}
                             className={`px-6 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${section === s
                                     ? 'bg-gray-800 text-white shadow'
                                     : 'text-gray-600 hover:text-gray-900'
@@ -153,28 +157,30 @@ export default function TopicsPage() {
                 </div>
 
                 {/* Tag Chips */}
-                <div className="mt-4 flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
-                    {tagsLoading ? (
-                        <div className="animate-pulse flex gap-2">
-                            {[1, 2, 3, 4].map(n => (
-                                <div key={n} className="h-8 w-20 bg-gray-200 rounded-full" />
-                            ))}
-                        </div>
-                    ) : (
-                        ['All', ...tags].map((tag) => (
-                            <button
-                                key={tag}
-                                onClick={() => setSelectedTag(tag)}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-all ${selectedTag === tag
-                                        ? 'bg-blue-600 text-white border-blue-600'
-                                        : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:text-blue-600'
-                                    }`}
-                            >
-                                {tag}
-                            </button>
-                        ))
-                    )}
-                </div>
+                {!isBurningIssue && (
+                    <div className="mt-4 flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
+                        {engineLoading ? (
+                            <div className="animate-pulse flex gap-2">
+                                {[1, 2, 3, 4].map(n => (
+                                    <div key={n} className="h-8 w-20 bg-gray-200 rounded-full" />
+                                ))}
+                            </div>
+                        ) : (
+                            ['All', ...tags].map((tag) => (
+                                <button
+                                    key={tag}
+                                    onClick={() => setSelectedTag(tag)}
+                                    className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-all ${selectedTag === tag
+                                            ? 'bg-blue-600 text-white border-blue-600'
+                                            : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+                                        }`}
+                                >
+                                    {tag}
+                                </button>
+                            ))
+                        )}
+                    </div>
+                )}
 
                 {/* Year / Month Filters */}
                 <div className="flex items-center gap-3 mt-4">
@@ -234,7 +240,7 @@ export default function TopicsPage() {
                                             {formatDisplayDate(article.date)}
                                         </p>
                                     </div>
-                                    {article.tags[0] && (
+                                    {article.tags?.[0] && (
                                         <span className="flex-shrink-0 px-2.5 py-1 border border-gray-300 rounded-full text-xs text-gray-600 group-hover:border-blue-300 group-hover:text-blue-600 transition-colors">
                                             {article.tags[0]}
                                         </span>
@@ -246,7 +252,7 @@ export default function TopicsPage() {
                 </div>
 
                 {/* Pagination */}
-                {totalPages > 1 && !isLoading && (
+                {displayTotalPages > 1 && !isLoading && (
                     <div className="flex items-center justify-center gap-2 mt-8">
                         <button
                             onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -256,10 +262,10 @@ export default function TopicsPage() {
                             ← Prev
                         </button>
 
-                        {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                        {Array.from({ length: Math.min(displayTotalPages, 5) }, (_, i) => {
                             const p = Math.min(
                                 Math.max(page - 2, 1) + i,
-                                totalPages - Math.min(totalPages, 5) + i + 1
+                                displayTotalPages - Math.min(displayTotalPages, 5) + i + 1
                             );
                             return (
                                 <button
@@ -275,13 +281,13 @@ export default function TopicsPage() {
                             );
                         })}
 
-                        {totalPages > 5 && page < totalPages - 2 && (
+                        {displayTotalPages > 5 && page < displayTotalPages - 2 && (
                             <span className="text-gray-400 text-sm">…</span>
                         )}
 
                         <button
-                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            disabled={page === totalPages}
+                            onClick={() => setPage(p => Math.min(displayTotalPages, p + 1))}
+                            disabled={page === displayTotalPages}
                             className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
                         >
                             Next →

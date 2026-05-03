@@ -266,9 +266,6 @@ function Toolbar({ editor }: { editor: Editor }) {
             >
                 ― HR
             </ToolbarButton>
-            <ToolbarButton onClick={addImage} title="Insert Image (URL)">
-                🖼 Image
-            </ToolbarButton>
 
             <ToolbarSep />
 

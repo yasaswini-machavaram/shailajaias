@@ -29,6 +29,8 @@ export default function NewArticlePage() {
     const [tags, setTags] = useState<string[]>([]);
     const [content, setContent] = useState('');
     const [source, setSource] = useState('');
+    const [imageUrl, setImageUrl] = useState('');
+    const [customTagInput, setCustomTagInput] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
@@ -50,7 +52,7 @@ export default function NewArticlePage() {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ title, type, date, tags, content, source }),
+                body: JSON.stringify({ title, type, date, tags, content, source, imageUrl: imageUrl || undefined }),
             });
 
             const data = await response.json();
@@ -73,6 +75,18 @@ export default function NewArticlePage() {
                 ? prev.filter(t => t !== tag)
                 : [...prev, tag]
         );
+    };
+
+    const addCustomTag = () => {
+        const tag = customTagInput.trim();
+        if (tag && !tags.includes(tag)) {
+            setTags(prev => [...prev, tag]);
+        }
+        setCustomTagInput('');
+    };
+
+    const removeTag = (tag: string) => {
+        setTags(prev => prev.filter(t => t !== tag));
     };
 
     return (
@@ -104,8 +118,8 @@ export default function NewArticlePage() {
                     />
                 </div>
 
-                {/* Type, Date & Source */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Type, Date, Source & Image */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Article Type *
@@ -144,6 +158,28 @@ export default function NewArticlePage() {
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
                     </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Featured Image URL
+                        </label>
+                        <input
+                            type="url"
+                            value={imageUrl}
+                            onChange={(e) => setImageUrl(e.target.value)}
+                            placeholder="Paste image URL or Google Drive link"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        />
+                        {imageUrl && (
+                            <div className="mt-2 rounded-lg overflow-hidden border border-gray-200">
+                                <img
+                                    src={imageUrl}
+                                    alt="Preview"
+                                    className="w-full max-h-40 object-cover"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Tags */}
@@ -151,7 +187,7 @@ export default function NewArticlePage() {
                     <label className="block text-sm font-medium text-gray-700 mb-3">
                         Tags
                     </label>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 mb-3">
                         {tagOptions.map((tag) => (
                             <button
                                 key={tag}
@@ -166,6 +202,36 @@ export default function NewArticlePage() {
                             </button>
                         ))}
                     </div>
+                    {/* Custom tag input */}
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={customTagInput}
+                            onChange={(e) => setCustomTagInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }}
+                            placeholder="Add custom tag…"
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        />
+                        <button
+                            type="button"
+                            onClick={addCustomTag}
+                            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+                        >
+                            + Add
+                        </button>
+                    </div>
+                    {/* Show non-preset tags as removable chips */}
+                    {tags.filter(t => !tagOptions.includes(t)).length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
+                            <span className="text-xs text-gray-500 self-center">Custom:</span>
+                            {tags.filter(t => !tagOptions.includes(t)).map(tag => (
+                                <span key={tag} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm">
+                                    {tag}
+                                    <button type="button" onClick={() => removeTag(tag)} className="text-blue-400 hover:text-blue-600 ml-0.5">×</button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Content - Rich Text Editor */}

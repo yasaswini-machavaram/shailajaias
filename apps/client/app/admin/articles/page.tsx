@@ -1,8 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../AuthContext';
+import { useSearchEngine } from '@/hooks/useSearchEngine';
+import { SearchCache } from '@/lib/search-cache';
+import type { ArticleMeta } from '@/lib/search-engine';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -31,24 +34,68 @@ const typeColors: Record<string, string> = {
 
 export default function ArticlesPage() {
     const { token } = useAuth();
+    const {
+        engine,
+        isLoading: engineLoading,
+        isCached,
+        cacheAge,
+        refresh: refreshIndex,
+    } = useSearchEngine();
+
+    // ─── State for the main table (API-backed, paginated) ───────────────
     const [articles, setArticles] = useState<Article[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [filter, setFilter] = useState<ArticleType>('all');
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [dateFilter, setDateFilter] = useState('');
 
+    // Whether we're using client-side search or server-side table
+    const isSearchActive = searchQuery.trim().length >= 3;
+    const isSearchTooShort = searchQuery.trim().length > 0 && searchQuery.trim().length < 3;
+
+    // ─── Client-side search results (from engine) ───────────────────────
+    const searchResults = useMemo<ArticleMeta[]>(() => {
+        if (!engine || !isSearchActive) return [];
+        return engine.searchByTitle(searchQuery, {
+            type: filter !== 'all' ? filter : undefined,
+        });
+    }, [engine, searchQuery, filter, isSearchActive]);
+
+    // Paginate client-side search results
+    const searchPage = useMemo(() => {
+        const limit = 15;
+        const start = (page - 1) * limit;
+        return searchResults.slice(start, start + limit);
+    }, [searchResults, page]);
+
+    const searchTotalPages = Math.max(1, Math.ceil(searchResults.length / 15));
+
+    // ─── Server-side table (no search active) ───────────────────────────
     useEffect(() => {
+        if (isSearchActive) return; // Skip when using client-side search
         fetchArticles();
-    }, [token, filter, page]);
+    }, [token, filter, page, dateFilter, isSearchActive]);
+
+    // Reset page on filter changes
+    useEffect(() => {
+        setPage(1);
+    }, [searchQuery, filter, dateFilter]);
 
     const fetchArticles = async () => {
         if (!token) return;
         setIsLoading(true);
 
         try {
-            const typeParam = filter !== 'all' ? `&type=${filter}` : '';
+            const params = new URLSearchParams();
+            params.set('page', String(page));
+            params.set('limit', '15');
+            if (filter !== 'all') params.set('type', filter);
+            if (dateFilter) params.set('date', dateFilter);
+
             const response = await fetch(
-                `${API_URL}/api/articles?page=${page}&limit=10${typeParam}`,
+                `${API_URL}/api/articles?${params.toString()}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             const data = await response.json();
@@ -75,11 +122,28 @@ export default function ArticlesPage() {
 
             if (response.ok) {
                 setArticles(articles.filter((a) => a._id !== id));
+                // Refresh search index so deleted article disappears from search
+                SearchCache.clear();
+                refreshIndex();
             }
         } catch (error) {
             console.error('Failed to delete article:', error);
         }
     };
+
+    const clearFilters = () => {
+        setSearchQuery('');
+        setDateFilter('');
+        setFilter('all');
+        setPage(1);
+    };
+
+    const hasActiveFilters = searchQuery || dateFilter || filter !== 'all';
+
+    // Determine which data to display
+    const displayArticles = isSearchActive ? searchPage : articles;
+    const displayTotalPages = isSearchActive ? searchTotalPages : totalPages;
+    const showLoading = isSearchActive ? engineLoading : isLoading;
 
     return (
         <div className="p-8">
@@ -89,16 +153,25 @@ export default function ArticlesPage() {
                     <h1 className="text-3xl font-bold text-gray-900">Articles</h1>
                     <p className="text-gray-600 mt-1">Manage Daily Prelims, Mains, and Burning Issues</p>
                 </div>
-                <Link
-                    href="/admin/articles/new"
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors"
-                >
-                    + Create Article
-                </Link>
+                <div className="flex gap-3">
+                    <Link
+                        href="/admin/articles/import"
+                        className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors"
+                    >
+                        📊 Import from Excel
+                    </Link>
+                    <Link
+                        href="/admin/articles/new"
+                        className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors"
+                    >
+                        + Create Article
+                    </Link>
+                </div>
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6 space-y-4">
+                {/* Type filter chips */}
                 <div className="flex gap-2">
                     {(['all', 'daily_prelims', 'mains', 'burning_issue'] as ArticleType[]).map((type) => (
                         <button
@@ -113,20 +186,97 @@ export default function ArticlesPage() {
                         </button>
                     ))}
                 </div>
+
+                {/* Search + Date filter row */}
+                <div className="flex gap-3 items-center">
+                    {/* Search by title/tags */}
+                    <div className="flex-1 relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search by title (min. 3 characters)..."
+                            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        />
+                    </div>
+
+                    {/* Date filter */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500 whitespace-nowrap">📅 Date:</span>
+                        <input
+                            type="date"
+                            value={dateFilter}
+                            onChange={(e) => { setDateFilter(e.target.value); setPage(1); }}
+                            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        />
+                    </div>
+
+                    {/* Clear all */}
+                    {hasActiveFilters && (
+                        <button
+                            onClick={clearFilters}
+                            className="px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors whitespace-nowrap"
+                        >
+                            ✕ Clear
+                        </button>
+                    )}
+                </div>
+
+                {/* 3-character hint */}
+                {isSearchTooShort && (
+                    <p className="text-xs text-amber-600 flex items-center gap-1">
+                        <span>💡</span>
+                        Type at least 3 characters to search by title
+                    </p>
+                )}
+
+                {/* Cache indicator (admin-only feature) */}
+                {isSearchActive && (
+                    <div className="flex items-center gap-2 text-xs">
+                        {isCached ? (
+                            <>
+                                <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                                <span className="text-gray-500">
+                                    Results from cache
+                                    {cacheAge && <span className="text-gray-400"> · updated {cacheAge}</span>}
+                                </span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="inline-block w-2 h-2 bg-blue-400 rounded-full" />
+                                <span className="text-gray-500">Results from live index</span>
+                            </>
+                        )}
+                        <button
+                            onClick={async () => {
+                                SearchCache.clear();
+                                await refreshIndex();
+                            }}
+                            className="ml-1 text-amber-600 hover:text-amber-700 font-medium hover:underline"
+                        >
+                            🔄 Refresh
+                        </button>
+                        <span className="text-gray-300">·</span>
+                        <span className="text-green-600 font-medium">⚡ {searchResults.length} results (instant)</span>
+                    </div>
+                )}
             </div>
 
             {/* Articles Table */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                {isLoading ? (
+                {showLoading ? (
                     <div className="p-8 text-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-500 mx-auto"></div>
                     </div>
-                ) : articles.length === 0 ? (
+                ) : displayArticles.length === 0 ? (
                     <div className="p-8 text-center text-gray-500">
                         <p>No articles found.</p>
-                        <Link href="/admin/articles/new" className="text-amber-500 hover:underline mt-2 inline-block">
-                            Create your first article
-                        </Link>
+                        {!isSearchActive && (
+                            <Link href="/admin/articles/new" className="text-amber-500 hover:underline mt-2 inline-block">
+                                Create your first article
+                            </Link>
+                        )}
                     </div>
                 ) : (
                     <table className="w-full">
@@ -140,27 +290,27 @@ export default function ArticlesPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {articles.map((article) => (
+                            {displayArticles.map((article) => (
                                 <tr key={article._id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4">
                                         <span className="font-medium text-gray-900">{article.title}</span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${typeColors[article.type]}`}>
-                                            {typeLabels[article.type]}
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${typeColors[article.type] || 'bg-gray-100 text-gray-700'}`}>
+                                            {typeLabels[article.type] || article.type}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-500">
-                                        {new Date(article.date).toLocaleDateString()}
+                                        {new Date(article.date).toLocaleDateString('en-IN', { timeZone: 'UTC' })}
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex gap-1">
-                                            {article.tags.slice(0, 3).map((tag) => (
+                                            {(article.tags || []).slice(0, 3).map((tag) => (
                                                 <span key={tag} className="px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
                                                     {tag}
                                                 </span>
                                             ))}
-                                            {article.tags.length > 3 && (
+                                            {(article.tags || []).length > 3 && (
                                                 <span className="text-xs text-gray-400">+{article.tags.length - 3}</span>
                                             )}
                                         </div>
@@ -186,7 +336,7 @@ export default function ArticlesPage() {
                 )}
 
                 {/* Pagination */}
-                {totalPages > 1 && (
+                {displayTotalPages > 1 && (
                     <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
                         <button
                             onClick={() => setPage(Math.max(1, page - 1))}
@@ -196,11 +346,12 @@ export default function ArticlesPage() {
                             Previous
                         </button>
                         <span className="text-sm text-gray-500">
-                            Page {page} of {totalPages}
+                            Page {page} of {displayTotalPages}
+                            {isSearchActive && <span className="text-green-600 ml-2">(⚡ from index)</span>}
                         </span>
                         <button
-                            onClick={() => setPage(Math.min(totalPages, page + 1))}
-                            disabled={page === totalPages}
+                            onClick={() => setPage(Math.min(displayTotalPages, page + 1))}
+                            disabled={page === displayTotalPages}
                             className="px-3 py-1 bg-gray-100 rounded disabled:opacity-50"
                         >
                             Next

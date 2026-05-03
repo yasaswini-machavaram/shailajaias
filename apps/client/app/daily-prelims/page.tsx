@@ -108,6 +108,23 @@ function DailyPrelimsInner() {
                         <div className="ca-empty-icon">📰</div>
                         <h2 className="ca-empty-title">No articles for this date</h2>
                         <p className="ca-empty-text">Try selecting a different date</p>
+                        {adjacentDates.previous && (
+                            <button
+                                onClick={() => {
+                                    pendingIndex.current = 0;
+                                    setSelectedDate(adjacentDates.previous!.split('T')[0]);
+                                }}
+                                className="ca-latest-btn"
+                            >
+                                <svg className="ca-latest-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Go to latest article
+                                <span className="ca-latest-btn-date">
+                                    {new Date(adjacentDates.previous).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}
+                                </span>
+                            </button>
+                        )}
                     </div>
                 ) : currentArticle ? (
                     <div className="ca-article-wrapper">
@@ -115,6 +132,13 @@ function DailyPrelimsInner() {
                         <article className="ca-article-card">
                             {/* Title */}
                             <h1 className="ca-article-title">{currentArticle.title}</h1>
+
+                            {/* Hero Image */}
+                            {currentArticle.imageUrl && (
+                                <figure className="ca-hero-image">
+                                    <img src={currentArticle.imageUrl} alt={currentArticle.title} />
+                                </figure>
+                            )}
 
                             {/* Content */}
                             <RichTextRenderer content={currentArticle.content} />
@@ -133,14 +157,15 @@ function DailyPrelimsInner() {
                         {currentArticle.tags && currentArticle.tags.length > 0 && (
                             <div className="ca-tags">
                                 {currentArticle.tags.map((tag, idx) => (
-                                    <span
+                                    <Link
                                         key={tag}
+                                        href={`/search?tag=${encodeURIComponent(tag)}`}
                                         className={`ca-tag ${idx === 0 ? 'ca-tag--primary' : ''}`}
                                     >
                                         {idx === 0 && <span className="ca-tag-icon">📄</span>}
                                         {tag}
                                         {idx === 0 && <span className="ca-tag-arrow">→</span>}
-                                    </span>
+                                    </Link>
                                 ))}
                             </div>
                         )}

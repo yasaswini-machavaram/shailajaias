@@ -147,6 +147,7 @@ isPublished (default false), createdBy
 | DELETE | `/api/burning-issues/:id` | Admin | Delete |
 | GET | `/api/magazines` | Public | List magazines |
 | GET | `/api/magazines/admin` | Admin | Admin list (includes unpublished) |
+| GET | `/api/magazines/download/:id` | Public | Download PDF with Content-Disposition: attachment |
 | GET | `/api/magazines/:id` | Public | Single magazine |
 | POST | `/api/magazines` | Admin | Upload PDF + create |
 | PUT | `/api/magazines/:id` | Admin | Update |
@@ -166,7 +167,8 @@ isPublished (default false), createdBy
 | POST | `/api/upload/image` | Admin | Upload image to S3 |
 | POST | `/api/upload/pdf` | Admin | Upload PDF to S3 |
 | GET | `/api/upload/presigned` | Admin | Presigned S3 URL |
-| GET | `/api/search` | Public | Unified search (articles + quizzes) |
+| GET | `/api/search/index` | Public | Lightweight search index for client-side Trie + Inverted Index (ETag + 5-min server cache) |
+| GET | `/api/search` | Public | Unified search — legacy fallback (articles + quizzes) |
 
 ### Auth Middleware
 - `protect`: Verifies Bearer JWT, attaches `req.user`
@@ -256,12 +258,19 @@ Breakpoints: mobile <640px, tablet 640-1024px, desktop >1024px
 | `DatePicker` | `components/DatePicker.tsx` | Prev/Next day date selector for articles/quiz |
 | `QuizOption` | `components/QuizOption.tsx` | Individual quiz answer option with states |
 | `RichTextRenderer` | `components/RichTextRenderer.tsx` | Renders TipTap JSON to styled HTML |
-| `TagChips` | `components/TagChips.tsx` | Tag display component |
+| `TagChips` | `components/TagChips.tsx` | Tag display component (links to `/search?tag=`) |
 | `BurningIssuesGallery` | `src/components/BurningIssuesGallery.tsx` | Image carousel for burning issues |
 | `Header` | `src/components/Header.tsx` | Page header |
 | `SearchBar` | `src/components/SearchBar.tsx` | Search input |
 | `MagazineCard` | `src/components/MagazineCard.tsx` | Magazine display card |
 | `QuickAccessCard` | `src/components/QuickAccessCard.tsx` | Home page quick access card |
+
+#### Client-Side Search Libraries
+| File | Location | Purpose |
+|------|----------|---------|
+| `SearchEngine` | `lib/search-engine.ts` | Trie (prefix tree) + Inverted Index for in-browser search |
+| `SearchCache` | `lib/search-cache.ts` | sessionStorage cache manager for the search index |
+| `useSearchEngine` | `hooks/useSearchEngine.ts` | React hook providing ready-to-use SearchEngine instance |
 
 #### Admin-Only Components (inline within pages)
 - TipTap rich text editor (in article creation/edit pages)
@@ -385,6 +394,7 @@ Admin creates content
 - S3 service and local file upload (multer)
 - Excel quiz import service
 - Unified search across articles + quizzes
+- Client-side search engine (Trie + Inverted Index) with sessionStorage cache — zero API calls per search
 - Shared types package (`@repo/types`)
 
 ### 🚧 PARTIALLY BUILT / NEEDS WORK
@@ -400,7 +410,7 @@ Admin creates content
 - Student progress tracking (quiz scores, completion)
 - Push notifications
 - Student profile page (`/profile`)
-- Search result page refinement
+- ~~Search result page refinement~~ (DONE — client-side Trie + Inverted Index)
 - App-wide loading states / skeleton screens
 - Error boundary handling
 - Dark mode (CSS vars set up for it in globals.css but not actively used)
@@ -452,6 +462,20 @@ Admin creates content
 - **Zero API overhead:** Reuses `adjacentDates.previous` already returned by the parallel `getAdjacentQuizDates()` call. No new endpoints, no new fetches.
 - **UX:** CTA shows "Go to latest quiz" + badge with the date (e.g. "17 Apr"). Clicking sets `date` state → triggers existing `useEffect` → loads quiz data + new adjacent dates → DatePicker, prev/next all sync automatically.
 - **Design:** Uses `#1E3A5F` primary with shadow, `active:scale` micro-animation, clipboard icon in empty state circle.
+
+### Session: 2026-05-03 — Client-Side Search Engine + 5 Bug Fixes
+- **Major feature: Client-side search engine** — Replaced per-keystroke MongoDB `$regex` search with in-browser Trie + Inverted Index. Estimated 95-99% reduction in search API costs.
+  - New API: `GET /api/search/index` serves lightweight metadata (`{_id, title, type, date, tags}`) with ETag/304 + 5-min server memory cache.
+  - New client libs: `lib/search-engine.ts` (Trie for title prefix search, Inverted Index for O(1) tag lookup), `lib/search-cache.ts` (sessionStorage), `hooks/useSearchEngine.ts` (React hook).
+  - Updated pages: `search/page.tsx`, `admin/articles/page.tsx` (cache badge + refresh), `topics/page.tsx` (tag chips use Inverted Index).
+  - All tag links unified to `/search?tag=X`. 3-character minimum enforced with UI hint.
+  - Server-side cache invalidation wired into article create/update/delete/import.
+- **Bug fixes (5):**
+  - **DatePicker calendar not opening** — Auto-call `showPicker()` via ref callback when popup mounts.
+  - **Magazines duplicate year** — Removed `Year {year}` text; badge now shows 📅 icon + year only.
+  - **Daily Quiz date dropdown unresponsive** — Made entire container div clickable via `showPicker()`.
+  - **Magazines sections not all expanded** — Changed default from `Set([currentYear])` to expand all years on load.
+  - **Magazine download opens in browser** — Added `GET /api/magazines/download/:id` with `Content-Disposition: attachment` header; client uses `application/octet-stream` blob type.
 
 ### Session: 2026-04-18 — Bug Fixes (Image Error / Magazine Delete / Quiz Edit 404)
 - **Bugs fixed: 3**

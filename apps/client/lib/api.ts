@@ -195,7 +195,7 @@ export async function getStats(): Promise<{
     };
 }
 
-// Date helper
+// Date helper — use UTC to avoid timezone drift
 export function formatDate(date: Date): string {
     return date.toISOString().split('T')[0];
 }
@@ -206,5 +206,6 @@ export function formatDisplayDate(dateString: string): string {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
+        timeZone: 'UTC',
     });
 }

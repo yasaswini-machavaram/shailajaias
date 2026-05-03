@@ -15,6 +15,7 @@ function formatDate(dateStr: string): string {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
+        timeZone: 'UTC',
     });
 }
 
@@ -26,6 +27,7 @@ function BurningIssuesInner() {
     // Gallery state
     const [selectedIssue, setSelectedIssue] = useState<BurningIssue | null>(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [shareCopied, setShareCopied] = useState(false);
 
     // Touch swipe support
     const touchStartX = useRef(0);
@@ -85,6 +87,44 @@ function BurningIssuesInner() {
     const closeGallery = () => {
         setSelectedIssue(null);
         setCurrentImageIndex(0);
+    };
+
+    const shareIssue = async () => {
+        if (!selectedIssue) return;
+        const dateStr = selectedIssue.date.split('T')[0];
+        const shareUrl = `${window.location.origin}/burning-issues?id=${selectedIssue._id}&date=${dateStr}`;
+        const shareData = {
+            title: selectedIssue.topic,
+            text: `Burning Issue: ${selectedIssue.topic}`,
+            url: shareUrl,
+        };
+
+        // Try native share first (works on mobile)
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+                return;
+            } catch {
+                // User cancelled or share failed — fall through to clipboard
+            }
+        }
+
+        // Fallback: copy to clipboard
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            setShareCopied(true);
+            setTimeout(() => setShareCopied(false), 2000);
+        } catch {
+            // Final fallback
+            const input = document.createElement('input');
+            input.value = shareUrl;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            setShareCopied(true);
+            setTimeout(() => setShareCopied(false), 2000);
+        }
     };
 
     // Keyboard navigation
@@ -189,7 +229,7 @@ function BurningIssuesInner() {
 
                 {/* Fullscreen overlay */}
                 <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col">
-                    {/* Top Bar: Close + Title + Counter */}
+                    {/* Top Bar: Close + Title + Share + Counter */}
                     <div className="flex items-center justify-between px-4 md:px-8 py-4 text-white">
                         <button
                             onClick={closeGallery}
@@ -200,12 +240,23 @@ function BurningIssuesInner() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
-                        <h2 className="text-sm md:text-base font-bold truncate max-w-[60%] text-center">
+                        <h2 className="text-sm md:text-base font-bold truncate max-w-[50%] text-center">
                             {selectedIssue.topic}
                         </h2>
-                        <span className="text-sm font-semibold text-white/70 tabular-nums min-w-[3rem] text-right">
-                            {currentImageIndex + 1} / {totalImages}
-                        </span>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={shareIssue}
+                                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                                aria-label="Share"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                                </svg>
+                            </button>
+                            <span className="text-sm font-semibold text-white/70 tabular-nums min-w-[3rem] text-right">
+                                {currentImageIndex + 1} / {totalImages}
+                            </span>
+                        </div>
                     </div>
 
                     {/* Main Image Area */}
@@ -299,7 +350,18 @@ function BurningIssuesInner() {
         );
     }
 
-    return renderTopicList();
+    return (
+        <>
+            {renderTopicList()}
+
+            {/* Share copied toast */}
+            {shareCopied && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] bg-green-600 text-white px-5 py-3 rounded-xl shadow-lg text-sm font-medium animate-fade-in">
+                    ✓ Link copied to clipboard
+                </div>
+            )}
+        </>
+    );
 }
 
 export default function BurningIssuesPage() {

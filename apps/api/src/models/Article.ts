@@ -77,8 +77,8 @@ const ArticleSchema = new Schema<IArticle>(
 // Compound index for efficient date + type queries
 ArticleSchema.index({ date: -1, type: 1 });
 
-// Text index for search
-ArticleSchema.index({ title: 'text', content: 'text', tags: 'text' });
+// Text index for search — only title and tags (not content body)
+ArticleSchema.index({ title: 'text', tags: 'text' });
 
 export const Article = mongoose.model<IArticle>('Article', ArticleSchema);
 export default Article;

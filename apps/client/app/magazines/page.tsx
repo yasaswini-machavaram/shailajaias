@@ -32,7 +32,7 @@ export default function MagazinesPage() {
     const [magazines, setMagazines] = useState<Magazine[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<MagazineCategory>('prelims_monthly');
-    const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([new Date().getFullYear()]));
+    const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set());
     const [shareToast, setShareToast] = useState(false);
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
@@ -65,6 +65,13 @@ export default function MagazinesPage() {
     const years = Object.keys(groupedByYear)
         .map(Number)
         .sort((a, b) => b - a);
+
+    // Bug #6 fix: Expand all year sections when magazines load
+    useEffect(() => {
+        if (years.length > 0) {
+            setExpandedYears(new Set(years));
+        }
+    }, [magazines]);
 
     const toggleYear = (year: number) => {
         setExpandedYears((prev) => {
@@ -99,21 +106,62 @@ export default function MagazinesPage() {
 
     const handleDownload = async (mag: Magazine) => {
         setDownloadingId(mag._id);
+        const safeName = mag.title.replace(/[/\\:*?"<>|]/g, '_').trim();
+        const fullUrl = getFullUrl(mag.pdfUrl);
+
         try {
-            const response = await fetch(getFullUrl(mag.pdfUrl));
+            // Try fetching as blob (works for same-origin or CORS-enabled URLs)
+            const response = await fetch(fullUrl, { mode: 'cors' });
+            if (!response.ok) throw new Error('Fetch failed');
+
             const blob = await response.blob();
-            const objectUrl = URL.createObjectURL(blob);
+            // Force PDF type so browser treats it as downloadable
+            const pdfBlob = new Blob([blob], { type: 'application/octet-stream' });
+            const objectUrl = URL.createObjectURL(pdfBlob);
             const link = document.createElement('a');
             link.href = objectUrl;
-            // Sanitize title: remove characters not safe for filenames
-            const safeName = mag.title.replace(/[/\\:*?"<>|]/g, '_').trim();
             link.download = `${safeName}.pdf`;
+            link.style.display = 'none';
             document.body.appendChild(link);
             link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(objectUrl);
-        } catch (error) {
-            console.error('Download failed:', error);
+
+            // Cleanup after a short delay to ensure download starts
+            setTimeout(() => {
+                document.body.removeChild(link);
+                URL.revokeObjectURL(objectUrl);
+            }, 1000);
+        } catch {
+            // CORS blocked — fall back to server-side download proxy
+            try {
+                const proxyUrl = `${API_URL}/api/magazines/download/${mag._id}`;
+                const response = await fetch(proxyUrl);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const pdfBlob = new Blob([blob], { type: 'application/octet-stream' });
+                    const objectUrl = URL.createObjectURL(pdfBlob);
+                    const link = document.createElement('a');
+                    link.href = objectUrl;
+                    link.download = `${safeName}.pdf`;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    setTimeout(() => {
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(objectUrl);
+                    }, 1000);
+                } else {
+                    // Last resort: open in new tab with download hint
+                    const link = document.createElement('a');
+                    link.href = fullUrl;
+                    link.download = `${safeName}.pdf`;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.click();
+                }
+            } catch {
+                // Absolute fallback
+                window.open(fullUrl, '_blank');
+            }
         } finally {
             setDownloadingId(null);
         }
@@ -166,9 +214,9 @@ export default function MagazinesPage() {
                                 >
                                     <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                                         <span className="w-8 h-8 rounded-lg bg-[#F5F5F5] text-[#1E3A5F] flex items-center justify-center text-sm">
-                                            {year}
+                                            📅
                                         </span>
-                                        Year {year}
+                                        {year}
                                     </h2>
                                     <svg
                                         className={`w-5 h-5 text-gray-400 transition-transform ${expandedYears.has(year) ? 'rotate-180' : ''}`}

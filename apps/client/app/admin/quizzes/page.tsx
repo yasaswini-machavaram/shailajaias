@@ -112,7 +112,7 @@ export default function QuizzesPage() {
                                         <span className="font-medium text-gray-900">{quiz.title}</span>
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-500">
-                                        {new Date(quiz.date).toLocaleDateString()}
+                                        {new Date(quiz.date).toLocaleDateString('en-IN', { timeZone: 'UTC' })}
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex gap-1">
