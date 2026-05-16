@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { Article, Quiz } from '../models/index.js';
 import type { ArticleType } from '../models/index.js';
 import { parseArticleExcel } from '../services/article-excel.service.js';
+import { parseMainsExcel } from '../services/mains-excel.service.js';
 import { invalidateSearchIndexCache } from './search-index.controller.js';
 
 // @desc    Get all articles with filters
@@ -387,6 +388,59 @@ export const importArticlesFromExcel = async (req: Request, res: Response): Prom
         });
     } catch (error) {
         console.error('Import articles error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @desc    Import mains articles from Excel file
+// @route   POST /api/articles/import-mains-excel
+// @access  Private/Admin
+export const importMainsFromExcel = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const file = req.file;
+        if (!file) {
+            res.status(400).json({ success: false, message: 'Please upload an Excel file' });
+            return;
+        }
+
+        // Parse Excel file using Mains-specific parser
+        const parseResult = parseMainsExcel(file.buffer);
+
+        if (parseResult.articles.length === 0) {
+            res.status(400).json({
+                success: false,
+                message: 'No valid mains articles found in Excel file',
+                errors: parseResult.errors,
+                skipped: parseResult.skipped,
+            });
+            return;
+        }
+
+        const user = (req as Request & { user: { _id: string } }).user;
+
+        // Bulk insert articles as mains type with structured fields
+        const articlesToInsert = parseResult.articles.map((article) => ({
+            ...article,
+            type: 'mains' as const,
+            createdBy: user._id,
+        }));
+
+        const inserted = await Article.insertMany(articlesToInsert);
+
+        // Invalidate search index cache so imported articles appear in search
+        invalidateSearchIndexCache();
+
+        res.status(201).json({
+            success: true,
+            data: {
+                imported: inserted.length,
+                skipped: parseResult.skipped,
+            },
+            message: `Successfully imported ${inserted.length} mains articles`,
+            warnings: parseResult.errors.length > 0 ? parseResult.errors : undefined,
+        });
+    } catch (error) {
+        console.error('Import mains articles error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };

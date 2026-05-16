@@ -1,12 +1,142 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import DatePicker from '@/components/DatePicker';
 import RichTextRenderer from '@/components/RichTextRenderer';
-import { getArticlesByDate, getAdjacentDates, formatDate, type Article } from '@/lib/api';
+import { getArticlesByDate, getAdjacentDates, type Article } from '@/lib/api';
 import { useRef } from 'react';
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface MainsQuestion {
+    question: string;
+    answer: string;
+}
+
+interface MainsArticle extends Article {
+    context?: string;
+    questions?: MainsQuestion[];
+    practice?: string;
+    valueAdditions?: string;
+    visualSummaryUrl?: string;
+}
+
+// ─── Visual Summary Modal ───────────────────────────────────────────────────
+
+function VisualSummaryModal({
+    imageUrl,
+    title,
+    onClose,
+}: {
+    imageUrl: string;
+    title: string;
+    onClose: () => void;
+}) {
+    // Close on Escape key
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [onClose]);
+
+    // Prevent body scroll when modal is open
+    useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, []);
+
+    return (
+        <div
+            className="mains-modal-overlay"
+            onClick={onClose}
+        >
+            <div
+                className="mains-modal-content"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* Close button */}
+                <button
+                    onClick={onClose}
+                    className="mains-modal-close"
+                    aria-label="Close"
+                >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+
+                {/* Image */}
+                <div className="mains-modal-image-wrap">
+                    <img
+                        src={imageUrl}
+                        alt={`Visual Summary — ${title}`}
+                        className="mains-modal-image"
+                    />
+                </div>
+
+                {/* Title */}
+                <p className="mains-modal-title">{title}</p>
+            </div>
+        </div>
+    );
+}
+
+// ─── Q&A Accordion ──────────────────────────────────────────────────────────
+
+function QAAccordion({ questions }: { questions: MainsQuestion[] }) {
+    const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+
+    const toggle = (index: number) => {
+        setExpandedIndex(expandedIndex === index ? null : index);
+    };
+
+    return (
+        <div className="mains-qa-section">
+            <div className="mains-section-header">
+                <span className="mains-section-icon">❓</span>
+                <h2 className="mains-section-title">Questions & Answers</h2>
+            </div>
+            <div className="mains-accordion">
+                {questions.map((qa, index) => (
+                    <div
+                        key={index}
+                        className={`mains-accordion-item ${expandedIndex === index ? 'mains-accordion-item--active' : ''}`}
+                    >
+                        {/* Question header */}
+                        <button
+                            onClick={() => toggle(index)}
+                            className="mains-accordion-header"
+                        >
+                            <span className="mains-accordion-number">Q{index + 1}</span>
+                            <span className="mains-accordion-question">{qa.question}</span>
+                            <span className={`mains-accordion-chevron ${expandedIndex === index ? 'mains-accordion-chevron--open' : ''}`}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </span>
+                        </button>
+
+                        {/* Answer panel */}
+                        <div className={`mains-accordion-panel ${expandedIndex === index ? 'mains-accordion-panel--open' : ''}`}>
+                            <div className="mains-accordion-answer">
+                                <div
+                                    className="mains-rich-content"
+                                    dangerouslySetInnerHTML={{ __html: qa.answer }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// ─── Main Page Component ────────────────────────────────────────────────────
 
 function DailyMainsInner() {
     const searchParams = useSearchParams();
@@ -15,10 +145,11 @@ function DailyMainsInner() {
         if (paramDate) return paramDate;
         return new Date().toISOString().split('T')[0];
     });
-    const [articles, setArticles] = useState<Article[]>([]);
-    const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
+    const [articles, setArticles] = useState<MainsArticle[]>([]);
+    const [currentIndex, setCurrentIndex] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [adjacentDates, setAdjacentDates] = useState<{ previous: string | null; next: string | null }>({ previous: null, next: null });
+    const [showVisualSummary, setShowVisualSummary] = useState(false);
     const pendingIndex = useRef<number | null>(null);
 
     // Update URL when date changes
@@ -36,14 +167,14 @@ function DailyMainsInner() {
                     getArticlesByDate('mains', selectedDate),
                     getAdjacentDates('mains', selectedDate)
                 ]);
-                setArticles(articlesData);
+                setArticles(articlesData as MainsArticle[]);
                 setAdjacentDates(datesData);
 
                 if (pendingIndex.current !== null) {
-                    setExpandedIndex(pendingIndex.current === -1 ? articlesData.length - 1 : pendingIndex.current);
+                    setCurrentIndex(pendingIndex.current === -1 ? articlesData.length - 1 : pendingIndex.current);
                     pendingIndex.current = null;
-                } else if (articlesData.length > 0) {
-                    setExpandedIndex(0); // Auto-expand first article
+                } else {
+                    setCurrentIndex(0);
                 }
             } catch (error) {
                 console.error('Failed to fetch data:', error);
@@ -55,204 +186,276 @@ function DailyMainsInner() {
         fetchAll();
     }, [selectedDate]);
 
-    const toggleExpand = (index: number) => {
-        setExpandedIndex(expandedIndex === index ? null : index);
-    };
+    const currentArticle = articles[currentIndex];
 
-    const goToPrevArticle = () => {
-        if (expandedIndex !== null && expandedIndex > 0) {
-            setExpandedIndex(expandedIndex - 1);
+    // Check if current article has structured mains fields
+    const isStructured = currentArticle && (
+        currentArticle.context ||
+        (currentArticle.questions && currentArticle.questions.length > 0) ||
+        currentArticle.practice ||
+        currentArticle.valueAdditions ||
+        currentArticle.visualSummaryUrl
+    );
+
+    const goToPrev = useCallback(() => {
+        if (currentIndex > 0) {
+            setCurrentIndex(currentIndex - 1);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } else if (adjacentDates.previous) {
             pendingIndex.current = -1;
             setSelectedDate(adjacentDates.previous.split('T')[0]);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-    };
+    }, [currentIndex, adjacentDates.previous]);
 
-    const goToNextArticle = () => {
-        if (expandedIndex !== null && expandedIndex < articles.length - 1) {
-            setExpandedIndex(expandedIndex + 1);
+    const goToNext = useCallback(() => {
+        if (currentIndex < articles.length - 1) {
+            setCurrentIndex(currentIndex + 1);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } else if (adjacentDates.next) {
             pendingIndex.current = 0;
             setSelectedDate(adjacentDates.next.split('T')[0]);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-    };
-
-    const goToPrevDay = () => {
-        if (adjacentDates.previous) {
-            setSelectedDate(adjacentDates.previous.split('T')[0]);
-        }
-    };
-
-    const goToNextDay = () => {
-        if (adjacentDates.next) {
-            setSelectedDate(adjacentDates.next.split('T')[0]);
-        }
-    };
-
-    // Sample icons for different question types
-    const getIcon = (index: number) => {
-        const icons = ['🛡️', '⚖️', '📈', '🌍', '🔬', '🎭'];
-        return icons[index % icons.length];
-    };
+    }, [currentIndex, articles.length, adjacentDates.next]);
 
     return (
-        <div className="min-h-screen bg-[#FAFAF8] pb-20">
-            {/* DatePicker */}
-            <div className="max-w-4xl mx-auto px-4 pt-2 pb-2">
-                <DatePicker 
-                    selectedDate={new Date(selectedDate)} 
-                    onDateChange={(date) => setSelectedDate(date.toISOString().split('T')[0])} 
-                />
+        <div className="ca-page pt-2">
+            {/* DatePicker & Counter */}
+            <div className="ca-header-inner">
+                <div className="ca-header-row">
+                    <DatePicker
+                        selectedDate={new Date(selectedDate)}
+                        onDateChange={(date) => setSelectedDate(date.toISOString().split('T')[0])}
+                    />
+                    {articles.length > 0 && (
+                        <span className="ca-counter">
+                            {currentIndex + 1} / {articles.length}
+                        </span>
+                    )}
+                </div>
             </div>
 
             {/* Content */}
-            <main className="max-w-4xl mx-auto px-4 py-6">
+            <main className="ca-main">
                 {isLoading ? (
-                    <div className="flex items-center justify-center py-20">
-                        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#1E3A5F]"></div>
+                    <div className="ca-loading">
+                        <div className="ca-spinner" />
                     </div>
                 ) : articles.length === 0 ? (
-                    <div className="text-center py-20">
-                        <div className="text-6xl mb-4">📝</div>
-                        <h2 className="text-xl font-bold text-[#1E3A5F] mb-2 font-headline">No mains content for this date</h2>
-                        <p className="text-gray-500">Try selecting a different date</p>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        {/* Accordion Questions */}
-                        <div className="space-y-3">
-                            {articles.map((article, index) => (
-                                <div
-                                    key={article._id}
-                                    className={`bg-white rounded-2xl border transition-all duration-300 overflow-hidden shadow-sm ${expandedIndex === index ? 'border-[#3B82F6] ring-1 ring-[#3B82F6]/20' : 'border-gray-200 hover:border-gray-300'
-                                        }`}
-                                >
-                                    {/* Header - Always visible */}
-                                    <button
-                                        onClick={() => toggleExpand(index)}
-                                        className="w-full px-6 py-5 flex items-center gap-4 text-left transition-colors"
-                                    >
-                                        <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-xl shadow-inner flex-shrink-0">
-                                            {getIcon(index)}
-                                        </div>
-                                        <span className={`flex-1 font-bold text-lg leading-snug transition-colors ${expandedIndex === index ? 'text-[#1E3A5F]' : 'text-gray-700'
-                                            }`}>
-                                            {article.title}
-                                        </span>
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${expandedIndex === index ? 'bg-[#3B82F6] text-white rotate-180' : 'bg-gray-100 text-gray-500'
-                                            }`}>
-                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                        </div>
-                                    </button>
-
-                                    {/* Expanded Content */}
-                                    {expandedIndex === index && (
-                                        <div className="px-6 pb-6 animate-fadeIn">
-                                            <div className="h-px bg-gray-100 mb-6" />
-                                            <div className="prose prose-slate max-w-none">
-                                                <RichTextRenderer content={article.content} />
-                                            </div>
-
-                                            {/* Article Source */}
-                                            {article.source && (
-                                                <div className="mt-6 p-4 bg-gray-50 rounded-xl flex items-center gap-2 text-sm text-gray-600 border border-gray-100">
-                                                    <span className="font-semibold text-gray-400">Source:</span>
-                                                    <span className="text-[#3B82F6] font-medium underline decoration-dotted underline-offset-4 cursor-pointer">
-                                                        {article.source}
-                                                    </span>
-                                                </div>
-                                            )}
-
-                                            {/* Tags */}
-                                            {article.tags && article.tags.length > 0 && (
-                                                <div className="mt-4 flex flex-wrap gap-2">
-                                                    {article.tags.map((tag) => (
-                                                        <span
-                                                            key={tag}
-                                                            className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold uppercase tracking-wider border border-gray-200"
-                                                        >
-                                                            {tag}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            {/* Internal Prev/Next Article Links */}
-                                            <div className="mt-8 pt-6 border-t border-gray-100 flex justify-between items-center text-sm font-medium">
-                                                <button
-                                                    onClick={goToPrevArticle}
-                                                    disabled={!adjacentDates.previous && index === 0}
-                                                    className="flex items-center gap-2 text-gray-500 hover:text-[#1E3A5F] transition-colors disabled:opacity-30 disabled:cursor-not-allowed group"
-                                                >
-                                                    <span className="text-xl group-hover:-translate-x-1 transition-transform">‹</span>
-                                                    Previous Article
-                                                </button>
-                                                <button
-                                                    onClick={goToNextArticle}
-                                                    disabled={!adjacentDates.next && index === articles.length - 1}
-                                                    className="flex items-center gap-2 text-gray-500 hover:text-[#1E3A5F] transition-colors disabled:opacity-30 disabled:cursor-not-allowed group"
-                                                >
-                                                    Next Article
-                                                    <span className="text-xl group-hover:translate-x-1 transition-transform">›</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Practice Question Box */}
-                        <div className="mt-8">
-                            <Link 
-                                href={`/daily-quiz?date=${selectedDate}`}
-                                className="block bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:border-blue-300 transition-all group"
+                    <div className="ca-empty">
+                        <div className="ca-empty-icon">📝</div>
+                        <h2 className="ca-empty-title">No mains content for this date</h2>
+                        <p className="ca-empty-text">Try selecting a different date</p>
+                        {adjacentDates.previous && (
+                            <button
+                                onClick={() => {
+                                    pendingIndex.current = 0;
+                                    setSelectedDate(adjacentDates.previous!.split('T')[0]);
+                                }}
+                                className="ca-latest-btn"
                             >
-                                <div className="w-full px-6 py-5 flex items-center justify-between">
-                                    <span className="font-bold text-gray-700 flex items-center gap-3">
-                                        <span className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-xl">❓</span>
-                                        Practice MCQs from today&apos;s CA
-                                    </span>
-                                    <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                    </svg>
+                                <svg className="ca-latest-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Go to latest article
+                                <span className="ca-latest-btn-date">
+                                    {new Date(adjacentDates.previous).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}
+                                </span>
+                            </button>
+                        )}
+                    </div>
+                ) : currentArticle ? (
+                    <div className="mains-article-wrapper">
+                        {/* Title */}
+                        <h1 className="mains-title">{currentArticle.title}</h1>
+
+                        {isStructured ? (
+                            <>
+                                {/* Visual Summary Button */}
+                                {currentArticle.visualSummaryUrl && (
+                                    <button
+                                        onClick={() => setShowVisualSummary(true)}
+                                        className="mains-visual-summary-btn"
+                                    >
+                                        <span className="mains-visual-summary-icon">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                                            </svg>
+                                        </span>
+                                        <span className="mains-visual-summary-text">
+                                            <span className="mains-visual-summary-label">Visual Summary</span>
+                                            <span className="mains-visual-summary-hint">Tap to view mind map / infographic</span>
+                                        </span>
+                                        <span className="mains-visual-summary-arrow">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
+                                            </svg>
+                                        </span>
+                                    </button>
+                                )}
+
+                                {/* Context */}
+                                {currentArticle.context && (
+                                    <div className="mains-context-section">
+                                        <div className="mains-section-header">
+                                            <span className="mains-section-icon">📋</span>
+                                            <h2 className="mains-section-title">Context</h2>
+                                        </div>
+                                        <div className="mains-context-body">
+                                            <div
+                                                className="mains-rich-content"
+                                                dangerouslySetInnerHTML={{ __html: currentArticle.context }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Q&A Accordion */}
+                                {currentArticle.questions && currentArticle.questions.length > 0 && (
+                                    <QAAccordion questions={currentArticle.questions} />
+                                )}
+
+                                {/* Source */}
+                                {currentArticle.source && (
+                                    <div className="mains-source">
+                                        <span className="mains-source-icon">🔗</span>
+                                        <span className="mains-source-label">Source: </span>
+                                        <span className="mains-source-name">{currentArticle.source}</span>
+                                    </div>
+                                )}
+
+                                {/* Tags */}
+                                {currentArticle.tags && currentArticle.tags.length > 0 && (
+                                    <div className="mains-tags">
+                                        {currentArticle.tags.map((tag, idx) => (
+                                            <Link
+                                                key={tag}
+                                                href={`/search?tag=${encodeURIComponent(tag)}`}
+                                                className={`mains-tag ${idx === 0 ? 'mains-tag--primary' : ''}`}
+                                            >
+                                                {idx === 0 && <span className="mains-tag-icon">📄</span>}
+                                                {tag}
+                                                {idx === 0 && <span className="mains-tag-arrow">→</span>}
+                                            </Link>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Practice */}
+                                {currentArticle.practice && (
+                                    <div className="mains-practice-section">
+                                        <div className="mains-section-header">
+                                            <span className="mains-section-icon">📝</span>
+                                            <h2 className="mains-section-title">Practice</h2>
+                                        </div>
+                                        <div className="mains-practice-body">
+                                            <div
+                                                className="mains-rich-content"
+                                                dangerouslySetInnerHTML={{ __html: currentArticle.practice }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Value Additions */}
+                                {currentArticle.valueAdditions && (
+                                    <div className="mains-value-section">
+                                        <div className="mains-section-header">
+                                            <span className="mains-section-icon">✨</span>
+                                            <h2 className="mains-section-title">Value Additions</h2>
+                                        </div>
+                                        <div className="mains-value-body">
+                                            <div
+                                                className="mains-rich-content"
+                                                dangerouslySetInnerHTML={{ __html: currentArticle.valueAdditions }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            /* ── Legacy fallback: render content via RichTextRenderer ── */
+                            <article className="ca-article-card">
+                                {currentArticle.imageUrl && (
+                                    <figure className="ca-hero-image">
+                                        <img src={currentArticle.imageUrl} alt={currentArticle.title} />
+                                    </figure>
+                                )}
+                                <RichTextRenderer content={currentArticle.content} />
+
+                                {currentArticle.source && (
+                                    <div className="mains-source" style={{ marginTop: '24px' }}>
+                                        <span className="mains-source-icon">🔗</span>
+                                        <span className="mains-source-label">Source: </span>
+                                        <span className="mains-source-name">{currentArticle.source}</span>
+                                    </div>
+                                )}
+
+                                {currentArticle.tags && currentArticle.tags.length > 0 && (
+                                    <div className="mains-tags" style={{ marginTop: '16px' }}>
+                                        {currentArticle.tags.map((tag, idx) => (
+                                            <Link
+                                                key={tag}
+                                                href={`/search?tag=${encodeURIComponent(tag)}`}
+                                                className={`mains-tag ${idx === 0 ? 'mains-tag--primary' : ''}`}
+                                            >
+                                                {tag}
+                                            </Link>
+                                        ))}
+                                    </div>
+                                )}
+                            </article>
+                        )}
+
+                        {/* CTA: Practice MCQs */}
+                        <div className="ca-cta-section" style={{ marginTop: '24px' }}>
+                            <Link href={`/daily-quiz?date=${selectedDate}`} className="ca-cta-card">
+                                <div className="ca-cta-icon ca-cta-icon--quiz">📝</div>
+                                <div className="ca-cta-content">
+                                    <h3 className="ca-cta-title">Practice MCQs from today&apos;s CA</h3>
+                                    <p className="ca-cta-subtitle">Test your understanding</p>
                                 </div>
+                                <span className="ca-cta-arrow">›</span>
                             </Link>
                         </div>
 
-                        {/* Day Navigation Buttons */}
-                        <div className="mt-12 flex justify-between gap-4">
+                        {/* Previous / Next Navigation */}
+                        <div className="ca-nav">
                             <button
-                                onClick={goToPrevDay}
-                                disabled={!adjacentDates.previous}
-                                className="px-6 py-3 bg-white border border-gray-200 rounded-xl font-bold text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                                onClick={goToPrev}
+                                disabled={!adjacentDates.previous && currentIndex === 0}
+                                className="ca-nav-btn ca-nav-btn--prev"
                             >
-                                <span className="text-xl">‹</span> Previous Day
+                                ‹ Previous Article
                             </button>
                             <button
-                                onClick={goToNextDay}
-                                disabled={!adjacentDates.next}
-                                className="px-8 py-3 bg-[#1E3A5F] text-white rounded-xl font-bold shadow-lg hover:bg-[#2C4A73] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                                onClick={goToNext}
+                                disabled={!adjacentDates.next && currentIndex === articles.length - 1}
+                                className="ca-nav-btn ca-nav-btn--next"
                             >
-                                Next Day <span className="text-xl">›</span>
+                                Next Article ›
                             </button>
                         </div>
                     </div>
-                )}
+                ) : null}
             </main>
+
+            {/* Visual Summary Modal */}
+            {showVisualSummary && currentArticle?.visualSummaryUrl && (
+                <VisualSummaryModal
+                    imageUrl={currentArticle.visualSummaryUrl}
+                    title={currentArticle.title}
+                    onClose={() => setShowVisualSummary(false)}
+                />
+            )}
         </div>
     );
 }
 
 export default function DailyMainsPage() {
     return (
-        <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500" /></div>}>
+        <Suspense fallback={<div className="ca-loading"><div className="ca-spinner" /></div>}>
             <DailyMainsInner />
         </Suspense>
     );

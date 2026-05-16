@@ -19,6 +19,13 @@ const tagOptions = [
     'Schemes', 'AYUSH', 'Defence', 'Agriculture', 'Education', 'Health',
 ];
 
+interface QAPair {
+    question: string;
+    answer: string;
+}
+
+const EMPTY_QA: QAPair = { question: '', answer: '' };
+
 export default function NewArticlePage() {
     const { token } = useAuth();
     const router = useRouter();
@@ -34,25 +41,88 @@ export default function NewArticlePage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
+    // ─── Mains-specific structured fields ─────────────────────────────────
+    const [context, setContext] = useState('');
+    const [practice, setPractice] = useState('');
+    const [valueAdditions, setValueAdditions] = useState('');
+    const [visualSummaryUrl, setVisualSummaryUrl] = useState('');
+    const [qaPairs, setQaPairs] = useState<QAPair[]>([
+        { ...EMPTY_QA }, { ...EMPTY_QA }, { ...EMPTY_QA },
+        { ...EMPTY_QA }, { ...EMPTY_QA }, { ...EMPTY_QA },
+    ]);
+
+    const isMains = type === 'mains';
+
+    const updateQA = (index: number, field: 'question' | 'answer', value: string) => {
+        setQaPairs(prev => {
+            const updated = [...prev];
+            updated[index] = { ...updated[index], [field]: value };
+            return updated;
+        });
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
 
-        if (!content || content === '{"type":"doc","content":[{"type":"paragraph"}]}') {
-            setError('Content is required. Please write some article content.');
-            return;
+        if (isMains) {
+            // For Mains: at least context or one Q&A pair is required
+            const hasQA = qaPairs.some(qa => qa.question.trim() && qa.answer.trim());
+            if (!context.trim() && !hasQA) {
+                setError('Please fill in at least the Context section or one Q&A pair.');
+                return;
+            }
+        } else {
+            if (!content || content === '{"type":"doc","content":[{"type":"paragraph"}]}') {
+                setError('Content is required. Please write some article content.');
+                return;
+            }
         }
 
         setIsSubmitting(true);
 
         try {
+            // Build request body
+            const body: Record<string, unknown> = {
+                title,
+                type,
+                date,
+                tags,
+                source,
+                imageUrl: imageUrl || undefined,
+            };
+
+            if (isMains) {
+                // Filter non-empty Q&A pairs
+                const questions = qaPairs
+                    .filter(qa => qa.question.trim() && qa.answer.trim())
+                    .map(qa => ({ question: qa.question.trim(), answer: qa.answer.trim() }));
+
+                body.context = context.trim() || undefined;
+                body.questions = questions.length > 0 ? questions : undefined;
+                body.practice = practice.trim() || undefined;
+                body.valueAdditions = valueAdditions.trim() || undefined;
+                body.visualSummaryUrl = visualSummaryUrl.trim() || undefined;
+
+                // Build minimal content fallback (required field)
+                const contentParts: string[] = [];
+                if (context.trim()) contentParts.push(`<blockquote>${context.trim()}</blockquote>`);
+                if (questions.length > 0) {
+                    contentParts.push(`<h3>${questions[0].question}</h3>`);
+                    contentParts.push(questions[0].answer);
+                }
+                body.content = contentParts.length > 0 ? contentParts.join('\n') : `<p>${title}</p>`;
+            } else {
+                body.content = content;
+            }
+
             const response = await fetch(`${API_URL}/api/articles`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ title, type, date, tags, content, source, imageUrl: imageUrl || undefined }),
+                body: JSON.stringify(body),
             });
 
             const data = await response.json();
@@ -160,19 +230,19 @@ export default function NewArticlePage() {
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Featured Image URL
+                            {isMains ? 'Visual Summary Image URL' : 'Featured Image URL'}
                         </label>
                         <input
-                            type="url"
-                            value={imageUrl}
-                            onChange={(e) => setImageUrl(e.target.value)}
+                            type="text"
+                            value={isMains ? visualSummaryUrl : imageUrl}
+                            onChange={(e) => isMains ? setVisualSummaryUrl(e.target.value) : setImageUrl(e.target.value)}
                             placeholder="Paste image URL or Google Drive link"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
-                        {imageUrl && (
+                        {(isMains ? visualSummaryUrl : imageUrl) && (
                             <div className="mt-2 rounded-lg overflow-hidden border border-gray-200">
                                 <img
-                                    src={imageUrl}
+                                    src={isMains ? visualSummaryUrl : imageUrl}
                                     alt="Preview"
                                     className="w-full max-h-40 object-cover"
                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -234,20 +304,115 @@ export default function NewArticlePage() {
                     )}
                 </div>
 
-                {/* Content - Rich Text Editor */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Content *
-                    </label>
-                    <p className="text-sm text-gray-500 mb-3">
-                        Use the toolbar to format content: headings for sections, blockquote for &quot;Context&quot; blocks, bullet lists for points, and insert images via URL.
-                    </p>
-                    <RichTextEditor
-                        content={content}
-                        onChange={setContent}
-                        placeholder="Start writing your article content... Use H2 for section headers, blockquote for context, bullet lists for points."
-                    />
-                </div>
+                {/* ─── MAINS: Structured Fields ──────────────────────────────── */}
+                {isMains ? (
+                    <>
+                        {/* Context */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 border-l-4 border-l-amber-500">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                📋 Context
+                            </label>
+                            <p className="text-sm text-gray-500 mb-3">
+                                Background context for the topic. Supports HTML formatting.
+                            </p>
+                            <textarea
+                                value={context}
+                                onChange={(e) => setContext(e.target.value)}
+                                rows={4}
+                                placeholder="Enter the context / background information..."
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
+                            />
+                        </div>
+
+                        {/* Q&A Pairs */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 border-l-4 border-l-blue-500">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                ❓ Questions & Answers
+                            </label>
+                            <p className="text-sm text-gray-500 mb-4">
+                                Up to 6 Q&A pairs. Empty pairs will be skipped. Answers support HTML.
+                            </p>
+                            <div className="space-y-5">
+                                {qaPairs.map((qa, index) => (
+                                    <div key={index} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-blue-600 text-white text-xs font-bold">
+                                                Q{index + 1}
+                                            </span>
+                                            <span className="text-sm font-semibold text-gray-700">Question {index + 1}</span>
+                                            {qa.question.trim() && qa.answer.trim() && (
+                                                <span className="ml-auto text-xs text-green-600 font-medium">✓ Complete</span>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={qa.question}
+                                            onChange={(e) => updateQA(index, 'question', e.target.value)}
+                                            placeholder={`Question ${index + 1}...`}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm mb-3"
+                                        />
+                                        <textarea
+                                            value={qa.answer}
+                                            onChange={(e) => updateQA(index, 'answer', e.target.value)}
+                                            rows={3}
+                                            placeholder={`Answer ${index + 1}... (HTML supported)`}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Practice */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 border-l-4 border-l-teal-500">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                📝 Practice
+                            </label>
+                            <p className="text-sm text-gray-500 mb-3">
+                                Practice questions or prompts for the student. HTML supported.
+                            </p>
+                            <textarea
+                                value={practice}
+                                onChange={(e) => setPractice(e.target.value)}
+                                rows={3}
+                                placeholder="Enter practice content..."
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+                            />
+                        </div>
+
+                        {/* Value Additions */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 border-l-4 border-l-orange-500">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                ✨ Value Additions
+                            </label>
+                            <p className="text-sm text-gray-500 mb-3">
+                                Extra value-add content, quotes, data, or facts. HTML supported.
+                            </p>
+                            <textarea
+                                value={valueAdditions}
+                                onChange={(e) => setValueAdditions(e.target.value)}
+                                rows={3}
+                                placeholder="Enter value additions..."
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+                            />
+                        </div>
+                    </>
+                ) : (
+                    /* ─── DEFAULT: Rich Text Editor (Prelims / Burning Issue) ── */
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Content *
+                        </label>
+                        <p className="text-sm text-gray-500 mb-3">
+                            Use the toolbar to format content: headings for sections, blockquote for &quot;Context&quot; blocks, bullet lists for points, and insert images via URL.
+                        </p>
+                        <RichTextEditor
+                            content={content}
+                            onChange={setContent}
+                            placeholder="Start writing your article content... Use H2 for section headers, blockquote for context, bullet lists for points."
+                        />
+                    </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex gap-4">

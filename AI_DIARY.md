@@ -393,6 +393,8 @@ Admin creates content
 - `BurningIssuesGallery` image carousel
 - S3 service and local file upload (multer)
 - Excel quiz import service
+- Excel article import: Daily Prelims + **Mains** (separate parsers, separate routes)
+- Mains article structured layout: title → visual summary modal → context → Q&A accordion (up to 6) → source → tags → practice → value additions
 - Unified search across articles + quizzes
 - Client-side search engine (Trie + Inverted Index) with sessionStorage cache — zero API calls per search
 - Shared types package (`@repo/types`)
@@ -489,6 +491,42 @@ Admin creates content
 - **Bug 3 — Quiz Edit gives 404** (`admin/quizzes/[id]/page.tsx`):
   - Root cause: The quiz list links to `/admin/quizzes/${id}` but the dynamic route `app/admin/quizzes/[id]/page.tsx` didn't exist.
   - Fix: Created the `[id]` page. Fetches quiz data by ID, pre-fills all fields (title, date, setName, questions/options/correctIndex/explanation/subject), submits via `PUT /api/quizzes/:id`.
+
+### Session: 2026-05-10 — Mains Article Module Rebuild (Excel Import + Structured Q&A)
+- **Major feature: Complete rebuild of the Mains article module**
+  - **Backend — Article model extended** with 5 new optional fields: `context`, `questions[]` (up to 6 Q&A pairs), `practice`, `valueAdditions`, `visualSummaryUrl`. Backward-compatible — existing Prelims articles unaffected.
+  - **New service: `mains-excel.service.ts`** — Parses Mains Excel files with 21 columns: Date, Title, Subject, Tags, Source, Practice, Value Additions, Context, Q1–Q6, A1–A6, Image. Reuses shared helpers (date parsing, Drive URL resolution).
+  - **New route: `POST /api/articles/import-mains-excel`** — Bulk import endpoint for Mains articles (separate from Prelims import).
+  - **Admin: `/admin/articles/import-mains`** — Dedicated import page with purple accent, Excel format guide, file upload.
+  - **Admin: Articles list** — Now shows 3 buttons: "Import Prelims" (green), "Import Mains" (purple), "Create Article" (amber).
+  - **Student: `/daily-mains` complete rewrite** — Structured layout:
+    1. Title (Playfair Display h1)
+    2. Visual Summary button → fullscreen image modal (Escape to close)
+    3. Context section (orange left-border card)
+    4. Q&A Accordion — up to 6 questions with smooth expand/collapse animation, numbered badges (navy collapsed → orange active)
+    5. Source (gray card)
+    6. Tags (clickable → `/search?tag=X`, indigo pills, primary tag gets amber)
+    7. Practice section (teal left-border card)
+    8. Value Additions (orange left-border card)
+    9. Prev/Next navigation
+  - **Legacy fallback:** Articles without structured fields still render via `RichTextRenderer`
+  - **Search integration:** Already working — Mains articles indexed by Trie (title) and Inverted Index (tags) with no changes needed.
+  - **~550 lines of new CSS** in `globals.css` for `.mains-*` classes.
+- **Files created:**
+  - `apps/api/src/services/mains-excel.service.ts`
+  - `apps/client/app/admin/articles/import-mains/page.tsx`
+- **Files modified:**
+  - `apps/api/src/models/Article.ts` — 5 new fields + IMainsQuestion interface
+  - `apps/api/src/controllers/article.controller.ts` — `importMainsFromExcel` function
+  - `apps/api/src/routes/article.routes.ts` — new mains import route
+  - `apps/client/app/daily-mains/page.tsx` — complete rewrite
+  - `apps/client/app/globals.css` — ~550 lines of mains-specific CSS
+  - `apps/client/app/admin/articles/page.tsx` — added Import Mains button
+- **Gotcha:** The `content` field is `required: true` in the Article schema, so even Mains articles populate it with a minimal fallback (context + first Q&A). The student page uses the structured fields if available, else falls back to `content`.
+  - **Admin: Create/Edit Article form** — When `type === 'mains'`, the form dynamically switches from the TipTap RichTextEditor to structured Mains fields: Context (amber left-border), Q&A pairs 1–6 (blue left-border, numbered badges with ✓ Complete indicator), Practice (teal left-border), Value Additions (orange left-border), Visual Summary Image URL. On save, auto-generates `content` fallback from context + first Q&A. Edit page pre-populates all structured fields from the DB.
+- **Files modified (continued):**
+  - `apps/client/app/admin/articles/new/page.tsx` — dynamic Mains structured form
+  - `apps/client/app/admin/articles/[id]/page.tsx` — dynamic Mains structured form + pre-populates from DB
 
 ### Session: 2026-04-18 (Project Analysis & Diary Creation)
 - **Who:** AI (Antigravity) — Initial comprehensive analysis

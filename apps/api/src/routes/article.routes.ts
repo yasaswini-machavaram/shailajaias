@@ -10,6 +10,7 @@ import {
     getDistinctTags,
     getAdjacentDates,
     importArticlesFromExcel,
+    importMainsFromExcel,
 } from '../controllers/article.controller.js';
 import { protect, adminOnly } from '../middlewares/auth.middleware.js';
 import multer from 'multer';
@@ -63,6 +64,11 @@ router.get('/:id', getArticle);
 // @desc    Import articles from Excel file
 // @access  Private/Admin
 router.post('/import-excel', protect, adminOnly, upload.single('file'), importArticlesFromExcel);
+
+// @route   POST /api/articles/import-mains-excel
+// @desc    Import mains articles from Excel file
+// @access  Private/Admin
+router.post('/import-mains-excel', protect, adminOnly, upload.single('file'), importMainsFromExcel);
 
 // @route   POST /api/articles
 // @desc    Create article

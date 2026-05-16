@@ -7,16 +7,27 @@ export interface IKeyword {
     linkedArticleId?: Types.ObjectId;
 }
 
+export interface IMainsQuestion {
+    question: string;
+    answer: string;
+}
+
 export interface IArticle extends Document {
     type: ArticleType;
     title: string;
     date: Date;
     tags: string[];
-    content: string; // TipTap JSON content
+    content: string; // TipTap JSON content (used by prelims; legacy fallback for mains)
     source?: string; // e.g. "The Hindu"
     keywords: IKeyword[];
     imageUrl?: string;
     order: number; // For ordering articles within a day
+    // Structured Mains fields (optional — only used by type: 'mains')
+    context?: string; // Context section (HTML)
+    questions?: IMainsQuestion[]; // Up to 6 Q&A pairs
+    practice?: string; // Practice section (HTML)
+    valueAdditions?: string; // Value additions section (HTML)
+    visualSummaryUrl?: string; // Visual summary image URL
     createdBy: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
@@ -62,6 +73,26 @@ const ArticleSchema = new Schema<IArticle>(
         order: {
             type: Number,
             default: 0,
+        },
+        // Structured Mains fields
+        context: {
+            type: String,
+            trim: true,
+        },
+        questions: [{
+            question: { type: String, required: true },
+            answer: { type: String, required: true },
+        }],
+        practice: {
+            type: String,
+            trim: true,
+        },
+        valueAdditions: {
+            type: String,
+            trim: true,
+        },
+        visualSummaryUrl: {
+            type: String,
         },
         createdBy: {
             type: Schema.Types.ObjectId,

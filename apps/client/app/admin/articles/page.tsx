@@ -50,6 +50,8 @@ export default function ArticlesPage() {
     const [totalPages, setTotalPages] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
     const [dateFilter, setDateFilter] = useState('');
+    const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Whether we're using client-side search or server-side table
     const isSearchActive = searchQuery.trim().length >= 3;
@@ -111,23 +113,27 @@ export default function ArticlesPage() {
         }
     };
 
-    const deleteArticle = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this article?')) return;
+    const confirmDelete = async () => {
+        if (!deleteTarget) return;
+        setIsDeleting(true);
 
         try {
-            const response = await fetch(`${API_URL}/api/articles/${id}`, {
+            const response = await fetch(`${API_URL}/api/articles/${deleteTarget.id}`, {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` },
             });
 
             if (response.ok) {
-                setArticles(articles.filter((a) => a._id !== id));
+                setArticles(prev => prev.filter((a) => a._id !== deleteTarget.id));
                 // Refresh search index so deleted article disappears from search
                 SearchCache.clear();
                 refreshIndex();
             }
         } catch (error) {
             console.error('Failed to delete article:', error);
+        } finally {
+            setIsDeleting(false);
+            setDeleteTarget(null);
         }
     };
 
@@ -158,7 +164,13 @@ export default function ArticlesPage() {
                         href="/admin/articles/import"
                         className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors"
                     >
-                        📊 Import from Excel
+                        📊 Import Prelims
+                    </Link>
+                    <Link
+                        href="/admin/articles/import-mains"
+                        className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg font-medium transition-colors"
+                    >
+                        📊 Import Mains
                     </Link>
                     <Link
                         href="/admin/articles/new"
@@ -323,7 +335,7 @@ export default function ArticlesPage() {
                                             Edit
                                         </Link>
                                         <button
-                                            onClick={() => deleteArticle(article._id)}
+                                            onClick={() => setDeleteTarget({ id: article._id, title: article.title })}
                                             className="text-red-600 hover:underline text-sm"
                                         >
                                             Delete
@@ -359,6 +371,41 @@ export default function ArticlesPage() {
                     </div>
                 )}
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {deleteTarget && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    style={{ background: 'rgba(0,0,0,0.5)' }}
+                    onClick={() => !isDeleting && setDeleteTarget(null)}
+                >
+                    <div
+                        className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Article</h3>
+                        <p className="text-gray-600 text-sm mb-1">Are you sure you want to delete:</p>
+                        <p className="text-gray-900 font-medium text-sm mb-4">&quot;{deleteTarget.title}&quot;</p>
+                        <p className="text-red-600 text-xs mb-5">This action cannot be undone.</p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setDeleteTarget(null)}
+                                disabled={isDeleting}
+                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                disabled={isDeleting}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                {isDeleting ? 'Deleting...' : 'Delete'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
