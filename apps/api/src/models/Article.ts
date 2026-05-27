@@ -18,7 +18,7 @@ export interface IArticle extends Document {
     date: Date;
     tags: string[];
     content: string; // TipTap JSON content (used by prelims; legacy fallback for mains)
-    source?: string; // e.g. "The Hindu"
+    source?: string | { name: string; url: string }; // plain string (legacy) or { name, url } link
     keywords: IKeyword[];
     imageUrl?: string;
     order: number; // For ordering articles within a day
@@ -60,8 +60,7 @@ const ArticleSchema = new Schema<IArticle>(
             required: [true, 'Content is required'],
         },
         source: {
-            type: String,
-            trim: true,
+            type: Schema.Types.Mixed, // string (legacy) or { name, url } object
         },
         keywords: [{
             word: { type: String, required: true },

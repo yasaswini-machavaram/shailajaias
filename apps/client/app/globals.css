@@ -700,13 +700,17 @@ html {
   margin: 16px 0;
   font-size: 13px;
   line-height: 20px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-gray);
 }
 
 .article-content table th,
 .article-content table td {
   border: 1px solid var(--border-gray);
-  padding: 10px 12px;
+  padding: 10px 14px;
   text-align: left;
+  vertical-align: top;
 }
 
 .article-content table th {
@@ -714,6 +718,7 @@ html {
   color: #fff;
   font-weight: 600;
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .article-content table tr:nth-child(even) {
@@ -722,6 +727,104 @@ html {
 
 .article-content table tr:hover {
   background: #FEF3C7;
+}
+
+/* Mobile-friendly table: horizontal scroll */
+@media (max-width: 640px) {
+  .article-content table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    font-size: 12px;
+  }
+
+  .article-content table th,
+  .article-content table td {
+    padding: 8px 10px;
+    min-width: 100px;
+  }
+}
+
+/* ── Nested Sub-Lists ── */
+/* Sub-bullets (level 1+) get indentation + smaller/outlined bullets */
+.article-content ul ul {
+  margin: 4px 0 4px 8px;
+  padding-left: 14px;
+}
+
+.article-content ul ul li {
+  padding-left: 14px;
+  font-size: 13px;
+  color: #4B5563;
+}
+
+.article-content ul ul li::before {
+  width: 5px;
+  height: 5px;
+  background: transparent;
+  border: 1.5px solid var(--primary-orange);
+  top: 9px;
+}
+
+/* ── Safety-net for legacy li[level] attributes (pre-normalized DB content) ── */
+.article-content li[level="0"] {
+  position: relative;
+  padding-left: 18px;
+  margin: 6px 0;
+  line-height: 22px;
+  list-style: none;
+}
+
+.article-content li[level="0"]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary-orange);
+}
+
+.article-content li[level="1"] {
+  position: relative;
+  padding-left: 32px;
+  margin: 4px 0;
+  line-height: 22px;
+  list-style: none;
+  font-size: 13px;
+  color: #4B5563;
+}
+
+.article-content li[level="1"]::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 9px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid var(--primary-orange);
+}
+
+.article-content li[level="2"] {
+  position: relative;
+  padding-left: 46px;
+  margin: 3px 0;
+  line-height: 22px;
+  list-style: none;
+  font-size: 12px;
+  color: #6B7280;
+}
+
+.article-content li[level="2"]::before {
+  content: '–';
+  position: absolute;
+  left: 30px;
+  top: 0;
+  color: var(--primary-orange);
+  font-weight: 700;
 }
 
 .article-content mark {
@@ -947,6 +1050,15 @@ html {
   font-weight: 600;
 }
 
+.ca-source-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.ca-source-link:hover {
+  opacity: 0.8;
+}
 /* Tags */
 .ca-tags {
   display: flex;
@@ -1442,6 +1554,9 @@ html {
   border-collapse: collapse;
   margin: 12px 0;
   font-size: 13px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-gray);
 }
 
 .mains-rich-content table th,
@@ -1449,16 +1564,119 @@ html {
   border: 1px solid var(--border-gray);
   padding: 8px 12px;
   text-align: left;
+  vertical-align: top;
 }
 
 .mains-rich-content table th {
   background: var(--primary-navy);
   color: #fff;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .mains-rich-content table tr:nth-child(even) {
   background: #F9FAFB;
+}
+
+.mains-rich-content table tr:hover {
+  background: #FEF3C7;
+}
+
+/* Mobile-friendly table: horizontal scroll */
+@media (max-width: 640px) {
+  .mains-rich-content table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    font-size: 12px;
+  }
+
+  .mains-rich-content table th,
+  .mains-rich-content table td {
+    padding: 8px 10px;
+    min-width: 100px;
+  }
+}
+
+/* ── Nested Sub-Lists ── */
+.mains-rich-content ul ul {
+  margin: 4px 0 4px 8px;
+  padding-left: 14px;
+}
+
+.mains-rich-content ul ul li {
+  padding-left: 14px;
+  font-size: 13px;
+  color: #4B5563;
+}
+
+.mains-rich-content ul ul li::before {
+  width: 5px;
+  height: 5px;
+  background: transparent;
+  border: 1.5px solid var(--primary-orange);
+  top: 9px;
+}
+
+/* ── Safety-net for legacy li[level] attributes ── */
+.mains-rich-content li[level="0"] {
+  position: relative;
+  padding-left: 18px;
+  margin: 6px 0;
+  line-height: 22px;
+  list-style: none;
+}
+
+.mains-rich-content li[level="0"]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary-orange);
+}
+
+.mains-rich-content li[level="1"] {
+  position: relative;
+  padding-left: 32px;
+  margin: 4px 0;
+  line-height: 22px;
+  list-style: none;
+  font-size: 13px;
+  color: #4B5563;
+}
+
+.mains-rich-content li[level="1"]::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 9px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid var(--primary-orange);
+}
+
+.mains-rich-content li[level="2"] {
+  position: relative;
+  padding-left: 46px;
+  margin: 3px 0;
+  line-height: 22px;
+  list-style: none;
+  font-size: 12px;
+  color: #6B7280;
+}
+
+.mains-rich-content li[level="2"]::before {
+  content: '–';
+  position: absolute;
+  left: 30px;
+  top: 0;
+  color: var(--primary-orange);
+  font-weight: 700;
 }
 
 .mains-rich-content img {
@@ -1495,6 +1713,15 @@ html {
   font-weight: 600;
 }
 
+.mains-source-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.mains-source-link:hover {
+  opacity: 0.8;
+}
 /* ── Tags ── */
 .mains-tags {
   display: flex;

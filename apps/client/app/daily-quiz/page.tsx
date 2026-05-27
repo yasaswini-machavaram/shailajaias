@@ -149,35 +149,30 @@ function DailyQuizInner() {
                     {/* Date Picker Button-style */}
                     <div className="relative group">
                         <div
-                            className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm hover:border-gray-300 transition-all cursor-pointer"
-                            onClick={() => {
-                                // Make the entire container open the date picker
-                                const input = document.getElementById('quiz-date-input') as HTMLInputElement;
-                                if (input) {
-                                    try { input.showPicker(); } catch { input.focus(); }
-                                }
-                            }}
+                            className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm pointer-events-none"
                         >
                             <span className="text-[#1E3A5F]">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
                             </span>
-                            <div className="relative">
-                                <input
-                                    id="quiz-date-input"
-                                    type="date"
-                                    value={date}
-                                    onChange={(e) => setDate(e.target.value)}
-                                    className="text-sm font-bold text-gray-700 outline-none bg-transparent cursor-pointer"
-                                />
-                            </div>
+                            <span className="text-sm font-bold text-gray-700">
+                                {new Date(date + 'T00:00:00Z').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}
+                            </span>
                             <span className="text-gray-400 ml-1">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                                 </svg>
                             </span>
                         </div>
+                        {/* Invisible native date input on top — browser positions calendar popup correctly */}
+                        <input
+                            type="date"
+                            value={date}
+                            onChange={(e) => setDate(e.target.value)}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            aria-label="Select quiz date"
+                        />
                     </div>
 
                     {/* Progress Indicator */}

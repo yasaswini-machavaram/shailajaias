@@ -105,6 +105,13 @@ export default function EditQuizPage() {
         e.preventDefault();
         setError('');
 
+        // Validate date is within reasonable range
+        const dateYear = new Date(date).getFullYear();
+        if (dateYear < 2020 || dateYear > 2030) {
+            setError('Date must be between 2020 and 2030.');
+            return;
+        }
+
         for (let i = 0; i < questions.length; i++) {
             const q = questions[i];
             if (!q.question.trim()) {
@@ -182,9 +189,11 @@ export default function EditQuizPage() {
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             required
+                            maxLength={200}
                             placeholder="e.g., Daily Quiz"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
+                        <p className="text-xs text-gray-400 mt-1 text-right">{title.length}/200</p>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Date *</label>
@@ -193,6 +202,8 @@ export default function EditQuizPage() {
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
                             required
+                            min="2020-01-01"
+                            max="2030-12-31"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
                     </div>
@@ -202,9 +213,11 @@ export default function EditQuizPage() {
                             type="text"
                             value={setName}
                             onChange={(e) => setSetName(e.target.value)}
+                            maxLength={100}
                             placeholder="e.g., Set A"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
+                        <p className="text-xs text-gray-400 mt-1 text-right">{setName.length}/100</p>
                     </div>
                 </div>
 

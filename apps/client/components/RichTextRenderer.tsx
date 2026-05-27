@@ -78,6 +78,14 @@ function RenderNode({ node, h2Number }: { node: TipTapNode; h2Number?: number })
             return renderBlockquote(node);
         case 'image':
             return renderImage(node);
+        case 'table':
+            return renderTable(node);
+        case 'tableRow':
+            return renderTableRow(node);
+        case 'tableHeader':
+            return renderTableCell(node, true);
+        case 'tableCell':
+            return renderTableCell(node, false);
         case 'horizontalRule':
             return <hr className="article-hr" />;
         case 'text':
@@ -173,6 +181,39 @@ function renderImage(node: TipTapNode) {
             <img src={src} alt={alt} title={title} className="article-img" />
             {title && <figcaption className="article-figcaption">{title}</figcaption>}
         </figure>
+    );
+}
+
+function renderTable(node: TipTapNode) {
+    return (
+        <table>
+            <tbody>
+                {node.content?.map((child, i) => <RenderNode key={i} node={child} />)}
+            </tbody>
+        </table>
+    );
+}
+
+function renderTableRow(node: TipTapNode) {
+    return (
+        <tr>
+            {node.content?.map((child, i) => <RenderNode key={i} node={child} />)}
+        </tr>
+    );
+}
+
+function renderTableCell(node: TipTapNode, isHeader: boolean) {
+    const Tag = isHeader ? 'th' : 'td';
+    const colspan = (node.attrs?.colspan as number) || 1;
+    const rowspan = (node.attrs?.rowspan as number) || 1;
+    const attrs: Record<string, number> = {};
+    if (colspan > 1) attrs.colSpan = colspan;
+    if (rowspan > 1) attrs.rowSpan = rowspan;
+
+    return (
+        <Tag {...attrs}>
+            {node.content?.map((child, i) => <RenderNode key={i} node={child} />)}
+        </Tag>
     );
 }
 

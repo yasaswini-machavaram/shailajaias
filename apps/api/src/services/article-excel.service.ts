@@ -6,7 +6,7 @@ export interface ParsedArticle {
     order: number;
     tags: string[];
     content: string; // Constructed HTML
-    source: string;
+    source: string | { name: string; url: string };
     imageUrl: string;
 }
 
@@ -14,6 +14,30 @@ export interface ParseArticleExcelResult {
     articles: ParsedArticle[];
     errors: string[];
     skipped: number;
+}
+
+// ─── Hyperlink Extraction ───────────────────────────────────────────────────
+
+/**
+ * Extract hyperlink { name, url } from a raw XLSX cell object.
+ * Cells with HYPERLINK("url","text") formulas have:
+ *   - cell.f  = 'HYPERLINK("url","text")'
+ *   - cell.v  = display text (fallback)
+ * Returns { name, url } if a HYPERLINK formula is found, plain string otherwise.
+ */
+function extractHyperlink(cell: XLSX.CellObject | undefined): string | { name: string; url: string } {
+    if (!cell) return '';
+    const formula = cell.f;
+    if (formula) {
+        // Match HYPERLINK("url","text") or HYPERLINK("url", "text")
+        const match = formula.match(/^HYPERLINK\("([^"]+)"\s*,\s*"([^"]+)"\)$/i);
+        if (match) {
+            return { name: match[2].trim(), url: match[1].trim() };
+        }
+    }
+    // Fallback: return plain string value
+    const val = String(cell.v ?? '').trim();
+    return val;
 }
 
 /**
@@ -53,6 +77,97 @@ function isSeparatorRow(title: unknown, content: unknown): boolean {
 }
 
 /**
+ * Convert bare `<li level="N">...</li>` tags into proper nested `<ul>` HTML.
+ *
+ * The Excel content column uses `<li level="0">` for top-level bullets and
+ * `<li level="1">` for sub-bullets, but they're NOT wrapped in `<ul>`.
+ * This function wraps consecutive `<li>` sequences in `<ul>` and nests
+ * level="1" items as sub-lists under the previous level="0" item.
+ *
+ * Also strips the `level` attribute from the output since it's non-standard.
+ *
+ * NOTE: HTML `<table>` content is passed through untouched.
+ */
+function normalizeListItems(html: string): string {
+    // Split the HTML by <li level="..."> tags while preserving them
+    // Pattern: match <li level="N"> ... </li> blocks
+    const liRegex = /<li\s+level="(\d+)">([\s\S]*?)<\/li>/gi;
+    const matches = [...html.matchAll(liRegex)];
+
+    if (matches.length === 0) {
+        // No <li level="..."> tags — return as-is (handles <table> and other HTML)
+        return html;
+    }
+
+    // Get text before, between, and after the <li> blocks
+    let result = '';
+    let lastIndex = 0;
+
+    // Group consecutive <li> items into list blocks
+    const groups: { start: number; end: number; items: { level: number; content: string }[] }[] = [];
+    let currentGroup: { start: number; end: number; items: { level: number; content: string }[] } | null = null;
+
+    for (const match of matches) {
+        const matchStart = match.index!;
+        const matchEnd = matchStart + match[0].length;
+        const level = parseInt(match[1], 10);
+        const content = match[2];
+
+        // Check if this <li> is close to the previous one (only whitespace between)
+        const gap = currentGroup ? html.substring(currentGroup.end, matchStart).trim() : '';
+
+        if (currentGroup && gap === '') {
+            // Continue the current group
+            currentGroup.items.push({ level, content });
+            currentGroup.end = matchEnd;
+        } else {
+            // Start a new group
+            if (currentGroup) groups.push(currentGroup);
+            currentGroup = { start: matchStart, end: matchEnd, items: [{ level, content }] };
+        }
+    }
+    if (currentGroup) groups.push(currentGroup);
+
+    // Build output
+    for (const group of groups) {
+        // Add text before this group
+        result += html.substring(lastIndex, group.start);
+
+        // Build proper nested <ul> from the items
+        result += '<ul>';
+        let inSubList = false;
+
+        for (const item of group.items) {
+            if (item.level >= 1) {
+                // Sub-bullet
+                if (!inSubList) {
+                    result += '<ul>';
+                    inSubList = true;
+                }
+                result += `<li>${item.content}</li>`;
+            } else {
+                // Top-level bullet
+                if (inSubList) {
+                    result += '</ul>';
+                    inSubList = false;
+                }
+                result += `<li>${item.content}</li>`;
+            }
+        }
+
+        if (inSubList) result += '</ul>';
+        result += '</ul>';
+
+        lastIndex = group.end;
+    }
+
+    // Add any remaining text after the last group
+    result += html.substring(lastIndex);
+
+    return result;
+}
+
+/**
  * Build the article content HTML from the three content sources.
  * Structure: blockquote (In News) + body (Content) + subheading (Additional Info)
  */
@@ -65,10 +180,11 @@ function buildContentHtml(inNews: unknown, rawContent: unknown, additionalInfo: 
         parts.push(`<blockquote>${inNewsStr}</blockquote>`);
     }
 
-    // 2. Main content body — strip <image> tags
+    // 2. Main content body — strip <image> tags, normalize <li level="N"> → nested <ul>
     const contentStr = String(rawContent || '').trim();
     if (contentStr) {
-        const cleanContent = stripImageTags(contentStr);
+        let cleanContent = stripImageTags(contentStr);
+        cleanContent = normalizeListItems(cleanContent);
         if (cleanContent) {
             parts.push(cleanContent);
         }
@@ -77,7 +193,9 @@ function buildContentHtml(inNews: unknown, rawContent: unknown, additionalInfo: 
     // 3. "Additional Info" → subheading section
     const additionalStr = String(additionalInfo || '').trim();
     if (additionalStr) {
-        parts.push(`<h3>Additional Information</h3>\n<p>${additionalStr}</p>`);
+        // Also normalize lists in additional info
+        const normalizedInfo = normalizeListItems(additionalStr);
+        parts.push(`<h3>Additional Information</h3>\n${normalizedInfo}`);
     }
 
     return parts.join('\n');
@@ -285,8 +403,10 @@ export const parseArticleExcel = (buffer: Buffer): ParseArticleExcelResult => {
             // Parse order
             const order = typeof sNo === 'number' ? sNo : parseInt(String(sNo || '0'), 10) || 0;
 
-            // Source
-            const source = String(sourceLink || '').trim();
+            // Source — extract hyperlink { name, url } from raw worksheet cell
+            const sourceColLetter = XLSX.utils.encode_col(6); // Column G ("Source Link")
+            const sourceCell = worksheet[`${sourceColLetter}${i + 1}`] as XLSX.CellObject | undefined;
+            const source = extractHyperlink(sourceCell);
 
             articles.push({
                 title: titleStr,

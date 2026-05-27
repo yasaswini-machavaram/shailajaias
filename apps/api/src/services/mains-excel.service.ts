@@ -13,7 +13,7 @@ export interface ParsedMainsArticle {
     order: number;
     tags: string[];
     content: string; // Minimal fallback content for the 'content' required field
-    source: string;
+    source: string | { name: string; url: string };
     context: string;
     questions: ParsedMainsQuestion[];
     practice: string;
@@ -25,6 +25,30 @@ export interface ParseMainsExcelResult {
     articles: ParsedMainsArticle[];
     errors: string[];
     skipped: number;
+}
+
+// ─── Hyperlink Extraction ───────────────────────────────────────────────────
+
+/**
+ * Extract hyperlink { name, url } from a raw XLSX cell object.
+ * Cells with HYPERLINK("url","text") formulas have:
+ *   - cell.f  = 'HYPERLINK("url","text")'
+ *   - cell.v  = display text (fallback)
+ * Returns { name, url } if a HYPERLINK formula is found, plain string otherwise.
+ */
+function extractHyperlink(cell: XLSX.CellObject | undefined): string | { name: string; url: string } {
+    if (!cell) return '';
+    const formula = cell.f;
+    if (formula) {
+        // Match HYPERLINK("url","text") or HYPERLINK("url", "text")
+        const match = formula.match(/^HYPERLINK\("([^"]+)"\s*,\s*"([^"]+)"\)$/i);
+        if (match) {
+            return { name: match[2].trim(), url: match[1].trim() };
+        }
+    }
+    // Fallback: return plain string value
+    const val = String(cell.v ?? '').trim();
+    return val;
 }
 
 // ─── Shared Helpers (aligned with article-excel.service.ts) ─────────────────
@@ -49,6 +73,58 @@ function extractImageFromTags(raw: string): { cleanHtml: string; imageRef: strin
     }
     const cleanHtml = raw.replace(/<image>[\s\S]*?<\/image>/gi, '').trim();
     return { cleanHtml, imageRef };
+}
+
+/**
+ * Convert bare `<li level="N">...</li>` tags into proper nested `<ul>` HTML.
+ * Same function as in article-excel.service.ts — kept in sync.
+ */
+function normalizeListItems(html: string): string {
+    const liRegex = /<li\s+level="(\d+)">([\s\S]*?)<\/li>/gi;
+    const matches = [...html.matchAll(liRegex)];
+    if (matches.length === 0) return html;
+
+    let result = '';
+    let lastIndex = 0;
+    const groups: { start: number; end: number; items: { level: number; content: string }[] }[] = [];
+    let currentGroup: { start: number; end: number; items: { level: number; content: string }[] } | null = null;
+
+    for (const match of matches) {
+        const matchStart = match.index!;
+        const matchEnd = matchStart + match[0].length;
+        const level = parseInt(match[1], 10);
+        const content = match[2];
+        const gap = currentGroup ? html.substring(currentGroup.end, matchStart).trim() : '';
+
+        if (currentGroup && gap === '') {
+            currentGroup.items.push({ level, content });
+            currentGroup.end = matchEnd;
+        } else {
+            if (currentGroup) groups.push(currentGroup);
+            currentGroup = { start: matchStart, end: matchEnd, items: [{ level, content }] };
+        }
+    }
+    if (currentGroup) groups.push(currentGroup);
+
+    for (const group of groups) {
+        result += html.substring(lastIndex, group.start);
+        result += '<ul>';
+        let inSubList = false;
+        for (const item of group.items) {
+            if (item.level >= 1) {
+                if (!inSubList) { result += '<ul>'; inSubList = true; }
+                result += `<li>${item.content}</li>`;
+            } else {
+                if (inSubList) { result += '</ul>'; inSubList = false; }
+                result += `<li>${item.content}</li>`;
+            }
+        }
+        if (inSubList) result += '</ul>';
+        result += '</ul>';
+        lastIndex = group.end;
+    }
+    result += html.substring(lastIndex);
+    return result;
 }
 
 /**
@@ -278,7 +354,7 @@ export const parseMainsExcel = (buffer: Buffer): ParseMainsExcelResult => {
             ];
             for (const [q, a] of qaPairs) {
                 const qStr = cellToString(q);
-                const aStr = cellToString(a);
+                const aStr = normalizeListItems(cellToString(a));
                 if (qStr && aStr) {
                     questions.push({ question: qStr, answer: aStr });
                 }
@@ -287,11 +363,16 @@ export const parseMainsExcel = (buffer: Buffer): ParseMainsExcelResult => {
             // Build tags
             const tags = buildTags(subject, tagsCell);
 
-            // Context, source, practice, value additions
-            const context = cellToString(contextVal);
-            const source = cellToString(sourceVal);
-            const practice = cellToString(practiceVal);
-            const valueAdditions = cellToString(valueVal);
+            // Context, source, practice, value additions — normalize list items
+            const context = normalizeListItems(cellToString(contextVal));
+
+            // Source — extract hyperlink { name, url } from raw worksheet cell
+            const sourceColLetter = XLSX.utils.encode_col(4); // Column E
+            const sourceCell = worksheet[`${sourceColLetter}${i + 1}`] as XLSX.CellObject | undefined;
+            const source = extractHyperlink(sourceCell);
+
+            const practice = normalizeListItems(cellToString(practiceVal));
+            const valueAdditions = normalizeListItems(cellToString(valueVal));
 
             // Resolve image
             const visualSummaryUrl = resolveImageUrl(imageVal);

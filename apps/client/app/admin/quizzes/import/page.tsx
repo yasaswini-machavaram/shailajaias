@@ -129,9 +129,11 @@ export default function ImportQuizPage() {
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             required
+                            maxLength={200}
                             placeholder="e.g., Daily Quiz - Feb 1"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
+                        <p className="text-xs text-gray-400 mt-1 text-right">{title.length}/200</p>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -142,6 +144,8 @@ export default function ImportQuizPage() {
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
                             required
+                            min="2020-01-01"
+                            max="2030-12-31"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
                     </div>
@@ -153,6 +157,7 @@ export default function ImportQuizPage() {
                             type="text"
                             value={setName}
                             onChange={(e) => setSetName(e.target.value)}
+                            maxLength={100}
                             placeholder="e.g., Set A"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />

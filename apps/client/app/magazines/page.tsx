@@ -107,15 +107,15 @@ export default function MagazinesPage() {
     const handleDownload = async (mag: Magazine) => {
         setDownloadingId(mag._id);
         const safeName = mag.title.replace(/[/\\:*?"<>|]/g, '_').trim();
-        const fullUrl = getFullUrl(mag.pdfUrl);
 
         try {
-            // Try fetching as blob (works for same-origin or CORS-enabled URLs)
-            const response = await fetch(fullUrl, { mode: 'cors' });
-            if (!response.ok) throw new Error('Fetch failed');
+            // Use server-side download proxy — it sets Content-Disposition: attachment
+            const proxyUrl = `${API_URL}/api/magazines/download/${mag._id}`;
+            const response = await fetch(proxyUrl);
+
+            if (!response.ok) throw new Error('Download failed');
 
             const blob = await response.blob();
-            // Force PDF type so browser treats it as downloadable
             const pdfBlob = new Blob([blob], { type: 'application/octet-stream' });
             const objectUrl = URL.createObjectURL(pdfBlob);
             const link = document.createElement('a');
@@ -131,37 +131,8 @@ export default function MagazinesPage() {
                 URL.revokeObjectURL(objectUrl);
             }, 1000);
         } catch {
-            // CORS blocked — fall back to server-side download proxy
-            try {
-                const proxyUrl = `${API_URL}/api/magazines/download/${mag._id}`;
-                const response = await fetch(proxyUrl);
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const pdfBlob = new Blob([blob], { type: 'application/octet-stream' });
-                    const objectUrl = URL.createObjectURL(pdfBlob);
-                    const link = document.createElement('a');
-                    link.href = objectUrl;
-                    link.download = `${safeName}.pdf`;
-                    link.style.display = 'none';
-                    document.body.appendChild(link);
-                    link.click();
-                    setTimeout(() => {
-                        document.body.removeChild(link);
-                        URL.revokeObjectURL(objectUrl);
-                    }, 1000);
-                } else {
-                    // Last resort: open in new tab with download hint
-                    const link = document.createElement('a');
-                    link.href = fullUrl;
-                    link.download = `${safeName}.pdf`;
-                    link.target = '_blank';
-                    link.rel = 'noopener noreferrer';
-                    link.click();
-                }
-            } catch {
-                // Absolute fallback
-                window.open(fullUrl, '_blank');
-            }
+            // Fallback: open proxy URL directly (browser still gets attachment header)
+            window.location.href = `${API_URL}/api/magazines/download/${mag._id}`;
         } finally {
             setDownloadingId(null);
         }

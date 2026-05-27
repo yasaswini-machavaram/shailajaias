@@ -145,13 +145,22 @@ function DailyPrelimsInner() {
                         </article>
 
                         {/* Source */}
-                        {currentArticle.source && (
-                            <div className="ca-source">
-                                <span className="ca-source-icon">🔗</span>
-                                <span className="ca-source-label">Source: </span>
-                                <span className="ca-source-name">{currentArticle.source}</span>
-                            </div>
-                        )}
+                        {currentArticle.source && (() => {
+                            const src = currentArticle.source!;
+                            const name = typeof src === 'string' ? src : src.name;
+                            const url = typeof src === 'object' ? src.url : null;
+                            return (
+                                <div className="ca-source">
+                                    <span className="ca-source-icon">🔗</span>
+                                    <span className="ca-source-label">Source: </span>
+                                    {url ? (
+                                        <a href={url} target="_blank" rel="noopener noreferrer" className="ca-source-name ca-source-link">{name}</a>
+                                    ) : (
+                                        <span className="ca-source-name">{name}</span>
+                                    )}
+                                </div>
+                            );
+                        })()}
 
                         {/* Tags */}
                         {currentArticle.tags && currentArticle.tags.length > 0 && (

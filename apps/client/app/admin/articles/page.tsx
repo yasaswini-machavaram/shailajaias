@@ -144,7 +144,7 @@ export default function ArticlesPage() {
         setPage(1);
     };
 
-    const hasActiveFilters = searchQuery || dateFilter || filter !== 'all';
+    const hasActiveFilters = searchQuery || dateFilter;
 
     // Determine which data to display
     const displayArticles = isSearchActive ? searchPage : articles;
@@ -209,8 +209,17 @@ export default function ArticlesPage() {
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Search by title (min. 3 characters)..."
-                            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                            className="w-full pl-10 pr-9 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm font-bold"
+                            >
+                                ✕
+                            </button>
+                        )}
                     </div>
 
                     {/* Date filter */}
@@ -291,21 +300,21 @@ export default function ArticlesPage() {
                         )}
                     </div>
                 ) : (
-                    <table className="w-full">
+                    <table className="w-full" style={{ tableLayout: 'fixed' }}>
                         <thead className="bg-gray-50 border-b border-gray-200">
                             <tr>
-                                <th className="text-left px-6 py-4 text-sm font-medium text-gray-500">Title</th>
-                                <th className="text-left px-6 py-4 text-sm font-medium text-gray-500">Type</th>
-                                <th className="text-left px-6 py-4 text-sm font-medium text-gray-500">Date</th>
-                                <th className="text-left px-6 py-4 text-sm font-medium text-gray-500">Tags</th>
-                                <th className="text-right px-6 py-4 text-sm font-medium text-gray-500">Actions</th>
+                                <th className="text-left px-6 py-4 text-sm font-medium text-gray-500" style={{ width: '35%' }}>Title</th>
+                                <th className="text-left px-6 py-4 text-sm font-medium text-gray-500" style={{ width: '15%' }}>Type</th>
+                                <th className="text-left px-6 py-4 text-sm font-medium text-gray-500" style={{ width: '15%' }}>Date</th>
+                                <th className="text-left px-6 py-4 text-sm font-medium text-gray-500" style={{ width: '20%' }}>Tags</th>
+                                <th className="text-right px-6 py-4 text-sm font-medium text-gray-500" style={{ width: '15%' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {displayArticles.map((article) => (
                                 <tr key={article._id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4">
-                                        <span className="font-medium text-gray-900">{article.title}</span>
+                                    <td className="px-6 py-4" style={{ maxWidth: '300px' }}>
+                                        <span className="font-medium text-gray-900 block truncate">{article.title}</span>
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${typeColors[article.type] || 'bg-gray-100 text-gray-700'}`}>

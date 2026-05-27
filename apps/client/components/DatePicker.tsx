@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 interface DatePickerProps {
     selectedDate: Date;
@@ -8,19 +8,7 @@ interface DatePickerProps {
 }
 
 export default function DatePicker({ selectedDate, onDateChange }: DatePickerProps) {
-    const [isOpen, setIsOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
-
-    // Close on click outside
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (ref.current && !ref.current.contains(e.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
 
     const formatDate = (date: Date) => {
         return date.toLocaleDateString('en-IN', {
@@ -49,7 +37,6 @@ export default function DatePicker({ selectedDate, onDateChange }: DatePickerPro
         const date = new Date(e.target.value);
         if (!isNaN(date.getTime())) {
             onDateChange(date);
-            setIsOpen(false);
         }
     };
 
@@ -66,16 +53,24 @@ export default function DatePicker({ selectedDate, onDateChange }: DatePickerPro
                 ‹
             </button>
 
-            {/* Date Display */}
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:border-[#D97706] transition-colors"
-            >
-                <span className="font-medium">{formatDate(selectedDate)}</span>
-                <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-            </button>
+            {/* Date Display — native input overlays the styled button */}
+            <div className="relative">
+                <div className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg pointer-events-none">
+                    <span className="font-medium">{formatDate(selectedDate)}</span>
+                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                {/* Invisible native date input on top — browser positions calendar popup correctly */}
+                <input
+                    type="date"
+                    value={selectedDate.toISOString().split('T')[0]}
+                    max={new Date().toISOString().split('T')[0]}
+                    onChange={handleInputChange}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    aria-label="Select date"
+                />
+            </div>
 
             {/* Next Button */}
             <button
@@ -89,25 +84,6 @@ export default function DatePicker({ selectedDate, onDateChange }: DatePickerPro
             >
                 ›
             </button>
-
-            {/* Calendar Popup */}
-            {isOpen && (
-                <div className="absolute top-full left-0 mt-2 p-2 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
-                    <input
-                        ref={(el) => {
-                            // Auto-open the native calendar picker when popup mounts
-                            if (el) {
-                                try { el.showPicker(); } catch { el.focus(); }
-                            }
-                        }}
-                        type="date"
-                        value={selectedDate.toISOString().split('T')[0]}
-                        max={new Date().toISOString().split('T')[0]}
-                        onChange={handleInputChange}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#D97706] focus:border-transparent"
-                    />
-                </div>
-            )}
         </div>
     );
 }

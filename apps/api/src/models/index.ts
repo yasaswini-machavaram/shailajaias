@@ -5,3 +5,4 @@ export { BurningIssue, type IBurningIssue, type IBurningIssueImage } from './Bur
 export { Magazine, type IMagazine, type MagazineCategory } from './Magazine.js';
 export { Quiz, type IQuiz, type IQuestion } from './Quiz.js';
 export { CourseNode, type ICourseNode, type IContentTab, type ContentTabType } from './Course.js';
+export { ResourceCategory, type IResourceCategory, ResourceItem, type IResourceItem } from './Resource.js';

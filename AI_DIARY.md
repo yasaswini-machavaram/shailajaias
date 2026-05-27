@@ -90,9 +90,11 @@ email (unique, lowercase), password (hashed, hidden by default), name, role ('ad
 ```
 type: 'daily_prelims' | 'mains' | 'burning_issue'
 title, date (indexed), tags[], content (TipTap JSON string), source?, keywords[], imageUrl?, order, createdBy
+// Structured Mains fields (optional — only used by type: 'mains'):
+context?, questions[] (up to 6 {question, answer}), practice?, valueAdditions?, visualSummaryUrl?
 ```
 - Compound index: `date DESC + type`
-- Text index on title, content, tags (for search)
+- Text index on `title` and `tags` only (not `content`)
 
 #### 3. BurningIssue (`models/BurningIssue.ts`)
 ```
@@ -124,6 +126,21 @@ isPublished (default false), createdBy
 - Tree structure via self-referencing `parent` field
 - `testId` references Quiz model
 
+#### 7. ResourceCategory (`models/Resource.ts`)
+```
+title, slug (unique, auto-generated), description?, icon (emoji), accentColor (hex), order,
+predefinedTags[] (e.g., ['GS1','GS2','GS3','GS4','Essay','Optional']), isPublished, createdBy
+```
+- Sorted by `order` for display
+
+#### 8. ResourceItem (`models/Resource.ts`)
+```
+title, category (ref → ResourceCategory), tag (string, e.g., 'GS1'), pdfUrl, pdfKey,
+description?, order, isPublished, createdBy
+```
+- PDFs stored locally in `/uploads/resource-{uuid}.pdf`
+- Indexes: `{ category, order }`, `{ category, tag }`
+
 ### API Routes Summary
 
 | Method | Route | Auth | Description |
@@ -137,6 +154,8 @@ isPublished (default false), createdBy
 | GET | `/api/articles/by-type/:type` | Public | Articles by type |
 | GET | `/api/articles/tags` | Public | Distinct tags |
 | GET | `/api/articles/:id` | Public | Single article |
+| POST | `/api/articles/import-excel` | Admin | Import Prelims articles from Excel (11 columns) |
+| POST | `/api/articles/import-mains-excel` | Admin | Import Mains articles from Excel (21 columns, structured Q&A) |
 | POST | `/api/articles` | Admin | Create article |
 | PUT | `/api/articles/:id` | Admin | Update article |
 | DELETE | `/api/articles/:id` | Admin | Delete article |
@@ -156,7 +175,7 @@ isPublished (default false), createdBy
 | GET | `/api/quizzes/adjacent-dates` | Public | Prev/next quiz dates |
 | GET | `/api/quizzes/:id` | Public | Single quiz with questions |
 | POST | `/api/quizzes` | Admin | Create quiz |
-| POST | `/api/quizzes/import-excel` | Admin | Import from Excel |
+| POST | `/api/quizzes/import-excel` | Admin | Import quiz from Excel |
 | PUT | `/api/quizzes/:id` | Admin | Update |
 | DELETE | `/api/quizzes/:id` | Admin | Delete |
 | GET | `/api/courses` | Public | Root-level courses (tree) |
@@ -167,17 +186,31 @@ isPublished (default false), createdBy
 | POST | `/api/upload/image` | Admin | Upload image to S3 |
 | POST | `/api/upload/pdf` | Admin | Upload PDF to S3 |
 | GET | `/api/upload/presigned` | Admin | Presigned S3 URL |
-| GET | `/api/search/index` | Public | Lightweight search index for client-side Trie + Inverted Index (ETag + 5-min server cache) |
+| GET | `/api/search/index` | Public | Lightweight search index for client-side Trie + Inverted Index — includes articles + quizzes + burning issues (ETag + 5-min server cache) |
 | GET | `/api/search` | Public | Unified search — legacy fallback (articles + quizzes) |
+| GET | `/api/resources/categories` | Public | List all published resource categories with item counts |
+| GET | `/api/resources/categories/:id` | Public | Single category + its published items |
+| POST | `/api/resources/categories` | Admin | Create resource category |
+| PUT | `/api/resources/categories/:id` | Admin | Update resource category |
+| DELETE | `/api/resources/categories/:id` | Admin | Delete category + all items + PDF files |
+| POST | `/api/resources/items` | Admin | Create resource item (multipart PDF) |
+| PUT | `/api/resources/items/:id` | Admin | Update resource item (optional PDF re-upload) |
+| DELETE | `/api/resources/items/:id` | Admin | Delete resource item + PDF file |
+| GET | `/api/resources/download/:id` | Public | Download resource PDF (Content-Disposition: attachment) |
 
 ### Auth Middleware
 - `protect`: Verifies Bearer JWT, attaches `req.user`
 - `adminOnly`: Checks `req.user.role === 'admin'`
-- JWT payload: `{ id, email, role }`, 7d expiry in middleware (30d in controller — inconsistency, use 30d)
+- **Two `generateToken` functions exist (inconsistency):**
+  - `auth.middleware.ts` → `{ id, email, role }`, `expiresIn: '7d'` — NOT used for login/register
+  - `auth.controller.ts` → `{ id }`, `expiresIn: '30d'` — THIS is the one used for login/register
+  - The controller's token is what users actually receive, so effective expiry is **30d** and payload is `{ id }` only
 
 ### Services
 - `s3.service.ts`: `uploadToS3`, `getPresignedUrl`, `deleteFromS3`
-- `excel.service.ts`: `parseQuizExcel` — parses `.xlsx`/`.xls` files into quiz question arrays
+- `excel.service.ts`: `parseQuizExcel` — parses `.xlsx`/`.xls` files into quiz question arrays (columns: Question, Option A-D, Correct Answer, Explanation, Subject)
+- `article-excel.service.ts`: `parseArticleExcel` — parses Prelims Excel (11 columns: S.No, Date, Subject, Title, In News, Content, Source Link, Ext Image URL, Image ID, Tags, Additional Info)
+- `mains-excel.service.ts`: `parseMainsExcel` — parses Mains Excel (21 columns: Date, Title, Subject, Tags, Source, Practice, Value Additions, Context, Q1-Q6, A1-A6, Image)
 
 ### File Upload Strategy
 - **Burning Issues images:** Local disk storage via multer (`/uploads/burning-issue-{uuid}.{ext}`)
@@ -226,7 +259,8 @@ Breakpoints: mobile <640px, tablet 640-1024px, desktop >1024px
 
 ### App Router Structure (apps/client/app/)
 ```
-/                        → Home page (page.tsx) — Student portal
+/                        → Landing page — hero banner, 5 module nav cards, testimonials, announcements, footer
+/current-affairs         → Current Affairs hub (was previously / — Daily Updates, Resources, Burning Issues, Magazines)
 /daily-prelims           → Daily Prelims articles
 /daily-mains             → Daily Mains articles
 /daily-quiz              → Daily Quiz
@@ -235,18 +269,24 @@ Breakpoints: mobile <640px, tablet 640-1024px, desktop >1024px
 /burning-issues          → Burning Issues gallery
 /topics                  → Course/topic browser
 /search                  → Global search
+/resources               → Resources accordion (categories + items)
+/resources/reader        → Resource PDF reader view
 /admin                   → Admin dashboard (requires login)
 /admin/login             → Admin login
-/admin/articles          → Article CRUD
-/admin/articles/new      → Create article (TipTap editor)
-/admin/articles/[id]     → Edit article
+/admin/articles          → Article CRUD (list, filter, search, delete)
+/admin/articles/new      → Create article (TipTap editor for Prelims; structured form for Mains)
+/admin/articles/[id]     → Edit article (same dynamic form)
+/admin/articles/import   → Import Prelims articles from Excel
+/admin/articles/import-mains → Import Mains articles from Excel (structured Q&A)
 /admin/burning-issues    → Burning Issues CRUD
 /admin/burning-issues/new→ Create burning issue (image upload)
-/admin/magazines         → Magazine CRUD (PDF upload, 21KB page)
+/admin/magazines         → Magazine CRUD (PDF upload)
 /admin/quizzes           → Quiz CRUD
 /admin/quizzes/new       → Create quiz
-/admin/quizzes/import    → Import from Excel
+/admin/quizzes/[id]      → Edit quiz
+/admin/quizzes/import    → Import quiz from Excel
 /admin/courses           → Course tree manager
+/admin/resources         → Resource categories + items CRUD (two-tab layout)
 ```
 
 ### Key Components
@@ -255,12 +295,14 @@ Breakpoints: mobile <640px, tablet 640-1024px, desktop >1024px
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | `BottomNav` | `components/BottomNav.tsx` | Mobile bottom nav (hidden on /admin) |
+| `Header` | `components/Header.tsx` | Fixed brand header with logo + search icon (hidden on /admin) |
+| `Breadcrumbs` | `components/Breadcrumbs.tsx` | Auto-generated breadcrumbs from `usePathname()` (hidden on `/` and `/admin`) |
 | `DatePicker` | `components/DatePicker.tsx` | Prev/Next day date selector for articles/quiz |
 | `QuizOption` | `components/QuizOption.tsx` | Individual quiz answer option with states |
 | `RichTextRenderer` | `components/RichTextRenderer.tsx` | Renders TipTap JSON to styled HTML |
 | `TagChips` | `components/TagChips.tsx` | Tag display component (links to `/search?tag=`) |
-| `BurningIssuesGallery` | `src/components/BurningIssuesGallery.tsx` | Image carousel for burning issues |
-| `Header` | `src/components/Header.tsx` | Page header |
+| `BurningIssuesGallery` | `src/components/BurningIssuesGallery.tsx` | Image carousel for burning issues (home page) |
+| `Header` (src) | `src/components/Header.tsx` | Legacy/secondary header component (used by src barrel) |
 | `SearchBar` | `src/components/SearchBar.tsx` | Search input |
 | `MagazineCard` | `src/components/MagazineCard.tsx` | Magazine display card |
 | `QuickAccessCard` | `src/components/QuickAccessCard.tsx` | Home page quick access card |
@@ -272,12 +314,17 @@ Breakpoints: mobile <640px, tablet 640-1024px, desktop >1024px
 | `SearchCache` | `lib/search-cache.ts` | sessionStorage cache manager for the search index |
 | `useSearchEngine` | `hooks/useSearchEngine.ts` | React hook providing ready-to-use SearchEngine instance |
 
-#### Admin-Only Components (inline within pages)
-- TipTap rich text editor (in article creation/edit pages)
-- Excel file upload UI (quiz import)
+#### Admin-Only Components
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `RichTextEditor` | `components/admin/RichTextEditor.tsx` | TipTap rich text editor (used in Prelims/BurningIssue article forms) |
+
+Additional inline admin UI (not separate components):
+- Excel file upload UI (quiz import, article import)
 - Image multi-upload (burning issues)
 - PDF upload (magazines)
 - Course tree manager
+- Mains structured form (context, Q&A pairs, practice, value additions)
 
 ### Authentication (Admin Portal)
 - `AuthContext.tsx` at `app/admin/AuthContext.tsx`
@@ -288,7 +335,12 @@ Breakpoints: mobile <640px, tablet 640-1024px, desktop >1024px
 
 ### API Client Layer (`lib/api.ts`)
 - `API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'`
-- Exports typed fetch functions: `getArticlesByDate`, `getAdjacentDates`, `getQuizzesByDate`, `getBurningIssuesList`, `getMagazines`, etc.
+- Exports typed fetch functions:
+  - Articles: `getArticlesByDate`, `getAdjacentDates`, `getArticleById`, `getBurningIssues` (articles endpoint)
+  - Quizzes: `getQuizzesByDate`, `getQuizByDate`, `getQuizById`, `getAdjacentQuizDates`
+  - Burning Issues: `getBurningIssuesList`, `getBurningIssueById`
+  - Magazines: `getMagazines`, `getMagazineById`
+  - Stats: `getStats` (home page counts — articles, burningIssues, magazines, quizzes, courses)
 - Pagination response shape: `{ success, data, pagination: { page, limit, total, pages } }`
 - Date helpers: `formatDate()` → ISO string, `formatDisplayDate()` → locale string
 
@@ -355,7 +407,7 @@ Admin creates content
 
 ### Styling
 - **Priority:** `style.json` tokens → CSS variables in `globals.css` → Tailwind utilities
-- Custom CSS classes: `ca-*` (current affairs page), `article-*` (article renderer), `rte-*` (rich text editor)
+- Custom CSS classes: `ca-*` (current affairs page), `mains-*` (mains article page), `article-*` (article renderer), `rte-*` (rich text editor)
 - Mobile-first, `md:` breakpoint for tablet+
 - Bottom nav hidden on `/admin` routes via `pathname?.startsWith('/admin')` check
 - Animations: `animate-fade-in-up` with `animationDelay` for staggered sections
@@ -364,7 +416,7 @@ Admin creates content
 
 ## ⚠️ KNOWN ISSUES & GOTCHAS
 
-1. **JWT expiry inconsistency:** `auth.middleware.ts` sets `expiresIn: '7d'` but `auth.controller.ts` uses `expiresIn: '30d'`. The controller generates the token for login — so effectively 30d. Keep 30d.
+1. **JWT expiry + payload inconsistency:** Two separate `generateToken` functions exist. `auth.middleware.ts` creates payload `{ id, email, role }` with `7d` expiry but is NOT used for login. `auth.controller.ts` creates payload `{ id }` only with `30d` expiry and IS used for login/register. Effective expiry is 30d, effective payload is `{ id }` only. The middleware's `protect` function calls `User.findById(decoded.id)` so both payloads work, but the middleware's own `generateToken` is essentially unused dead code.
 2. **MongoDB Atlas:** The `.env` file may have been updated to use MongoDB Atlas URI in conversation `285017db`. Always verify `MONGO_URI` before local development.
 3. **No `NEXT_PUBLIC_API_URL` in client .env:** The client reads `process.env.NEXT_PUBLIC_API_URL` which defaults to `http://localhost:4000`. For production, create `apps/client/.env.local`.
 4. **TipTap Editor:** Article content is stored as TipTap JSON string in the `content` field. The `RichTextRenderer` parses this. Fallback to `dangerouslySetInnerHTML` for legacy HTML content.
@@ -374,10 +426,11 @@ Admin creates content
 8. **`web/` and `docs/` apps:** These are leftover Turborepo stubs. They are not part of the product.
 9. **File upload local vs S3:** Burning issues and magazines use LOCAL disk. The S3 service is for article images uploaded via TipTap editor and the generic upload endpoints. Do not mix these.
 10. **Tailwind primary color mismatch:** `tailwind.config.js` sets `primary: #f5a623` but the design system uses `#1E3A5F`. Always use style.json values (via CSS vars or literal hex), not Tailwind's `primary` color.
+11. **`createArticle` / `updateArticle` controllers don't handle Mains structured fields:** The `createArticle` and `updateArticle` functions in `article.controller.ts` only destructure `{ type, title, date, tags, content, keywords, imageUrl, source }` from `req.body`. They do NOT extract or save `context`, `questions`, `practice`, `valueAdditions`, or `visualSummaryUrl`. The admin create/edit forms send these fields, but they are silently dropped. The **Excel import** works correctly because it uses `Article.insertMany()` directly. This needs to be fixed by extending both controller functions to handle the Mains fields.
 
 ---
 
-## 🗺️ WHAT IS BUILT (STATUS AS OF APRIL 2026)
+## 🗺️ WHAT IS BUILT (STATUS AS OF MAY 2026)
 
 ### ✅ COMPLETE
 - Backend API (all 8 routes: auth, articles, burning-issues, magazines, quizzes, courses, upload, search)
@@ -395,14 +448,21 @@ Admin creates content
 - Excel quiz import service
 - Excel article import: Daily Prelims + **Mains** (separate parsers, separate routes)
 - Mains article structured layout: title → visual summary modal → context → Q&A accordion (up to 6) → source → tags → practice → value additions
-- Unified search across articles + quizzes
+- Unified search across articles + quizzes + burning issues
 - Client-side search engine (Trie + Inverted Index) with sessionStorage cache — zero API calls per search
+- Search index API (`/api/search/index`) with ETag/304 + 5-min server-side memory cache
+- Global Header (`components/Header.tsx`) + Auto-Breadcrumbs (`components/Breadcrumbs.tsx`)
 - Shared types package (`@repo/types`)
+- **Resource module:** Categories (submodules) + Items (PDFs) — admin CRUD, student accordion browse, PDF reader
+  - Admin: category management (icons, colors, predefined tags) + item upload (PDF, tag, category)
+  - Student: `/resources` accordion page + `/resources/reader` PDF viewer (react-pdf)
+  - Bottom nav points to `/resources`
+  - 9 API endpoints under `/api/resources/`
 
 ### 🚧 PARTIALLY BUILT / NEEDS WORK
 - **Student Login/Registration:** There are routes (`/api/auth/register`, `/api/auth/login`) but NO student-facing login/profile page in the client app. The `/profile` route in the bottom nav links to `/profile` but no page exists.
 - **Courses/Topics browser:** `/topics` page exists but needs to properly render the course tree/hierarchy.
-- **Magazine PDF reader:** `/magazines/reader` sub-directory exists but details unknown.
+- **Magazine PDF reader:** `/magazines/reader` contains `PdfViewerClient.tsx` (11KB react-pdf component) + a thin `page.tsx` wrapper. Functional but may need UX polish.
 - **Admin recent activity section:** Placeholder text says "No recent activity to show" — not yet implemented.
 - **Course content tabs:** Video, notes, and test tabs exist in schema but unknown if UI is complete.
 - **Mobile responsiveness refinement:** Conversation `073e7bf3` focused on mobile responsive templates for invitation templates (different project?). The Shailaja IAS client uses TailwindCSS responsive classes but may need further mobile polish.
@@ -511,7 +571,7 @@ Admin creates content
     9. Prev/Next navigation
   - **Legacy fallback:** Articles without structured fields still render via `RichTextRenderer`
   - **Search integration:** Already working — Mains articles indexed by Trie (title) and Inverted Index (tags) with no changes needed.
-  - **~550 lines of new CSS** in `globals.css` for `.mains-*` classes.
+  - **~524 lines of new CSS** in `globals.css` for `.mains-*` classes (lines 1118–1641).
 - **Files created:**
   - `apps/api/src/services/mains-excel.service.ts`
   - `apps/client/app/admin/articles/import-mains/page.tsx`
@@ -527,6 +587,119 @@ Admin creates content
 - **Files modified (continued):**
   - `apps/client/app/admin/articles/new/page.tsx` — dynamic Mains structured form
   - `apps/client/app/admin/articles/[id]/page.tsx` — dynamic Mains structured form + pre-populates from DB
+
+### Session: 2026-05-27 (Resource Module)
+- **Who:** AI (Antigravity)
+- **What:** Built the complete Resource module from scratch.
+- **New files created:**
+  - `apps/api/src/models/Resource.ts` — ResourceCategory + ResourceItem Mongoose models
+  - `apps/api/src/controllers/resource.controller.ts` — Full CRUD for categories + items (10 functions)
+  - `apps/api/src/routes/resource.routes.ts` — 9 routes with multer PDF upload
+  - `apps/client/app/resources/page.tsx` — Student accordion page (lazy-load items, tag badges, read/download/share)
+  - `apps/client/app/resources/reader/page.tsx` — Suspense wrapper
+  - `apps/client/app/resources/reader/PdfViewerClient.tsx` — react-pdf viewer (copied from magazine pattern)
+  - `apps/client/app/admin/resources/page.tsx` — Two-tab admin page (Categories + Items), modal forms
+- **Files modified (wiring only):**
+  - `apps/api/src/routes/index.ts` — added resource routes export
+  - `apps/api/src/index.ts` — registered `/api/resources` route
+  - `apps/api/src/models/index.ts` — exported ResourceCategory + ResourceItem
+  - `apps/client/app/admin/layout.tsx` — added Resources nav item to sidebar
+  - `apps/client/components/BottomNav.tsx` — changed Resources link from `/magazines` to `/resources`
+  - `apps/client/components/Breadcrumbs.tsx` — added 'resources' route label
+- **Design decisions:**
+  - Local disk storage for PDFs (same as magazines, not S3)
+  - Tag colors handled via inline styles (no new CSS classes needed)
+  - Predefined UPSC tags: GS1, GS2, GS3, GS4, Essay, Optional
+  - Admin can add custom tags per category
+- **Verified:** Backend TypeScript compiles clean. No errors in resource files.
+
+### Session: 2026-05-27 (Resource Item Display Order)
+- **Who:** AI (Antigravity)
+- **What:** Removed the display order option for resource items in the admin portal (while preserving it for resource categories).
+- **Files modified:**
+  - `apps/client/app/admin/resources/page.tsx` — Removed the "Display Order" number input field from the Add/Edit Resource item modal form. The "Published" checkbox is now rendered as a single full-width field.
+- **Design decisions:**
+  - Kept the database schema `order` field to maintain compatibility and prevent database validation errors.
+  - Form submission still appends the default `itemOrder` state (default `0` or whatever was loaded on edit) so the backend receives a valid number.
+- **Verified:** Both `client` and `api` compile and build successfully.
+
+### Session: 2026-05-27 (Source Hyperlinks: Excel + Clickable Links)
+- **Who:** AI (Antigravity)
+- **What:** Replaced the article source string field with a mixed type `{ name, url }` object to parse hyperlinks from Excel spreadsheets and render them as clickable links on the user website.
+- **Backend changes:**
+  - `apps/api/src/models/Article.ts` — Updated the `source` field in `IArticle` interface and schema to use `Schema.Types.Mixed` to accept both legacy strings and new `{ name, url }` objects.
+  - `apps/api/src/services/mains-excel.service.ts` — Added `extractHyperlink()` helper which parses cell formulas like `=HYPERLINK("url", "text")` to extract both display name and target URL. Applied this parser to Column E (index 4) for Mains articles.
+  - `apps/api/src/services/article-excel.service.ts` — Applied the same `extractHyperlink()` parser to Column G (index 6) for Prelims articles.
+- **Admin portal changes:**
+  - `new/page.tsx` & `[id]/page.tsx` — Replaced the single "Source" text input with separate "Source Name" and "Source URL" fields in both create and edit forms. On submit, builds the `{ name, url }` structure if a URL is provided, falling back to a string name.
+- **Client changes:**
+  - `apps/client/lib/api.ts` — Updated the Article type interface.
+  - `daily-prelims/page.tsx` & `daily-mains/page.tsx` — Updated both pages to render the source as a clickable link that opens in a new tab when `source.url` is present, or as standard text otherwise.
+  - `apps/client/app/globals.css` — Added `.ca-source-link` and `.mains-source-link` hover/underline styles.
+- **Verified:** Complete application build (`pnpm run build`) is fully successful.
+
+### Session: 2026-05-27 (User Webpage Bugsheet 3 Fixes)
+- **Who:** AI (Antigravity)
+- **What:** Fixed 4 "Fail" bugs from `Bugsheet 3(User webpage).csv`
+- **Bugs fixed:**
+  - **Bug 2 + 4 (DatePicker calendar mispositioning):** Rewrote `DatePicker.tsx` to use an invisible native `<input type="date">` overlaying the styled button instead of `showPicker()`. This ensures the browser positions the calendar popup correctly near the input. Applied same pattern to quiz page's inline date picker.
+  - **Bug 6 (PDF download opens in tab instead of downloading):** Simplified `handleDownload` in magazines to always use the server-side download proxy (`/api/magazines/download/:id`) which sets `Content-Disposition: attachment`. Removed the complex multi-fallback approach that could silently fall through to `window.open()`. Fallback now redirects to the proxy URL directly.
+  - **Bug 7 (Breadcrumbs invisible on page load):** Added `bg-[#F8FAFC]` background, `relative z-30` positioning to the breadcrumbs nav so they appear above sticky page elements (like magazine tabs at z-20) but below the header (z-50). Reduced top padding from 72px to 68px.
+- **Files modified:**
+  - `apps/client/components/DatePicker.tsx` — Full rewrite: invisible native input overlay
+  - `apps/client/app/daily-quiz/page.tsx` — Replaced `showPicker()` with invisible native input overlay
+  - `apps/client/app/magazines/page.tsx` — Simplified download handler to use server proxy
+  - `apps/client/components/Breadcrumbs.tsx` — Added background, z-index, adjusted top padding
+- **Verified:** TypeScript compiles clean.
+
+### Session: 2026-05-27 (Admin Portal Bugsheet 3 Fixes)
+- **Who:** AI (Antigravity)
+- **What:** Fixed 10 "Fail" bugs from `Bugsheet 3(Admin Portal Bugsheet).csv`
+- **Bugs fixed:**
+  - **Bug 1 + 14 (Date validation):** Added `min="2020-01-01"` / `max="2030-12-31"` to all `<input type="date">` across Articles (create/edit), Quizzes (create/edit/import). Also added JS year-range validation (2020–2030) in every `handleSubmit`.
+  - **Bug 2, 10, 13, 15 (Title/text character limits):** Added `maxLength={200}` to all title inputs + character counter (`{title.length}/200`). Added `maxLength={100}` to quiz set name inputs.
+  - **Bug 8 + 9 (Long title breaks table columns):** 
+    - Articles table: `table-layout: fixed`, explicit column widths (35/15/15/20/15%), `truncate` class on title cell with `max-width: 300px`.
+    - Magazines table: Same `table-layout: fixed` approach (40/20/15/25%), `truncate` + `min-w-0` on title cell.
+  - **Bug 11 (Magazine upload fails on "All Years" tab):** `resetForm()` now defaults `formYear` to `currentYear` instead of `filterYear` (which is `''` when "All Years" is selected), preventing the "required fields" server error.
+  - **Bug 12 (Search Clear button visible on empty):** Changed `hasActiveFilters` to only check `searchQuery || dateFilter` (not tab filter). Added inline `✕` clear button inside the search input that appears only when text is entered.
+- **Files modified:**
+  - `apps/client/app/admin/articles/new/page.tsx` — maxLength on title, min/max on date, date validation
+  - `apps/client/app/admin/articles/[id]/page.tsx` — same
+  - `apps/client/app/admin/articles/page.tsx` — table-layout fixed, column widths, title truncation, inline search clear
+  - `apps/client/app/admin/quizzes/new/page.tsx` — maxLength on title/setName, min/max on date, date validation
+  - `apps/client/app/admin/quizzes/[id]/page.tsx` — same
+  - `apps/client/app/admin/quizzes/import/page.tsx` — maxLength on title/setName, min/max on date
+  - `apps/client/app/admin/magazines/page.tsx` — resetForm year fix, title maxLength, table-layout fixed, title truncation
+- **Verified:** TypeScript compiles clean (both API and client). No type errors.
+
+### Session: 2026-05-27 (Landing Page + Current Affairs Route)
+- **Who:** AI (Antigravity)
+- **What:** Created a new top-level landing page and moved old home page content to `/current-affairs`.
+- **New files:**
+  - `apps/client/app/page.tsx` (overwritten) — Landing page with hero banner carousel (3 slides, auto-rotate), 5 module navigation cards (Mentorship, Video Courses, Current Affairs, Tests, Resources) with "Free" badges, rotating motivational quotes, toppers testimonials YouTube carousel, announcements list, footer with links + contact FAB
+  - `apps/client/app/current-affairs/page.tsx` — Exact copy of old home page content
+  - `apps/api/src/scripts/seed-resource-categories.ts` — Seed script for 7 predefined resource categories
+- **Files modified:**
+  - `apps/client/components/BottomNav.tsx` — Changed Prelims tab → Current Affairs (CA) tab pointing to `/current-affairs`
+  - `apps/client/components/Breadcrumbs.tsx` — Added 'current-affairs' route label
+- **Seeded data:** 7 resource categories (Standard Text Books, Revision Notes for Prelims/Mains, Mains Value Addition Notes, Prelims/Mains PYQ Solved, Topper Notes) with predefined UPSC tags and accent colors
+
+### Session: 2026-05-27 (Content Rendering: Lists + Tables)
+- **Who:** AI (Antigravity)
+- **What:** Fixed content rendering for Excel-imported Prelims articles and added full table support.
+- **Problem:** Excel content uses `<li level="0">` and `<li level="1">` without wrapping `<ul>` — browsers can't render these as lists.
+- **Backend fix:**
+  - `article-excel.service.ts` — Added `normalizeListItems()` function that converts bare `<li level="N">` into proper nested `<ul>` structure during import. Also normalizes Additional Info column.
+- **Frontend fixes:**
+  - `globals.css` — Added: nested sub-list styles (`ul ul li` with outlined bullets), safety-net CSS for legacy `li[level]` attributes, mobile-responsive table (horizontal scroll, smaller font), improved table styling (border-radius, vertical-align).
+  - `RichTextRenderer.tsx` — Added TipTap JSON table support: `table`, `tableRow`, `tableHeader`, `tableCell` node types with colspan/rowspan handling.
+- **Verified:** All 16 sample rows produce balanced, correctly nested `<ul>` HTML. Backend + client compile clean.
+- **Gotcha:** Existing DB content may still have bare `<li level="...">` tags — the CSS safety-net handles this. Re-importing articles will produce proper `<ul>` structure.
+- **Mains service update (same session):**
+  - `mains-excel.service.ts` — Added same `normalizeListItems()` function. Applied to: `context`, `practice`, `valueAdditions`, Q&A `answer` fields, and the `content` fallback.
+  - `globals.css` — Added nested sub-lists, `li[level]` safety-net, mobile table scroll, and table hover/rounded styles to `.mains-rich-content` (mirroring `.article-content` patterns).
+
 
 ### Session: 2026-04-18 (Project Analysis & Diary Creation)
 - **Who:** AI (Antigravity) — Initial comprehensive analysis

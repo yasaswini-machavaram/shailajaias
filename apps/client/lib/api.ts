@@ -13,7 +13,7 @@ export interface Article {
     type: 'daily_prelims' | 'mains' | 'burning_issue';
     date: string;
     tags: string[];
-    source?: string;
+    source?: string | { name: string; url: string };
     imageUrl?: string;
     isPublished: boolean;
 }

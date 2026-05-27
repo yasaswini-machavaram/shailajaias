@@ -317,13 +317,22 @@ function DailyMainsInner() {
                                 )}
 
                                 {/* Source */}
-                                {currentArticle.source && (
-                                    <div className="mains-source">
-                                        <span className="mains-source-icon">🔗</span>
-                                        <span className="mains-source-label">Source: </span>
-                                        <span className="mains-source-name">{currentArticle.source}</span>
-                                    </div>
-                                )}
+                                {currentArticle.source && (() => {
+                                    const src = currentArticle.source!;
+                                    const name = typeof src === 'string' ? src : src.name;
+                                    const url = typeof src === 'object' ? src.url : null;
+                                    return (
+                                        <div className="mains-source">
+                                            <span className="mains-source-icon">🔗</span>
+                                            <span className="mains-source-label">Source: </span>
+                                            {url ? (
+                                                <a href={url} target="_blank" rel="noopener noreferrer" className="mains-source-name mains-source-link">{name}</a>
+                                            ) : (
+                                                <span className="mains-source-name">{name}</span>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
 
                                 {/* Tags */}
                                 {currentArticle.tags && currentArticle.tags.length > 0 && (
@@ -384,13 +393,22 @@ function DailyMainsInner() {
                                 )}
                                 <RichTextRenderer content={currentArticle.content} />
 
-                                {currentArticle.source && (
-                                    <div className="mains-source" style={{ marginTop: '24px' }}>
-                                        <span className="mains-source-icon">🔗</span>
-                                        <span className="mains-source-label">Source: </span>
-                                        <span className="mains-source-name">{currentArticle.source}</span>
-                                    </div>
-                                )}
+                                {currentArticle.source && (() => {
+                                    const src = currentArticle.source!;
+                                    const name = typeof src === 'string' ? src : src.name;
+                                    const url = typeof src === 'object' ? src.url : null;
+                                    return (
+                                        <div className="mains-source" style={{ marginTop: '24px' }}>
+                                            <span className="mains-source-icon">🔗</span>
+                                            <span className="mains-source-label">Source: </span>
+                                            {url ? (
+                                                <a href={url} target="_blank" rel="noopener noreferrer" className="mains-source-name mains-source-link">{name}</a>
+                                            ) : (
+                                                <span className="mains-source-name">{name}</span>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
 
                                 {currentArticle.tags && currentArticle.tags.length > 0 && (
                                     <div className="mains-tags" style={{ marginTop: '16px' }}>

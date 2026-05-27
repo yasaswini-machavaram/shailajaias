@@ -37,7 +37,8 @@ export default function EditArticlePage() {
     const [date, setDate] = useState('');
     const [tags, setTags] = useState<string[]>([]);
     const [content, setContent] = useState('');
-    const [source, setSource] = useState('');
+    const [sourceName, setSourceName] = useState('');
+    const [sourceUrl, setSourceUrl] = useState('');
     const [imageUrl, setImageUrl] = useState('');
     const [customTagInput, setCustomTagInput] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -84,7 +85,13 @@ export default function EditArticlePage() {
                 setDate(new Date(article.date).toISOString().split('T')[0]);
                 setTags(article.tags || []);
                 setContent(article.content || '');
-                setSource(article.source || '');
+                // Parse source (could be string or { name, url })
+                if (typeof article.source === 'string') {
+                    setSourceName(article.source || '');
+                } else if (article.source && typeof article.source === 'object') {
+                    setSourceName(article.source.name || '');
+                    setSourceUrl(article.source.url || '');
+                }
                 setImageUrl(article.imageUrl || '');
 
                 // Populate Mains-specific fields if available
@@ -121,6 +128,14 @@ export default function EditArticlePage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+
+        // Validate date is within reasonable range
+        const dateYear = new Date(date).getFullYear();
+        if (dateYear < 2020 || dateYear > 2030) {
+            setError('Date must be between 2020 and 2030.');
+            return;
+        }
+
         setIsSubmitting(true);
 
         try {
@@ -130,7 +145,7 @@ export default function EditArticlePage() {
                 type,
                 date,
                 tags,
-                source,
+                source: sourceName ? (sourceUrl ? { name: sourceName, url: sourceUrl } : sourceName) : undefined,
                 imageUrl: imageUrl || undefined,
             };
 
@@ -233,8 +248,10 @@ export default function EditArticlePage() {
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         required
+                        maxLength={200}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     />
+                    <p className="text-xs text-gray-400 mt-1 text-right">{title.length}/200</p>
                 </div>
 
                 {/* Type, Date, Source & Image */}
@@ -262,18 +279,32 @@ export default function EditArticlePage() {
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
                             required
+                            min="2020-01-01"
+                            max="2030-12-31"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Source
+                            Source Name
                         </label>
                         <input
                             type="text"
-                            value={source}
-                            onChange={(e) => setSource(e.target.value)}
-                            placeholder="e.g. The Hindu, Indian Express"
+                            value={sourceName}
+                            onChange={(e) => setSourceName(e.target.value)}
+                            placeholder="e.g. India's rural models: The Hindu"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Source URL
+                        </label>
+                        <input
+                            type="url"
+                            value={sourceUrl}
+                            onChange={(e) => setSourceUrl(e.target.value)}
+                            placeholder="https://www.thehindu.com/..."
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
                     </div>

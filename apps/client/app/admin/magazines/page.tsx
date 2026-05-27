@@ -91,7 +91,7 @@ export default function AdminMagazinesPage() {
     const resetForm = () => {
         setFormTitle('');
         setFormCategory(activeTab);
-        setFormYear(filterYear);
+        setFormYear(typeof filterYear === 'number' ? filterYear : currentYear);
         setFormMonth(activeTab === 'quarterly' ? QUARTERS[0] : MONTHS[0]);
         setPdfFile(null);
         setError('');
@@ -259,23 +259,23 @@ export default function AdminMagazinesPage() {
                 </div>
             ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <table className="w-full">
+                    <table className="w-full" style={{ tableLayout: 'fixed' }}>
                         <thead>
                             <tr className="bg-gray-50 border-b border-gray-200">
-                                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Title</th>
-                                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Month/Quarter</th>
-                                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
-                                <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Actions</th>
+                                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase" style={{ width: '40%' }}>Title</th>
+                                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase" style={{ width: '20%' }}>Month/Quarter</th>
+                                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase" style={{ width: '15%' }}>Status</th>
+                                <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase" style={{ width: '25%' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {magazines.map((mag) => (
                                 <tr key={mag._id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4">
+                                    <td className="px-6 py-4" style={{ maxWidth: '300px' }}>
                                         <div className="flex items-center gap-3">
                                             <span className="text-2xl">📄</span>
-                                            <div>
-                                                <p className="font-medium text-gray-900">{mag.title}</p>
+                                            <div className="min-w-0">
+                                                <p className="font-medium text-gray-900 truncate">{mag.title}</p>
                                                 <a
                                                     href={getFullUrl(mag.pdfUrl)}
                                                     target="_blank"
@@ -352,7 +352,9 @@ export default function AdminMagazinesPage() {
                                     placeholder="e.g., October 2025 Monthly Current Affairs Magazine"
                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     required
+                                    maxLength={200}
                                 />
+                                <p className="text-xs text-gray-400 mt-1 text-right">{formTitle.length}/200</p>
                             </div>
 
                             {/* Category */}

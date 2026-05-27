@@ -17,6 +17,8 @@ const ROUTE_LABELS: Record<string, string> = {
     'magazines':      'Magazines',
     'topics':         'Browse Topics',
     'search':         'Search',
+    'resources':      'Resources',
+    'current-affairs': 'Current Affairs',
 };
 
 /** Convert a slug like "study-plan" to "Study Plan" */
@@ -51,7 +53,7 @@ export default function Breadcrumbs() {
 
     return (
         <nav
-            className="max-w-7xl mx-auto w-full px-4 md:px-8 pt-[72px] pb-2"
+            className="max-w-7xl mx-auto w-full px-4 md:px-8 pt-[68px] pb-2 bg-[#F8FAFC] relative z-30"
             aria-label="Breadcrumb"
         >
             <ol className="flex items-center flex-wrap gap-1 text-xs font-medium">
