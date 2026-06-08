@@ -31,6 +31,8 @@ export default function EditQuizPage() {
     const [title, setTitle] = useState('');
     const [date, setDate] = useState('');
     const [setName, setSetName] = useState('');
+    const [tags, setTags] = useState('');
+    const [quizType, setQuizType] = useState<'daily' | 'practice'>('daily');
     const [questions, setQuestions] = useState<QuestionForm[]>([{ ...emptyQuestion }]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,6 +53,11 @@ export default function EditQuizPage() {
                     setTitle(quiz.title || '');
                     setDate(quiz.date ? quiz.date.split('T')[0] : '');
                     setSetName(quiz.setName || '');
+                    
+                    const isPractice = quiz.tags?.includes('prelims-practice');
+                    setQuizType(isPractice ? 'practice' : 'daily');
+                    setTags(quiz.tags ? quiz.tags.filter((t: string) => t !== 'prelims-practice').join(', ') : '');
+                    
                     setQuestions(
                         quiz.questions?.length > 0
                             ? quiz.questions.map((q: QuestionForm) => ({
@@ -130,6 +137,11 @@ export default function EditQuizPage() {
 
         setIsSubmitting(true);
         try {
+            let finalTags = tags.split(',').map((t) => t.trim()).filter((t) => t && t !== 'prelims-practice');
+            if (quizType === 'practice') {
+                finalTags.push('prelims-practice');
+            }
+
             const response = await fetch(`${API_URL}/api/quizzes/${quizId}`, {
                 method: 'PUT',
                 headers: {
@@ -141,6 +153,7 @@ export default function EditQuizPage() {
                     date,
                     setName: setName || undefined,
                     questions,
+                    tags: finalTags,
                 }),
             });
 
@@ -167,9 +180,9 @@ export default function EditQuizPage() {
     }
 
     return (
-        <div className="p-8 max-w-3xl">
+        <div className="p-8 max-w-4xl">
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900">Edit Quiz</h1>
+                <h1 className="text-3xl font-bold text-gray-900 font-headline">Edit Quiz</h1>
                 <p className="text-gray-600 mt-1">Update quiz title, date, and questions</p>
             </div>
 
@@ -180,8 +193,8 @@ export default function EditQuizPage() {
                     </div>
                 )}
 
-                {/* Title, Date, Set Name */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 grid grid-cols-3 gap-4">
+                {/* Title, Date, Set Name, Quiz Type, Tags */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 grid grid-cols-1 md:grid-cols-5 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Title *</label>
                         <input
@@ -218,6 +231,27 @@ export default function EditQuizPage() {
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
                         <p className="text-xs text-gray-400 mt-1 text-right">{setName.length}/100</p>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Quiz Type *</label>
+                        <select
+                            value={quizType}
+                            onChange={(e) => setQuizType(e.target.value as 'daily' | 'practice')}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent font-medium"
+                        >
+                            <option value="daily">Daily Quiz</option>
+                            <option value="practice">Prelims Practice Test</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Subject Tags</label>
+                        <input
+                            type="text"
+                            value={tags}
+                            onChange={(e) => setTags(e.target.value)}
+                            placeholder="e.g., polity, geography"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        />
                     </div>
                 </div>
 

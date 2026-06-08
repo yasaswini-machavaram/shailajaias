@@ -14,6 +14,7 @@ import {
   uploadRoutes,
   searchRoutes,
   resourceRoutes,
+  testSeriesRoutes,
 } from "./routes/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -68,6 +69,7 @@ app.use('/api/courses', courseRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/resources', resourceRoutes);
+app.use('/api/tests/series', testSeriesRoutes);
 
 // 404 handler
 app.use((_req, res) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../AuthContext';
 
@@ -13,10 +13,21 @@ export default function ImportQuizPage() {
     const [title, setTitle] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [setName, setSetName] = useState('');
+    const [tags, setTags] = useState('');
+    const [quizType, setQuizType] = useState<'daily' | 'practice'>('daily');
     const [excelFile, setExcelFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [result, setResult] = useState<{ success: boolean; message: string; count?: number } | null>(null);
     const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('type') === 'practice') {
+                setQuizType('practice');
+            }
+        }
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -31,11 +42,17 @@ export default function ImportQuizPage() {
         setIsSubmitting(true);
 
         try {
+            let finalTags = tags.split(',').map((t) => t.trim()).filter((t) => t && t !== 'prelims-practice');
+            if (quizType === 'practice') {
+                finalTags.push('prelims-practice');
+            }
+
             const formData = new FormData();
             formData.append('file', excelFile);
             formData.append('title', title);
             formData.append('date', date);
             if (setName) formData.append('setName', setName);
+            if (finalTags.length > 0) formData.append('tags', finalTags.join(','));
 
             const response = await fetch(`${API_URL}/api/quizzes/import-excel`, {
                 method: 'POST',
@@ -63,9 +80,9 @@ export default function ImportQuizPage() {
     };
 
     return (
-        <div className="p-8 max-w-2xl">
+        <div className="p-8 max-w-4xl">
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900">Import Quiz from Excel</h1>
+                <h1 className="text-3xl font-bold text-gray-900 font-headline">Import Quiz from Excel</h1>
                 <p className="text-gray-600 mt-1">Upload an Excel file with quiz questions</p>
             </div>
 
@@ -118,8 +135,8 @@ export default function ImportQuizPage() {
                     </div>
                 )}
 
-                {/* Title, Date & Set Name */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 grid grid-cols-3 gap-4">
+                {/* Title, Date & Set Name, Quiz Type, Tags */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 grid grid-cols-1 md:grid-cols-5 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Quiz Title *
@@ -159,6 +176,31 @@ export default function ImportQuizPage() {
                             onChange={(e) => setSetName(e.target.value)}
                             maxLength={100}
                             placeholder="e.g., Set A"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Quiz Type *
+                        </label>
+                        <select
+                            value={quizType}
+                            onChange={(e) => setQuizType(e.target.value as 'daily' | 'practice')}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent font-medium"
+                        >
+                            <option value="daily">Daily Quiz</option>
+                            <option value="practice">Prelims Practice Test</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Subject Tags
+                        </label>
+                        <input
+                            type="text"
+                            value={tags}
+                            onChange={(e) => setTags(e.target.value)}
+                            placeholder="e.g., polity, geography"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
                     </div>

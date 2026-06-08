@@ -19,6 +19,12 @@ const ROUTE_LABELS: Record<string, string> = {
     'search':         'Search',
     'resources':      'Resources',
     'current-affairs': 'Current Affairs',
+    'tests':          'Tests',
+    'prelims-test-series':  'Prelims Test Series',
+    'prelims-practice-test': 'Prelims Practice Test',
+    'mains-test-series':    'Mains Test Series',
+    'mains-practice-test':  'Mains Practice Test',
+    'ca-prelims':           'CA Prelims',
 };
 
 /** Convert a slug like "study-plan" to "Study Plan" */

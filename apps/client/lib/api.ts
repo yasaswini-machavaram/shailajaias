@@ -25,6 +25,7 @@ export interface Question {
     correctAnswer: number;
     correctIndex: number;
     explanation: string;
+    subject?: string;
 }
 
 export interface Quiz {
@@ -64,6 +65,32 @@ export interface Magazine {
     updatedAt: string;
 }
 
+export interface TestSeriesItem {
+    title: string;
+    date: string;
+    quizId?: Quiz | string;
+    questionPaperUrl?: string;
+    questionPaperKey?: string;
+    solutionPaperUrl?: string;
+    solutionPaperKey?: string;
+    syllabus?: string;
+    discussionVideoUrl?: string;
+    isLocked: boolean;
+}
+
+export interface TestSeries {
+    _id: string;
+    title: string;
+    description?: string;
+    brochureUrl?: string;
+    brochureKey?: string;
+    introVideoUrl?: string;
+    tests: TestSeriesItem[];
+    isPublished: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export interface ApiResponse<T> {
     success: boolean;
     data: T;
@@ -78,7 +105,7 @@ export interface ApiResponse<T> {
 
 // Helper function
 async function fetchApi<T>(endpoint: string): Promise<ApiResponse<T>> {
-    const response = await fetch(`${API_URL}${endpoint}`);
+    const response = await fetch(`${API_URL}${endpoint}`, { cache: 'no-store' });
     if (!response.ok) {
         throw new Error(`API Error: ${response.status}`);
     }
@@ -130,6 +157,11 @@ export async function getBurningIssues(limit = 10): Promise<Article[]> {
 // Quiz APIs
 export async function getQuizzesByDate(date: string): Promise<Quiz[]> {
     const { data } = await fetchApi<Quiz[]>(`/api/quizzes?date=${date}&includeQuestions=true`);
+    return data || [];
+}
+
+export async function getQuizzesByTag(tag: string): Promise<Quiz[]> {
+    const { data } = await fetchApi<Quiz[]>(`/api/quizzes?tags=${tag}&includeQuestions=true&limit=100`);
     return data || [];
 }
 
@@ -193,6 +225,19 @@ export async function getStats(): Promise<{
         quizzes: quizzes.pagination?.total || 0,
         courses: courses.pagination?.total || 0,
     };
+}
+
+// Test Series APIs
+export async function getTestSeriesList(includeUnpublished?: boolean): Promise<TestSeries[]> {
+    let url = '/api/tests/series';
+    if (includeUnpublished) url += '?includeUnpublished=true';
+    const { data } = await fetchApi<TestSeries[]>(url);
+    return data || [];
+}
+
+export async function getTestSeriesById(id: string): Promise<TestSeries | null> {
+    const { data } = await fetchApi<TestSeries>(`/api/tests/series/${id}`);
+    return data || null;
 }
 
 // Date helper — use UTC to avoid timezone drift

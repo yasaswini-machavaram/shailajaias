@@ -271,6 +271,12 @@ Breakpoints: mobile <640px, tablet 640-1024px, desktop >1024px
 /search                  → Global search
 /resources               → Resources accordion (categories + items)
 /resources/reader        → Resource PDF reader view
+/tests                   → Tests hub — 5 submodule cards (Prelims/Mains Test Series, Practice Tests, CA Prelims)
+/tests/prelims-test-series    → Prelims Test Series — proper exam mode quiz engine. During test: countdown timer (1min/Q), options show only selected/unselected state (NO correct/incorrect reveal, NO explanation). After finishing (or timer expiry): detailed analysis dashboard (score, stats, subject breakdown, question map) + Review Mode reveals correct answers + explanations. No learning/test toggle — always test mode.
+/tests/prelims-practice-test  → Prelims Practice Test — dual-mode quiz engine. Test mode: same as prelims-test-series (timer, scoring, analysis). Learning mode: single-question attempt-first (no timer, no scoring, explanation revealed after selecting option). Mode toggle locks once test starts.
+/tests/mains-test-series      → Mains Test Series (placeholder)
+/tests/mains-practice-test    → Mains Practice Test (placeholder)
+/tests/ca-prelims             → CA Prelims (placeholder)
 /admin                   → Admin dashboard (requires login)
 /admin/login             → Admin login
 /admin/articles          → Article CRUD (list, filter, search, delete)
@@ -460,6 +466,7 @@ Admin creates content
   - 9 API endpoints under `/api/resources/`
 
 ### 🚧 PARTIALLY BUILT / NEEDS WORK
+- **Test Series Module:** `/tests` hub page with 5 submodule cards. **Prelims Test Series** and **Prelims Practice Test** submodules are COMPLETE with full quiz engines (timer, UPSC scoring, detailed analysis). Mains Test Series, Mains Practice Test, and CA Prelims remain placeholder "Coming Soon" pages.
 - **Student Login/Registration:** There are routes (`/api/auth/register`, `/api/auth/login`) but NO student-facing login/profile page in the client app. The `/profile` route in the bottom nav links to `/profile` but no page exists.
 - **Courses/Topics browser:** `/topics` page exists but needs to properly render the course tree/hierarchy.
 - **Magazine PDF reader:** `/magazines/reader` contains `PdfViewerClient.tsx` (11KB react-pdf component) + a thin `page.tsx` wrapper. Functional but may need UX polish.
@@ -496,6 +503,114 @@ Admin creates content
 ---
 
 ## 📅 CHANGELOG (Update after every session)
+
+### Session: 2026-06-08 — Test Series Question Paper & Solution PDF Uploads
+- **Who:** AI (Antigravity)
+- **What:** Added capability for administrators to upload Question Paper and Detailed Solution PDFs for each test in the Prelims Test Series submodule, and configured student download buttons to open these files directly (falling back to dynamic client print layouts if absent).
+- **Files created/modified:**
+  - `packages/types/index.ts` — Added `questionPaperUrl`, `questionPaperKey`, `solutionPaperUrl`, `solutionPaperKey` optional properties to `ITestSeriesItem` interface.
+  - `apps/api/src/models/TestSeries.ts` — Added the same fields to `ITestSeriesItem` typescript interface and Mongoose schema definition so they persist correctly in the database.
+  - `apps/client/app/admin/test-series/prelims-test-series/page.tsx` — Extended `TestItemForm` interface, added `handlePaperUpload` helper using express multer upload route, mapped new fields in form state changers (`handleEditClick`, `handleAddNewTest`), and added PDF file inputs inside each test item editing card block.
+  - `apps/client/app/tests/prelims-test-series/page.tsx` — Updated Download Question and Detailed Solution buttons to link directly to the uploaded static files (via `API_URL` prefixing) with fallback to the dynamic Next.js client print layouts (`/tests/print-test?id=...`).
+- **Gotchas:**
+  - Standardized database mapping in `apps/api/src/controllers/testSeries.controller.ts` leverages `...t` which automatically copies the newly added fields.
+  - Ensure the client's `solutionPaperUrl` and `solutionPaperKey` fields match the database schema fields.
+
+### Session: 2026-06-08 — Test Series Timer, UPSC Scoring & Detailed Analysis
+- **Who:** AI (Antigravity)
+- **What:** Integrated countdown timer, UPSC negative marking scoring, and detailed post-test analysis dashboard into Prelims Test Series and Prelims Practice Test (test mode). Overhauled learning mode in Practice Test from "answers shown upfront" to "attempt-first-then-reveal".
+- **Scoring formula:** `totalScore = (correct × 2) - (incorrect × 2/3)`. Unattempted = 0. Max = totalQ × 2.
+- **Timer:** 1 minute per question. Total = numberOfQuestions × 60s. Auto-submits on expiry. Timer pulses red when < 60s. Timer exists ONLY in test mode (both pages) — NOT in learning mode.
+- **Exam Mode UX (prelims-test-series):** Correct/incorrect answers and explanations are hidden during the test. Options show a clean blue "Selected" state. Options do not freeze; users can click different options to change their answer (last clicked becomes selected).
+- **KPI Bar (prelims-test-series):** Shows `Attempted | Unattempted | Skipped` during the test instead of correct/wrong, preserving the exam mode secrecy.
+- **Accordion Expand UX:** Tapping anywhere on a test series card header (except the START button) toggles description expansion.
+- **Ask Doubt Integration:** Added an "Ask Doubt" button to the post-test analysis page next to the action buttons, allowing students to trigger the WhatsApp/email doubt modal for the `activeTestItem`.
+- **Analysis dashboard:** Replaces old simple 2-stat scorecard. Shows: total score/maxMarks, correct/incorrect/unattempted with progress bars, accuracy %, negative marks lost, time taken (MM:SS), subject-wise breakdown table (if questions have `subject` field), color-coded question map grid (green=correct, red=incorrect, gray=unattempted). Each grid cell is clickable → enters Review Mode showing question + your answer + correct answer + explanation.
+- **Learning mode (prelims-practice-test only):** Changed from scrollable all-questions list (answers/explanations pre-revealed) → single-question-at-a-time navigation where user must select an option first, then correct/incorrect highlighting + explanation revealed. No timer, no scoring, no scorecard.
+- **Mode toggle lock:** Once user answers any question in test mode, Learning↔Test toggle is disabled (shows "Mode locked during test"). Prevents gaming the timer.
+- **Key state vars added:** `timeRemaining`, `testStartTime`, `timerRef` (useRef for setInterval), `showReview`, `hasStartedTest` (practice test only), `activeTestItem` (tracks the TestSeriesItem currently being taken as a quiz).
+- **Key functions added:** `formatTime()`, `getTimeTaken()`, `getStats()` (useCallback — returns correct/incorrect/unattempted/totalScore/maxMarks/negativeMarks/accuracy), `getSubjectBreakdown()` (useCallback — per-subject stats), `handleFinishTest()` (stops timer + shows scorecard).
+- **Files modified:**
+  - `apps/client/app/tests/prelims-test-series/page.tsx` — Removed learning/test mode toggle (always test mode now). Added timer useEffect, scoring helpers, detailed analysis dashboard, review mode, question navigation grid, header accordion tap handlers, non-freezing options, custom exam KPI bar, and "Ask Doubt" dashboard action button with `activeTestItem` tracking.
+  - `apps/client/app/tests/prelims-practice-test/page.tsx` — Added timer (test mode only), scoring helpers, detailed analysis (test mode only), rewrote learning mode to attempt-first, added mode toggle lock with `hasStartedTest` state.
+- **Gotchas:**
+  - `selectedIdx` is scoped inside `.map()` callback — cannot reference it outside. Use `answers[currentQuestionIndex]` in outer scope instead.
+  - Timer `useEffect` deps: must include `activeQuiz`, `showScorecard` (and `learnMode` for practice test) to properly start/stop. Cleanup function must clear interval.
+  - Subject-wise breakdown only renders if there are multiple subjects (hides if all questions are 'General').
+  - Ensure `activeTestItem` is cleared out when exiting back to the main series screen so that the doubt modal state is clean.
+
+### Session: 2026-06-03 — Prelims Test Series Group Visibility Fix
+- **Who:** AI (Antigravity)
+- **What:** Fixed visibility issue of newly added Prelims Test Series groups in the student portal. Manually published the user's test series group in MongoDB. Configured cache-busting headers in client API service to ensure dynamic updates load instantly.
+- **Files modified:**
+  - `apps/client/lib/api.ts` — Updated `fetchApi` function to include `{ cache: 'no-store' }` to ensure Next.js App Router and browsers bypass cache for dynamic data fetches.
+- **Gotchas & Discoveries:** Test series groups are created in `isPublished: false` (Draft) status by default. The admin must check the "Publish to students" checkbox and save for it to be visible in the user portal.
+
+### Session: 2026-06-03 — Prelims Test Series Submodule (Excel Import & Client-Side print generation)
+- **Who:** AI (Antigravity)
+- **What:** Completed implementation of the Prelims Test Series submodule. Simplified the admin workflow: removed PDF paper uploads and manual quiz reference selectors, replacing them with a direct Excel question importer (reusing the Current Affairs format). Student offline downloads are now dynamically formatted as print/PDF layouts generated in-browser.
+- **Files created/modified:**
+  - [index.ts](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/packages/types/index.ts) — Removed paper file keys from `ITestSeriesItem` typescript interface.
+  - [TestSeries.ts](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/api/src/models/TestSeries.ts) — Modified schema to remove question and solution paper fields.
+  - [testSeries.controller.ts](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/api/src/controllers/testSeries.controller.ts) — Implemented `importTestExcel` controller to parse Excel files and auto-create Quiz documents. Cleans up associated quizzes when a test series is deleted.
+  - [testSeries.routes.ts](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/api/src/routes/testSeries.routes.ts) — Mounted `POST /import-excel` using in-memory multer buffers and cleaned up paper upload routes.
+  - [page.tsx](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/client/app/admin/test-series/page.tsx) — Redesigned the CMS editor. Removed PDF fields and manual dropdowns, and integrated direct Excel file uploads.
+  - [page.tsx](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/client/app/tests/print-test/page.tsx) — [NEW] Created a print-friendly page layout supporting both question booklets and explanation sheets, triggering `window.print()` automatically.
+  - [page.tsx](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/client/app/tests/prelims-test-series/page.tsx) — Redesigned student download buttons to open `/tests/print-test` in new tabs with mode query parameters.
+- **Verified:** Both `api` and `client` build and compile successfully with Next.js static generation.
+
+### Session: 2026-06-03 — Admin Test Series Hub and Route Restructuring
+- **Who:** AI (Antigravity)
+- **What:** Completed implementation of the Admin Test Series dashboard / hub page with 5 submodules matching the student view layout. Rearranged the routes to allocate a dedicated manager page for Prelims Test Series.
+- **Files created/modified:**
+  - `apps/client/app/admin/test-series/page.tsx` — Replaced the old Prelims Test Series manager with a 5-submodule Hub dashboard containing cards for Prelims/Mains Series & Practice tests and CA Prelims.
+  - `apps/client/app/admin/test-series/prelims-test-series/page.tsx` — [NEW] Created this dedicated route and moved the existing Prelims Test Series editor/uploader panel here.
+  - `apps/client/app/admin/quizzes/page.tsx` — Modified tab parsing to read URL search parameters on mount, routing the user automatically to the `'practice'` tab from the Hub. Added dynamic URL builders passing `?type=practice` to Create/Import buttons.
+  - `apps/client/app/admin/quizzes/new/page.tsx` & `apps/client/app/admin/quizzes/import/page.tsx` — Added client-side query string reader to auto-select `prelims-practice` type when navigating from the hub.
+- **Verified:** Client compiles and builds successfully via Next.js with all 39 static routes.
+
+### Session: 2026-06-03 — Admin Quizzes Filtering and Tag Management
+- **Who:** AI (Antigravity)
+- **What:** Fixed visibility issue of Prelims Practice Tests in the Admin Portal. Added tabs to filter and separate Daily Quizzes from Prelims Practice Tests and Test Series Quizzes. Integrated a "Quiz Type" selector (Daily Quiz vs. Prelims Practice Test) to new, edit, and import forms to automate the assignment of the 'prelims-practice' tag and eliminate typos.
+- **Files modified:**
+  - `apps/client/app/admin/quizzes/page.tsx` — Added tab filters (All, Daily, Practice, Series), increased fetch limit to 100, styled tags with distinct color-coded badges.
+  - `apps/client/app/admin/quizzes/new/page.tsx` — Added Quiz Type dropdown, automatically appends `'prelims-practice'` to tags for practice tests.
+  - `apps/client/app/admin/quizzes/[id]/page.tsx` — Pre-selects Quiz Type on load and appends/removes tag on save.
+  - `apps/client/app/admin/quizzes/import/page.tsx` — Added Quiz Type selector to import form, automatically appends the tag to FormData tags field.
+- **Verified:** Client compiles and builds successfully via Next.js.
+
+### Session: 2026-06-03 — Prelims Practice Test Submodule Implementation
+- **Who:** AI (Antigravity)
+- **What:** Completed implementation of the Prelims Practice Test submodule, including dynamic quiz filtering by subject, learning/test mode toggling, layout customization matching design references, guidelines/orientation modals, and backend excel upload/quiz tags adjustments.
+- **Files modified:**
+  - `apps/api/src/controllers/quiz.controller.ts` — Updated `importQuizFromExcel` to read and parse `tags` from the request body.
+  - `apps/client/app/admin/quizzes/new/page.tsx` — Added Tags input field to quiz creation form and integrated it into the API request.
+  - `apps/client/app/admin/quizzes/[id]/page.tsx` — Added Tags input field to quiz edit form, populating from the API and submitting changes.
+  - `apps/client/app/admin/quizzes/import/page.tsx` — Added Tags input field to Excel quiz import form, appending it to the FormData submission.
+  - `apps/client/lib/api.ts` — Added `getQuizzesByTag` to fetch quizzes by tag, and added `subject` field to `Question` type interface.
+  - `apps/client/app/tests/prelims-practice-test/page.tsx` — Completely implemented practice tests list view and execution view, supporting subject filter, soft colored subject panels, guidelines, orientations, and Learning vs Test modes.
+- **Verified:** `pnpm --filter client build` runs and builds the client package successfully.
+
+### Session: 2026-06-03 — Test Series Module (Hub + 5 Submodule Placeholders)
+- **Who:** AI (Antigravity)
+- **What:** Created the Test Series module with a hub page and 5 submodule placeholder pages.
+- **New files created:**
+  - `apps/client/app/tests/page.tsx` — Tests hub page with 5 visually rich cards (gradient icon placeholders, bold titles, numbered feature lists, alternating tinted backgrounds, hover animations)
+  - `apps/client/app/tests/prelims-test-series/page.tsx` — Placeholder (Coming Soon)
+  - `apps/client/app/tests/prelims-practice-test/page.tsx` — Placeholder (Coming Soon)
+  - `apps/client/app/tests/mains-test-series/page.tsx` — Placeholder (Coming Soon)
+  - `apps/client/app/tests/mains-practice-test/page.tsx` — Placeholder (Coming Soon)
+  - `apps/client/app/tests/ca-prelims/page.tsx` — Placeholder (Coming Soon)
+- **Files modified:**
+  - `apps/client/app/page.tsx` — Changed "Tests" module card `href` from `/daily-quiz` to `/tests`
+  - `apps/client/components/Breadcrumbs.tsx` — Added 6 new route labels (tests, prelims-test-series, prelims-practice-test, mains-test-series, mains-practice-test, ca-prelims)
+  - `apps/client/app/globals.css` — Added ~175 lines of `.tests-*` CSS classes (card layout, image placeholder, feature list, hover animations, mobile responsive breakpoints)
+- **Design decisions:**
+  - Placeholder gradient icons instead of generated images (to be replaced later)
+  - Cards use design system tokens (Playfair Display headings, Inter body, navy/orange accents)
+  - Mobile: cards stack vertically (image above content) on screens ≤480px
+  - No backend changes needed for this phase
+- **Verified:** `next build` compiles clean — all 6 new pages render as static content.
 
 ### Session: 2026-04-19 — Burning Issues UX Redesign
 - **Problem:** Each BurningIssue's images were flattened into individual grid cards (a 5-image topic = 5 identical cards). Instagram-stories metaphor was wrong for educational content.

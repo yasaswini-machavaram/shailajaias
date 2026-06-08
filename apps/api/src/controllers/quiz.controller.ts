@@ -113,7 +113,7 @@ export const createQuiz = async (req: Request, res: Response): Promise<void> => 
 export const importQuizFromExcel = async (req: Request, res: Response): Promise<void> => {
     try {
         const file = req.file;
-        const { title, date, setName } = req.body;
+        const { title, date, setName, tags } = req.body;
 
         if (!file) {
             res.status(400).json({ success: false, message: 'Please upload an Excel file' });
@@ -139,12 +139,21 @@ export const importQuizFromExcel = async (req: Request, res: Response): Promise<
 
         const user = (req as Request & { user: { _id: string } }).user;
 
+        let quizTags: string[] = [];
+        if (tags) {
+            if (Array.isArray(tags)) {
+                quizTags = tags;
+            } else if (typeof tags === 'string') {
+                quizTags = tags.split(',').map((t) => t.trim()).filter(Boolean);
+            }
+        }
+
         // Create quiz with parsed questions
         const quiz = await Quiz.create({
             title,
             date: new Date(date),
             questions: parseResult.questions,
-            tags: [], // Tags at Quiz level are no longer provided by Excel import UI
+            tags: quizTags,
             setName: setName || undefined,
             createdBy: user._id,
         });

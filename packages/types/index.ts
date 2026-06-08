@@ -60,6 +60,33 @@ export interface IQuiz {
   createdAt: string;
 }
 
+// Test Series types
+export interface ITestSeriesItem {
+  title: string;
+  date: string;
+  quizId?: string; // ID of online quiz, optional
+  questionPaperUrl?: string;
+  questionPaperKey?: string;
+  solutionPaperUrl?: string;
+  solutionPaperKey?: string;
+  syllabus?: string;
+  discussionVideoUrl?: string;
+  isLocked: boolean;
+}
+
+export interface ITestSeries {
+  id: string;
+  title: string;
+  description?: string;
+  brochureUrl?: string;
+  brochureKey?: string;
+  introVideoUrl?: string;
+  tests: ITestSeriesItem[];
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Course types
 export type ContentTabType = 'video' | 'notes' | 'test';
 
