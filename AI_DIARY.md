@@ -502,7 +502,23 @@ Admin creates content
 
 ---
 
+## 🐛 KNOWN BUGS / TODO
+
+1. **[FIXED] Prelims Test Series Multi-Group Navigation** — Client page at `/tests/prelims-test-series` used to auto-select `list[0]` on load. Now shows card-based landing page when multiple groups exist, auto-drills only when 1 group. "← Back to All Series" button in detail view.
+
+---
+
 ## 📅 CHANGELOG (Update after every session)
+
+### Session: 2026-06-09 — Multi-Group Test Series Navigation Fix
+- **Who:** AI (Antigravity)
+- **What:** Implemented two-level navigation for the Prelims Test Series student page. When admin publishes multiple test series groups, students now see a card-based landing page (group title, description, total/sectional/full-length counts, brochure/intro shortcuts, "View Tests →" CTA). Clicking a card drills into the detail view with a "← Back to All Series" button. If only 1 group is published, auto-drills directly (no landing page). Removed the old tiny tab-style group switcher.
+- **Files modified:**
+  - `apps/client/app/tests/prelims-test-series/page.tsx` — Changed `fetchInitialData` to only auto-select when `list.length === 1`. Removed tab buttons (old lines 773-789). Added Groups Landing card grid (`seriesList.map`) with gradient strip, stats row, brochure/intro quick actions, and "View Tests" CTA. Added "← Back to All Series" back-navigation button in detail header (only when `seriesList.length > 1`). Reordered conditional rendering: loading → empty → landing → detail.
+- **Gotchas:**
+  - Landing cards use `series.tests || []` since the list endpoint may not populate tests array fully — `getCounts` handles empty arrays gracefully.
+  - `e.stopPropagation()` on brochure/intro buttons inside cards prevents accidental drill-in.
+  - Back button resets `expandedIndex` and `selectedSubject` to avoid stale state.
 
 ### Session: 2026-06-08 — Test Series Question Paper & Solution PDF Uploads
 - **Who:** AI (Antigravity)

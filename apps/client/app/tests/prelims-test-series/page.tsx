@@ -113,8 +113,8 @@ function PrelimsTestSeriesInner() {
             try {
                 const list = await getTestSeriesList(false); // only published
                 setSeriesList(list);
-                if (list.length > 0) {
-                    // Fetch full series by ID to populate quizzes
+                // Auto-select only if exactly 1 group (skip landing page)
+                if (list.length === 1) {
                     const detailedFirst = await getTestSeriesById(list[0]._id);
                     setSelectedSeries(detailedFirst);
                 }
@@ -769,30 +769,11 @@ function PrelimsTestSeriesInner() {
                         </div>
                     </div>
 
-                    {/* Series Group Selector Tabs if multiple */}
-                    {seriesList.length > 1 && (
-                        <div className="flex gap-2 overflow-x-auto pb-4 mb-6 no-scrollbar">
-                            {seriesList.map((series) => (
-                                <button
-                                    key={series._id}
-                                    onClick={() => handleSelectSeries(series._id)}
-                                    className={`px-5 py-3 rounded-2xl text-xs font-bold transition-all border shrink-0 ${
-                                        selectedSeries?._id === series._id
-                                            ? 'bg-[#1E3A5F] border-[#1E3A5F] text-white shadow-md'
-                                            : 'bg-white border-gray-200/80 text-gray-600 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    {series.title}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-
                     {isLoading ? (
                         <div className="flex justify-center items-center py-20">
                             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#1E3A5F]"></div>
                         </div>
-                    ) : !selectedSeries ? (
+                    ) : seriesList.length === 0 ? (
                         <div className="text-center py-16 bg-white border border-gray-100 rounded-3xl p-8 shadow-sm">
                             <span className="text-4xl">📭</span>
                             <h3 className="text-lg font-bold text-[#1E3A5F] mt-4">No test series published yet</h3>
@@ -800,10 +781,104 @@ function PrelimsTestSeriesInner() {
                                 Tests are currently being uploaded by our administrators. Please check back later.
                             </p>
                         </div>
+                    ) : !selectedSeries ? (
+                        /* ─── GROUPS LANDING PAGE ─── */
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            {seriesList.map((series) => {
+                                const counts = getCounts(series.tests || []);
+                                return (
+                                    <div
+                                        key={series._id}
+                                        className="bg-white border-2 border-gray-100 hover:border-[#1E3A5F]/30 rounded-3xl overflow-hidden shadow-sm hover:shadow-lg transition-all group cursor-pointer"
+                                        onClick={() => handleSelectSeries(series._id)}
+                                    >
+                                        {/* Card Header Gradient Strip */}
+                                        <div className="h-2 bg-gradient-to-r from-[#1E3A5F] via-[#2A4E7D] to-[#D97706]"></div>
+
+                                        <div className="p-6 md:p-8">
+                                            <div className="flex items-start justify-between gap-4 mb-4">
+                                                <div className="flex-1">
+                                                    <h2 className="text-xl font-bold text-[#1E3A5F] font-headline group-hover:text-[#D97706] transition-colors">
+                                                        {series.title}
+                                                    </h2>
+                                                    {series.description && (
+                                                        <p className="text-gray-500 text-sm mt-1.5 leading-relaxed line-clamp-2">
+                                                            {series.description}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="w-12 h-12 rounded-2xl bg-[#1E3A5F]/5 border border-[#1E3A5F]/10 flex items-center justify-center shrink-0 group-hover:bg-[#1E3A5F]/10 transition-colors">
+                                                    <span className="text-2xl">📝</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Stats Row */}
+                                            <div className="grid grid-cols-3 gap-3 mb-5">
+                                                <div className="bg-slate-50 border border-gray-100 rounded-xl p-3 text-center">
+                                                    <span className="block text-xl font-extrabold text-[#1E3A5F]">{(series.tests || []).length}</span>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Tests</span>
+                                                </div>
+                                                <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-3 text-center">
+                                                    <span className="block text-xl font-extrabold text-[#D97706]">{counts.sectional}</span>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sectional</span>
+                                                </div>
+                                                <div className="bg-green-50/60 border border-green-100 rounded-xl p-3 text-center">
+                                                    <span className="block text-xl font-extrabold text-green-700">{counts.fullLength}</span>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Full Length</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Quick Actions + CTA */}
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex gap-2">
+                                                    {series.brochureUrl && (
+                                                        <a
+                                                            href={`${API_URL}${series.brochureUrl}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-100 rounded-lg text-[10px] font-bold shadow-sm transition-colors"
+                                                        >
+                                                            📄 Brochure
+                                                        </a>
+                                                    )}
+                                                    {series.introVideoUrl && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setVideoModalUrl(series.introVideoUrl || null); }}
+                                                            className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-100 rounded-lg text-[10px] font-bold shadow-sm transition-colors"
+                                                        >
+                                                            ▶️ Intro
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-1.5 text-sm font-bold text-[#1E3A5F] group-hover:text-[#D97706] transition-colors">
+                                                    View Tests
+                                                    <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                                                    </svg>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     ) : (
                         <div>
                             {/* Selected Series Header Info */}
                             <div className="bg-white border border-gray-150/60 rounded-3xl p-6 md:p-8 shadow-sm mb-8 space-y-6">
+                                {/* Back to All Series button (only if multiple groups) */}
+                                {seriesList.length > 1 && (
+                                    <button
+                                        onClick={() => { setSelectedSeries(null); setExpandedIndex(null); setSelectedSubject('All'); }}
+                                        className="inline-flex items-center gap-2 text-sm font-semibold text-[#1E3A5F] hover:text-[#D97706] transition-colors group mb-2"
+                                    >
+                                        <svg className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                        Back to All Series
+                                    </button>
+                                )}
                                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                                     <div>
                                         <h2 className="text-2xl font-bold text-[#1E3A5F] font-headline">{selectedSeries.title}</h2>
