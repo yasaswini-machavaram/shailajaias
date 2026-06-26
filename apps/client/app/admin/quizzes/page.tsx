@@ -19,22 +19,10 @@ export default function QuizzesPage() {
     const { token } = useAuth();
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'all' | 'daily' | 'practice' | 'series'>('all');
+
 
     useEffect(() => {
         fetchQuizzes();
-
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const tabParam = params.get('tab');
-            if (tabParam === 'practice') {
-                setActiveTab('practice');
-            } else if (tabParam === 'daily') {
-                setActiveTab('daily');
-            } else if (tabParam === 'series') {
-                setActiveTab('series');
-            }
-        }
     }, [token]);
 
     const fetchQuizzes = async () => {
@@ -72,21 +60,11 @@ export default function QuizzesPage() {
         }
     };
 
-    // Filter quizzes based on active tab
+    // Filter to only show daily quizzes (exclude practice and test series quizzes)
     const filteredQuizzes = quizzes.filter((quiz) => {
         const isPractice = quiz.tags?.includes('prelims-practice');
         const isSeries = quiz.tags?.includes('prelims-test-series');
-        
-        if (activeTab === 'daily') {
-            return !isPractice && !isSeries;
-        }
-        if (activeTab === 'practice') {
-            return isPractice;
-        }
-        if (activeTab === 'series') {
-            return isSeries;
-        }
-        return true;
+        return !isPractice && !isSeries;
     });
 
     return (
@@ -94,18 +72,18 @@ export default function QuizzesPage() {
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 font-headline">Quizzes & Tests</h1>
-                    <p className="text-gray-600 mt-1">Manage daily quizzes, practice tests, and test series questions</p>
+                    <h1 className="text-3xl font-bold text-gray-900 font-headline">Daily Quizzes</h1>
+                    <p className="text-gray-600 mt-1">Manage daily quizzes for students</p>
                 </div>
                 <div className="flex gap-2">
                     <Link
-                        href={activeTab === 'practice' ? '/admin/quizzes/import?type=practice' : '/admin/quizzes/import'}
+                        href="/admin/quizzes/import"
                         className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors shadow-sm flex items-center gap-1.5"
                     >
                         📊 Import Excel
                     </Link>
                     <Link
-                        href={activeTab === 'practice' ? '/admin/quizzes/new?type=practice' : '/admin/quizzes/new'}
+                        href="/admin/quizzes/new"
                         className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors shadow-sm flex items-center gap-1.5"
                     >
                         + Create Quiz
@@ -113,49 +91,7 @@ export default function QuizzesPage() {
                 </div>
             </div>
 
-            {/* Tab Navigation */}
-            <div className="flex border-b border-gray-200 mb-6 gap-2">
-                <button
-                    onClick={() => setActiveTab('all')}
-                    className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
-                        activeTab === 'all'
-                            ? 'border-amber-500 text-amber-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                >
-                    All Quizzes ({quizzes.length})
-                </button>
-                <button
-                    onClick={() => setActiveTab('daily')}
-                    className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
-                        activeTab === 'daily'
-                            ? 'border-amber-500 text-amber-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                >
-                    Daily Quizzes ({quizzes.filter(q => !q.tags?.includes('prelims-practice') && !q.tags?.includes('prelims-test-series')).length})
-                </button>
-                <button
-                    onClick={() => setActiveTab('practice')}
-                    className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
-                        activeTab === 'practice'
-                            ? 'border-purple-500 text-purple-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                >
-                    Prelims Practice Tests ({quizzes.filter(q => q.tags?.includes('prelims-practice')).length})
-                </button>
-                <button
-                    onClick={() => setActiveTab('series')}
-                    className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
-                        activeTab === 'series'
-                            ? 'border-blue-500 text-blue-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                >
-                    Test Series Quizzes ({quizzes.filter(q => q.tags?.includes('prelims-test-series')).length})
-                </button>
-            </div>
+
 
             {/* Quizzes Table */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

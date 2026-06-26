@@ -1,9 +1,14 @@
 // User types
 export interface IUser {
   id: string;
-  email: string;
+  email?: string;
+  phone?: string;
   name: string;
   role: 'admin' | 'student';
+  authProvider?: 'local' | 'whatsapp';
+  status?: 'active' | 'suspended';
+  enrolledCourses?: string[];
+  enrolledTestSeries?: string[];
   createdAt: string;
 }
 
@@ -128,6 +133,52 @@ export const TOPIC_TAGS = [
 ] as const;
 
 export type TopicTag = (typeof TOPIC_TAGS)[number];
+
+// Doubt types
+export interface IDoubtMessage {
+  senderId: string;
+  senderName: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface IDoubt {
+  id: string;
+  _id?: string;
+  student: string | { id: string; name: string; phone?: string; email?: string };
+  testSeries?: string;
+  quiz?: string;
+  questionIndex?: number;
+  questionText?: string;
+  subject: string;
+  title: string;
+  description: string;
+  status: 'pending' | 'answered' | 'resolved';
+  messages: IDoubtMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Test Report types
+export interface ITestReport {
+  id: string;
+  student: string;
+  quiz: string | { _id: string; title: string; questions?: any[] };
+  testSeries?: string | { _id: string; title: string };
+  scorecard: {
+    totalScore: number;
+    maxMarks: number;
+    correct: number;
+    incorrect: number;
+    unattempted: number;
+    accuracy: number;
+    negativeMarks: number;
+    timeTaken: number;
+  };
+  answers: Record<string, number>;
+  createdAt: string;
+  updatedAt: string;
+}
 
 // API Response types
 export interface ApiResponse<T> {

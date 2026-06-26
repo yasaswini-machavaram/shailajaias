@@ -81,8 +81,11 @@ AWS_REGION=ap-south-1
 
 #### 1. User (`models/User.ts`)
 ```
-email (unique, lowercase), password (hashed, hidden by default), name, role ('admin'|'student')
+email? (unique, sparse, lowercase), password? (hashed, hidden by default), phone? (unique, sparse),
+name, role ('admin'|'student'), authProvider ('local'|'whatsapp', default 'local')
 ```
+- `email` and `password` are optional — WhatsApp-only students won't have them
+- `phone` is optional — admin users won't have it. Uses sparse unique index.
 - Pre-save hook hashes password via bcrypt (10 salt rounds)
 - `comparePassword()` instance method for login check
 
@@ -146,7 +149,8 @@ description?, order, isPublished, createdBy
 | Method | Route | Auth | Description |
 |--------|-------|------|-------------|
 | POST | `/api/auth/register` | Public | Register user |
-| POST | `/api/auth/login` | Public | Login, returns JWT |
+| POST | `/api/auth/login` | Public | Login (email/password), returns JWT |
+| POST | `/api/auth/whatsapp` | Public | Login/Register via WhatsApp (OTPless token verification) |
 | GET | `/api/auth/me` | Private | Get current user |
 | GET | `/api/articles` | Public | List articles (filter: type, date, page, limit) |
 | GET | `/api/articles/by-date` | Public | Articles by exact date + type |
@@ -278,6 +282,8 @@ Breakpoints: mobile <640px, tablet 640-1024px, desktop >1024px
 /tests/mains-practice-test    → Mains Practice Test (placeholder)
 /tests/ca-prelims             → CA Prelims (placeholder)
 /admin                   → Admin dashboard (requires login)
+/login                   → Student WhatsApp login (OTPless SDK)
+/profile                 → Student profile (logged-in: details+logout, logged-out: login CTA)
 /admin/login             → Admin login
 /admin/articles          → Article CRUD (list, filter, search, delete)
 /admin/articles/new      → Create article (TipTap editor for Prelims; structured form for Mains)
@@ -332,12 +338,22 @@ Additional inline admin UI (not separate components):
 - Course tree manager
 - Mains structured form (context, Q&A pairs, practice, value additions)
 
-### Authentication (Admin Portal)
+### Authentication
+
+#### Admin Portal
 - `AuthContext.tsx` at `app/admin/AuthContext.tsx`
 - JWT stored in `localStorage` keys: `token`, `user`
 - Admin layout wraps all `/admin/*` routes in `AuthProvider`
 - Login page at `/admin/login` — redirects to dashboard on success
 - Non-admin users redirected to `/`
+
+#### Student Portal
+- `StudentAuthContext.tsx` at `contexts/StudentAuthContext.tsx`
+- JWT stored in `localStorage` keys: `student_token`, `student_user`
+- Root layout wraps all pages via `Providers.tsx` → `StudentAuthProvider`
+- Login page at `/login` — WhatsApp login via OTPless SDK
+- Does NOT enforce login on any route — browsing is free
+- `useStudentAuth()` hook provides: `user`, `token`, `isLoggedIn`, `isLoading`, `loginWithWhatsApp()`, `logout()`
 
 ### API Client Layer (`lib/api.ts`)
 - `API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'`
@@ -464,10 +480,13 @@ Admin creates content
   - Student: `/resources` accordion page + `/resources/reader` PDF viewer (react-pdf)
   - Bottom nav points to `/resources`
   - 9 API endpoints under `/api/resources/`
+- **Student Login/Registration (Dev Mock OTP)**: Phone number input and 6-digit OTP code flow bypasses real SMS networks by printing OTP keys directly to developer consoles. Supports automatic registration/login with JWT and session states. Swaps directly to WhatsApp OTPless in production.
+- **Student Profile details editing**: Interactive `/profile` details card lets users update Name and Email with inline alerts.
+- **UPSC Doubt Resolution System**: Comprehensive student-mentor doubt ticket portal. Allows students to submit subject-specific questions directly from prelims test-series review panels or general queries from `/profile` tab. Features interactive discussion threads, follow-up messages, and an admin workspace desk at `/admin/doubts` with quick reply and status updates.
+- **UPSC Test Reports saving & tracking**: Persistent exam scorecard saving for logged-in students. Allows users to save prelims test results to a "Test Reports" dashboard under `/profile`. Includes detailed analysis metrics, subject-wise breakdown, and detailed review option (fetching questions and explanations dynamically without DB duplication). Supports midway authentication with temporary localStorage caching during redirects.
 
 ### 🚧 PARTIALLY BUILT / NEEDS WORK
 - **Test Series Module:** `/tests` hub page with 5 submodule cards. **Prelims Test Series** and **Prelims Practice Test** submodules are COMPLETE with full quiz engines (timer, UPSC scoring, detailed analysis). Mains Test Series, Mains Practice Test, and CA Prelims remain placeholder "Coming Soon" pages.
-- **Student Login/Registration:** There are routes (`/api/auth/register`, `/api/auth/login`) but NO student-facing login/profile page in the client app. The `/profile` route in the bottom nav links to `/profile` but no page exists.
 - **Courses/Topics browser:** `/topics` page exists but needs to properly render the course tree/hierarchy.
 - **Magazine PDF reader:** `/magazines/reader` contains `PdfViewerClient.tsx` (11KB react-pdf component) + a thin `page.tsx` wrapper. Functional but may need UX polish.
 - **Admin recent activity section:** Placeholder text says "No recent activity to show" — not yet implemented.
@@ -475,11 +494,9 @@ Admin creates content
 - **Mobile responsiveness refinement:** Conversation `073e7bf3` focused on mobile responsive templates for invitation templates (different project?). The Shailaja IAS client uses TailwindCSS responsive classes but may need further mobile polish.
 
 ### ❌ NOT STARTED / FUTURE FEATURES
-- Student subscription/payment system
+- Student subscription/payment system (manual admin overrides available in user dashboard)
 - Student progress tracking (quiz scores, completion)
 - Push notifications
-- Student profile page (`/profile`)
-- ~~Search result page refinement~~ (DONE — client-side Trie + Inverted Index)
 - App-wide loading states / skeleton screens
 - Error boundary handling
 - Dark mode (CSS vars set up for it in globals.css but not actively used)
@@ -506,9 +523,150 @@ Admin creates content
 
 1. **[FIXED] Prelims Test Series Multi-Group Navigation** — Client page at `/tests/prelims-test-series` used to auto-select `list[0]` on load. Now shows card-based landing page when multiple groups exist, auto-drills only when 1 group. "← Back to All Series" button in detail view.
 
----
-
 ## 📅 CHANGELOG (Update after every session)
+
+### Session: 2026-06-25 (6) — UPSC Prelims Test Reports saving & tracking
+- **Who:** AI (Antigravity)
+- **What:**
+  1. **Shared Types**: Added `ITestReport` interface to `packages/types/index.ts`.
+  2. **Backend Mongoose Schema**: Created the `TestReport` model at `apps/api/src/models/TestReport.ts` and registered it in index exports.
+  3. **Backend API Endpoints**: Created `testReport.controller.ts` and `testReport.routes.ts` providing CRUD capabilities, status updates, and reports listing. Mounted routes under `/api/reports`.
+  4. **Student Portal - Scorecard Save Action**: Integrated the "Save Report" action button to the scorecard view.
+  5. **Midway Authentication Flow**: Implemented pending test report payload caching in `localStorage` alongside custom redirects to support logged-out users logging in mid-test and auto-saving their results.
+  6. **Student Portal - My Reports Desk**: Overhauled the profile reports placeholder card into a fully functional Reports panel in `/profile`, featuring list views, detailed metric dashboards, dynamic subject breakdowns, and interactive review pagination with correct answers and explanations.
+- **Files created:**
+  - `apps/api/src/models/TestReport.ts`
+  - `apps/api/src/controllers/testReport.controller.ts`
+  - `apps/api/src/routes/testReport.routes.ts`
+- **Files modified:**
+  - `packages/types/index.ts`
+  - `apps/api/src/models/index.ts`
+  - `apps/api/src/routes/index.ts`
+  - `apps/api/src/index.ts`
+  - `apps/client/app/tests/prelims-test-series/page.tsx`
+  - `apps/client/app/login/page.tsx`
+  - `apps/client/app/profile/page.tsx`
+- **Gotchas:**
+  - Standard exam components inside loops or callbacks must correctly reference the parent `TestSeries` (`selectedSeries?._id`) rather than local loop subdocuments (`activeTestItem?._id`) which lack MongoDB object IDs in the shared models.
+
+### Session: 2026-06-25 (5) — UPSC Doubt Resolution System
+- **Who:** AI (Antigravity)
+- **What:**
+  1. **Shared Types**: Added `IDoubt` and `IDoubtMessage` interfaces to `packages/types/index.ts`.
+  2. **Backend Mongoose Schema**: Created the `Doubt` model at `apps/api/src/models/Doubt.ts` and registered it in index exports.
+  3. **Backend API Endpoints**: Created `doubt.controller.ts` and `doubt.routes.ts` providing CRUD capabilities, status updates, and discussion thread replies. Mounted routes under `/api/doubts`.
+  4. **Student Portal - Ask Doubt Modal**: Integrated a text-only modal inside prelims test-series review mode, pre-populating quiz/test context, question indexes, and default subject categories.
+  5. **Student Portal - My Doubt Desk**: Implemented a dashboard tab inside `/profile` rendering student doubts list, active message thread chat views, and support for follow-up replies and general queries.
+  6. **Admin Portal - Doubt Resolution Hub**: Designed a split-pane layout at `/admin/doubts` featuring status/subject filters, query search, user contact details, pre-filled context links, and reply/status resolution buttons.
+- **Files created:**
+  - `apps/api/src/models/Doubt.ts`
+  - `apps/api/src/controllers/doubt.controller.ts`
+  - `apps/api/src/routes/doubt.routes.ts`
+  - `apps/client/app/admin/doubts/page.tsx`
+- **Files modified:**
+  - `packages/types/index.ts`
+  - `apps/api/src/models/index.ts`
+  - `apps/api/src/routes/index.ts`
+  - `apps/api/src/index.ts`
+  - `apps/client/app/tests/prelims-test-series/page.tsx`
+  - `apps/client/app/profile/page.tsx`
+  - `apps/client/app/admin/layout.tsx`
+- **Gotchas:**
+  - `verbatimModuleSyntax` requires type-only imports (`import type`) when importing interfaces in typescript files.
+  - Push operations to Mongoose sub-document arrays (`messages`) must satisfy Mongoose type restrictions; use `as any` or strict assertions on `Types.ObjectId` fields to pass compilation.
+
+### Session: 2026-06-25 (4) — Prelims Test Series Overview Screen
+- **Who:** AI (Antigravity)
+- **What:**
+  1. **Test Overview State**: Added `showOverview` state in `prelims-test-series/page.tsx` and reset handlers on beginning/exiting tests.
+  2. **Interactive Dashboard**: Built an interactive overview panel displaying summary cards for stats (Attempted, Marked for Review, Unattempted/Skipped) and a scrollable detail list of questions showing status badges and text previews.
+  3. **Bidirectional Navigation**: Integrated a jumping mechanism to instantly return students to the targeted question in the active exam.
+  4. **Workspace Build Verification**: Corrected non-standard dependency syntax in unused template applications (docs/web) to allow clean `pnpm install` execution, and verified compilation of client/api workspaces.
+- **Files modified:**
+  - `apps/client/app/tests/prelims-test-series/page.tsx`
+  - `apps/docs/package.json`
+  - `apps/web/package.json`
+- **Gotchas:**
+  - Conditional rendering in exam pages must properly align with timer and scorecard states to prevent overlapping layouts.
+
+### Session: 2026-06-25 (3) — Mock OTP Login, Profile Editing & Admin Controls
+- **Who:** AI (Antigravity)
+- **What:**
+  1. **User Schema Updates**: Added `status` (`'active' | 'suspended'`), `enrolledCourses` (array of `CourseNode` references), and `enrolledTestSeries` (array of `TestSeries` references) to the User model.
+  2. **Backend Authentication & Mocking**: Created local in-memory OTP map and `sendOtp` / `verifyOtp` API controllers in `auth.controller.ts`. Printed the 6-digit OTP code to the server terminal console.
+  3. **Backend Admin User Management Dashboard APIs**: Created `adminUser.controller.ts` and `adminUser.routes.ts` providing CRUD capabilities, status suspension hooks, and manual course/test-series enrollments.
+  4. **Frontend Student Authentication Integration**: Updated `StudentAuthContext` to replace `loginWithWhatsApp` with `sendOtp`, `verifyOtp`, and `updateProfile` endpoints.
+  5. **Frontend Pages**: Re-designed student `/login` page with custom SMS verification box and console instructions. Overhauled student `/profile` with Name/Email details editor. Added "Users" navigation link in `admin/layout.tsx` and created a student accounts administration dashboard in `apps/client/app/admin/users/page.tsx`.
+- **Files modified:**
+  - `apps/api/src/models/User.ts`
+  - `apps/api/src/controllers/auth.controller.ts`
+  - `apps/api/src/routes/auth.routes.ts`
+  - `apps/api/src/middlewares/auth.middleware.ts`
+  - `apps/api/src/routes/index.ts`
+  - `apps/api/src/index.ts`
+  - `packages/types/index.ts`
+  - `apps/client/contexts/StudentAuthContext.tsx`
+  - `apps/client/app/login/page.tsx`
+  - `apps/client/app/profile/page.tsx`
+  - `apps/client/app/admin/layout.tsx`
+- **Files created:**
+  - `apps/api/src/controllers/adminUser.controller.ts`
+  - `apps/api/src/routes/adminUser.routes.ts`
+  - `apps/client/app/admin/users/page.tsx`
+- **Gotchas:**
+  - Mongoose `pre-save` hook needs safety validation on password hashing to prevent type clashes on undefined fields.
+  - Optional student emails require matching optional definitions in token payloads (`JwtPayload`) and shared types (`IUser`).
+  - Active admin portal sidebar links have strict subpath checking in `layout.tsx` which handles the new `/admin/users` tab cleanly.
+
+### Session: 2026-06-25 (2) — OTPless WhatsApp Login & Student Auth
+- **Who:** AI (Antigravity)
+- **What:**
+  1. **User model upgrade**: Added `phone` (unique, sparse), `authProvider` (`'local'|'whatsapp'`), made `email`/`password` optional to support WhatsApp-only students. Admin login remains email/password.
+  2. **Backend WhatsApp auth endpoint**: Added `POST /api/auth/whatsapp` in [auth.controller.ts](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/api/src/controllers/auth.controller.ts). Verifies OTPless token via direct REST API call to `https://auth.otpless.app/auth/v1/verify` (no SDK dependency needed). Creates new student or returns existing one by phone number. Returns JWT matching existing auth pattern.
+  3. **Student AuthContext**: Created [StudentAuthContext.tsx](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/client/contexts/StudentAuthContext.tsx) — separate from admin `AuthContext`. Stores session in `student_token`/`student_user` localStorage keys. Provides `loginWithWhatsApp()` and `logout()`. Does NOT enforce login on any route.
+  4. **Login page**: Created [/login](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/client/app/login/page.tsx) — gradient hero, OTPless v2 SDK script injection (`auth.js`), WhatsApp login button rendered by SDK inside `#otpless-login-page` div, 3-step how-it-works guide, privacy note.
+  5. **Profile page**: Created [/profile](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/client/app/profile/page.tsx) — two views: logged-out CTA (WhatsApp login link + grayed feature previews) and logged-in (avatar with initials, account details card, Coming Soon feature placeholders for Test Reports/Subscription/Doubts, logout with confirmation).
+  6. **BottomNav**: Replaced "Search" (🔍) with "Profile" (👤) pointing to `/profile`. Search remains accessible from header icon.
+  7. **Root layout**: Wrapped body content with [Providers.tsx](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/client/components/Providers.tsx) client wrapper containing `StudentAuthProvider`.
+  8. **Shared types**: Updated `IUser` in `packages/types` with optional `phone` and `authProvider`.
+  9. **Environment variables**: Added `OTPLESS_CLIENT_ID`, `OTPLESS_CLIENT_SECRET` to `apps/api/.env` and `NEXT_PUBLIC_OTPLESS_APP_ID` to `apps/client/.env.local` (all placeholders — need real OTPless dashboard values).
+- **Files modified:**
+  - `apps/api/src/models/User.ts`
+  - `apps/api/src/controllers/auth.controller.ts`
+  - `apps/api/src/routes/auth.routes.ts`
+  - `apps/api/.env`
+  - `apps/client/app/layout.tsx`
+  - `apps/client/components/BottomNav.tsx`
+  - `packages/types/index.ts`
+- **Files created:**
+  - `apps/client/contexts/StudentAuthContext.tsx`
+  - `apps/client/components/Providers.tsx`
+  - `apps/client/app/login/page.tsx`
+  - `apps/client/app/profile/page.tsx`
+  - `apps/client/.env.local`
+- **Gotchas:**
+  - OTPless SDK dependency (`otpless-node-js-auth-sdk`) could not be installed via pnpm due to broken workspace stubs (`apps/web`, `apps/docs`). Used direct REST API call (`fetch`) instead — zero additional dependencies.
+  - OTPless v2 `auth.js` script must be loaded dynamically (not via `<script>` in `<head>`) because it requires `data-appid` and a `window.otpless` callback.
+  - Student auth is intentionally non-blocking — users can browse all content without logging in. Auth is only for profile tracking.
+  - The `getMe` endpoint now returns `phone` field in addition to existing fields.
+
+### Session: 2026-06-25 (1) — Dedicated Practice Test CMS & Exam Module Navigation Overhaul
+- **Who:** AI (Antigravity)
+- **What:**
+  1. Separated the **Prelims Practice Test** admin flow from **Daily Quizzes**. Created a dedicated manager page [prelims-practice-test/page.tsx](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/client/app/admin/test-series/prelims-practice-test/page.tsx) with inline Manual Create & Excel Import, automatically applying the `prelims-practice` tag.
+  2. Cleaned up Daily Quiz admin views ([new/page.tsx](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/client/app/admin/quizzes/new/page.tsx), [import/page.tsx](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/client/app/admin/quizzes/import/page.tsx), [id]/page.tsx) by stripping the "Quiz Type" dropdown selector and tab filters. Daily quizzes page is now purely for daily quizzes. Added `returnTo` param redirection support on edit page.
+  3. Overhauled test-taking navigation in student portal: Added 5 running test navigation buttons (Clear Response, Mark for Review & Next, Previous, Skip/Save & Next, Submit) to [Prelims Test Series](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/client/app/tests/prelims-test-series/page.tsx) and [Prelims Practice Test](file:///Users/thirunavukarasu/ShailajaIASApp/shailaja-ias/apps/client/app/tests/prelims-practice-test/page.tsx) (Test Mode only).
+  4. Added purple color highlighting for "Mark for Review" questions in the Question Map grid and implemented a persistent "Submit Test" button inside the running header.
+- **Files modified:**
+  - `apps/client/app/admin/test-series/page.tsx`
+  - `apps/client/app/admin/quizzes/page.tsx`
+  - `apps/client/app/admin/quizzes/new/page.tsx`
+  - `apps/client/app/admin/quizzes/import/page.tsx`
+  - `apps/client/app/admin/quizzes/[id]/page.tsx`
+  - `apps/client/app/tests/prelims-test-series/page.tsx`
+  - `apps/client/app/tests/prelims-practice-test/page.tsx`
+- **Files created:**
+  - `apps/client/app/admin/test-series/prelims-practice-test/page.tsx`
 
 ### Session: 2026-06-09 — Multi-Group Test Series Navigation Fix
 - **Who:** AI (Antigravity)

@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
+import { useStudentAuth } from '@/contexts/StudentAuthContext';
 
 export default function Header() {
     const pathname = usePathname();
     const router = useRouter();
+    const { isLoggedIn, user } = useStudentAuth();
 
     // Don't show on admin pages
     if (pathname?.startsWith('/admin')) return null;
@@ -39,26 +41,46 @@ export default function Header() {
                 {/* Future tabs slot — empty for now */}
                 <div className="flex-1" />
 
-                {/* Search */}
-                <button
-                    onClick={() => router.push('/search')}
-                    className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-white hover:shadow-sm border border-transparent hover:border-gray-100 transition-all group"
-                    aria-label="Search"
-                >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={2.5}
-                        className="w-5 h-5 stroke-gray-500 group-hover:stroke-[#D97706] transition-colors"
+                {/* Actions */}
+                <div className="flex items-center gap-3">
+                    {/* Search */}
+                    <button
+                        onClick={() => router.push('/search')}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-white hover:shadow-sm border border-transparent hover:border-gray-100 transition-all group"
+                        aria-label="Search"
                     >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-                        />
-                    </svg>
-                </button>
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={2.5}
+                            className="w-5 h-5 stroke-gray-500 group-hover:stroke-[#D97706] transition-colors"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+                            />
+                        </svg>
+                    </button>
+
+                    {isLoggedIn ? (
+                        <Link
+                            href="/profile"
+                            className="flex items-center gap-2 px-3.5 py-2 bg-[#1E3A5F] hover:bg-[#152C4A] text-white text-xs font-semibold rounded-xl transition-all shadow-sm active:scale-[0.98]"
+                        >
+                            <span className="text-sm">👤</span>
+                            <span className="hidden sm:inline">{user?.name || 'Profile'}</span>
+                        </Link>
+                    ) : (
+                        <Link
+                            href="/login"
+                            className="flex items-center gap-2 px-4 py-2 border border-[#1E3A5F] hover:bg-[#1E3A5F]/5 text-[#1E3A5F] text-xs font-bold rounded-xl transition-all active:scale-[0.98]"
+                        >
+                            <span>Sign In</span>
+                        </Link>
+                    )}
+                </div>
             </div>
         </header>
     );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../AuthContext';
 
@@ -30,19 +30,12 @@ export default function NewQuizPage() {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [setName, setSetName] = useState('');
     const [tags, setTags] = useState('');
-    const [quizType, setQuizType] = useState<'daily' | 'practice'>('daily');
+
     const [questions, setQuestions] = useState<QuestionForm[]>([{ ...emptyQuestion }]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            if (params.get('type') === 'practice') {
-                setQuizType('practice');
-            }
-        }
-    }, []);
+
 
     const updateQuestion = (index: number, field: keyof QuestionForm, value: any) => {
         setQuestions((prev) => {
@@ -102,10 +95,7 @@ export default function NewQuizPage() {
         setIsSubmitting(true);
 
         try {
-            let finalTags = tags.split(',').map((t) => t.trim()).filter((t) => t && t !== 'prelims-practice');
-            if (quizType === 'practice') {
-                finalTags.push('prelims-practice');
-            }
+            const finalTags = tags.split(',').map((t) => t.trim()).filter(Boolean);
 
             const response = await fetch(`${API_URL}/api/quizzes`, {
                 method: 'POST',
@@ -151,7 +141,7 @@ export default function NewQuizPage() {
                 )}
 
                 {/* Title, Date, Set Name, Quiz Type, Tags */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Title *</label>
                         <input
@@ -189,17 +179,7 @@ export default function NewQuizPage() {
                         />
                         <p className="text-xs text-gray-400 mt-1 text-right">{setName.length}/100</p>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Quiz Type *</label>
-                        <select
-                            value={quizType}
-                            onChange={(e) => setQuizType(e.target.value as 'daily' | 'practice')}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent font-medium"
-                        >
-                            <option value="daily">Daily Quiz</option>
-                            <option value="practice">Prelims Practice Test</option>
-                        </select>
-                    </div>
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Subject Tags</label>
                         <input

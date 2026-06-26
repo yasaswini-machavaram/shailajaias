@@ -98,6 +98,7 @@ function PrelimsPracticeTestInner() {
     const [learnMode, setLearnMode] = useState<boolean>(true);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<number, number>>({});
+    const [markedForReview, setMarkedForReview] = useState<Record<number, boolean>>({});
     const [showScorecard, setShowScorecard] = useState(false);
     const [showReview, setShowReview] = useState(false);
     const [hasStartedTest, setHasStartedTest] = useState(false);
@@ -173,6 +174,7 @@ function PrelimsPracticeTestInner() {
         setLearnMode(true);
         setCurrentQuestionIndex(0);
         setAnswers({});
+        setMarkedForReview({});
         setShowScorecard(false);
         setShowReview(false);
         setHasStartedTest(false);
@@ -310,17 +312,29 @@ function PrelimsPracticeTestInner() {
                             </div>
 
                             <div className="flex items-center gap-3">
-                                {/* Timer Badge (Test mode only) */}
+                                {/* Timer & Submit Badge (Test mode only) */}
                                 {!learnMode && !showScorecard && (
-                                    <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-mono text-lg font-extrabold border-2 transition-all ${
-                                        isTimerLow
-                                            ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
-                                            : 'bg-slate-50 border-gray-200 text-[#1E3A5F]'
-                                    }`}>
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        {formatTime(timeRemaining)}
+                                    <div className="flex items-center gap-3">
+                                        <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-mono text-lg font-extrabold border-2 transition-all ${
+                                            isTimerLow
+                                                ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
+                                                : 'bg-slate-50 border-gray-200 text-[#1E3A5F]'
+                                        }`}>
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            {formatTime(timeRemaining)}
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                if (confirm('Are you sure you want to end the test and submit?')) {
+                                                    handleFinishTest();
+                                                }
+                                            }}
+                                            className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-2xl shadow-sm transition-all"
+                                        >
+                                            Submit Test
+                                        </button>
                                     </div>
                                 )}
                                 <div className="flex gap-2">
@@ -345,6 +359,7 @@ function PrelimsPracticeTestInner() {
                                                 setShowScorecard(false);
                                                 setShowReview(false);
                                                 setAnswers({});
+                                                setMarkedForReview({});
                                                 setCurrentQuestionIndex(0);
                                             }
                                         }}
@@ -364,6 +379,7 @@ function PrelimsPracticeTestInner() {
                                                 setShowScorecard(false);
                                                 setShowReview(false);
                                                 setAnswers({});
+                                                setMarkedForReview({});
                                                 setCurrentQuestionIndex(0);
                                                 setHasStartedTest(false);
                                                 const totalSeconds = activeQuiz.questions.length * 60;
@@ -543,6 +559,7 @@ function PrelimsPracticeTestInner() {
                                     <button
                                         onClick={() => {
                                             setAnswers({});
+                                            setMarkedForReview({});
                                             setShowScorecard(false);
                                             setShowReview(false);
                                             setCurrentQuestionIndex(0);
@@ -680,12 +697,22 @@ function PrelimsPracticeTestInner() {
                                             
                                             let style = 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50/50 cursor-pointer';
                                             if (selectedIdx !== undefined) {
-                                                if (isCorrect) {
-                                                    style = 'border-green-500 bg-green-50/50 text-green-900';
-                                                } else if (isThisSelected) {
-                                                    style = 'border-red-500 bg-red-50/50 text-red-900';
+                                                if (learnMode) {
+                                                    // Learning Mode: Immediate green/red evaluation
+                                                    if (isCorrect) {
+                                                        style = 'border-green-500 bg-green-50/50 text-green-900';
+                                                    } else if (isThisSelected) {
+                                                        style = 'border-red-500 bg-red-50/50 text-red-900';
+                                                    } else {
+                                                        style = 'border-gray-100 bg-white opacity-50';
+                                                    }
                                                 } else {
-                                                    style = 'border-gray-100 bg-white opacity-50';
+                                                    // Test Mode: Only highlight selected in blue
+                                                    if (isThisSelected) {
+                                                        style = 'border-[#1E3A5F] bg-[#1E3A5F]/5 text-[#1E3A5F]';
+                                                    } else {
+                                                        style = 'border-gray-100 bg-white text-gray-500';
+                                                    }
                                                 }
                                             }
 
@@ -693,23 +720,26 @@ function PrelimsPracticeTestInner() {
                                                 <button
                                                     key={oIdx}
                                                     onClick={() => handleSelectOption(currentQuestionIndex, oIdx)}
-                                                    disabled={selectedIdx !== undefined}
+                                                    disabled={learnMode && selectedIdx !== undefined}
                                                     className={`w-full p-4 md:px-6 md:py-5 rounded-xl border-2 text-left transition-all font-semibold flex items-center justify-between text-gray-700 text-sm md:text-base ${style}`}
                                                 >
                                                     <span>{optionLabels[oIdx]}. {option}</span>
-                                                    {selectedIdx !== undefined && isCorrect && (
+                                                    {selectedIdx !== undefined && learnMode && isCorrect && (
                                                         <span className="text-green-600 font-bold text-lg">✓</span>
                                                     )}
-                                                    {selectedIdx !== undefined && isThisSelected && !isCorrect && (
+                                                    {selectedIdx !== undefined && learnMode && isThisSelected && !isCorrect && (
                                                         <span className="text-red-600 font-bold text-lg">✗</span>
+                                                    )}
+                                                    {selectedIdx !== undefined && !learnMode && isThisSelected && (
+                                                        <span className="text-[#1E3A5F] font-bold text-sm">✔ Selected</span>
                                                     )}
                                                 </button>
                                             );
                                         })}
                                     </div>
 
-                                    {/* Explanation (shown after answering) */}
-                                    {isAnswered && (
+                                    {/* Explanation (shown after answering in Learning mode) */}
+                                    {isAnswered && learnMode && (
                                         <div className="mt-8 p-6 bg-blue-50/40 border border-blue-100/50 rounded-2xl animate-fade-in-up">
                                             <h4 className="text-blue-600 font-bold text-xs uppercase tracking-wider mb-2">
                                                 💡 Explanation
@@ -727,8 +757,10 @@ function PrelimsPracticeTestInner() {
                                         {activeQuiz.questions.map((_, idx) => {
                                             const isActive = idx === currentQuestionIndex;
                                             const isAttempted = answers[idx] !== undefined;
+                                            const isMarked = markedForReview[idx] === true;
                                             let bg = 'bg-gray-100 text-gray-400';
                                             if (isActive) bg = 'bg-[#1E3A5F] text-white ring-2 ring-[#1E3A5F]/30';
+                                            else if (isMarked) bg = 'bg-purple-600 text-white';
                                             else if (isAttempted) bg = 'bg-blue-100 text-blue-700';
                                             return (
                                                 <button
@@ -744,28 +776,64 @@ function PrelimsPracticeTestInner() {
                                 </div>
 
                                 {/* Navigation Row */}
-                                <div className="flex items-center justify-between gap-4">
+                                <div className="flex flex-wrap items-center justify-between gap-4 mt-6">
                                     <button
                                         onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
                                         disabled={currentQuestionIndex === 0}
-                                        className="flex-1 max-w-[200px] flex items-center justify-center gap-2 px-6 py-4 bg-white border border-gray-200 rounded-xl text-[#1E3A5F] font-bold text-sm shadow-sm hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="px-5 py-3.5 bg-white border border-gray-200 rounded-xl text-[#1E3A5F] font-bold text-sm shadow-sm hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         Previous
                                     </button>
+
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setAnswers(prev => {
+                                                const next = { ...prev };
+                                                delete next[currentQuestionIndex];
+                                                return next;
+                                            })}
+                                            className="px-5 py-3.5 bg-white border border-gray-200 rounded-xl text-gray-600 hover:text-gray-800 font-bold text-sm shadow-sm hover:bg-gray-50 transition-all"
+                                        >
+                                            Clear Response
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setMarkedForReview(prev => ({
+                                                    ...prev,
+                                                    [currentQuestionIndex]: !prev[currentQuestionIndex]
+                                                }));
+                                                if (currentQuestionIndex < totalQuestions - 1) {
+                                                    setCurrentQuestionIndex(prev => prev + 1);
+                                                }
+                                            }}
+                                            className="px-5 py-3.5 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 font-bold text-sm rounded-xl transition-all"
+                                        >
+                                            {markedForReview[currentQuestionIndex]
+                                                ? (currentQuestionIndex === totalQuestions - 1 ? 'Unmark Review' : 'Unmark & Next')
+                                                : (currentQuestionIndex === totalQuestions - 1 ? 'Mark for Review' : 'Mark for Review & Next')
+                                            }
+                                        </button>
+                                    </div>
                                     
                                     {currentQuestionIndex < totalQuestions - 1 ? (
                                         <button
                                             onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
                                             className="flex-1 max-w-[200px] flex items-center justify-center gap-2 px-6 py-4 bg-[#1E3A5F] rounded-xl text-white font-bold text-sm shadow-md hover:bg-[#2A4E7D] transition-all"
                                         >
-                                            Next
+                                            {answers[currentQuestionIndex] !== undefined ? 'Save & Next' : 'Skip & Next'}
                                         </button>
                                     ) : !learnMode ? (
                                         <button
-                                            onClick={handleFinishTest}
+                                            onClick={() => {
+                                                if (confirm('Are you sure you want to end the test and submit?')) {
+                                                    handleFinishTest();
+                                                }
+                                            }}
                                             className="flex-1 max-w-[200px] flex items-center justify-center gap-2 px-6 py-4 bg-green-600 rounded-xl text-white font-bold text-sm shadow-md hover:bg-green-700 transition-all"
                                         >
-                                            Finish Test
+                                            Submit
                                         </button>
                                     ) : (
                                         <div className="flex-1 max-w-[200px]"></div>

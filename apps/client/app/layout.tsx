@@ -4,6 +4,7 @@ import "./globals.css";
 import BottomNav from "@/components/BottomNav";
 import Header from "@/components/Header";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import Providers from "@/components/Providers";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -45,10 +46,12 @@ export default function RootLayout({
   return (
     <html lang="en" data-theme="light" style={{ colorScheme: 'light' }}>
       <body className={`${inter.variable} ${playfair.variable} antialiased`}>
-        <Header />
-        <Breadcrumbs />
-        {children}
-        <BottomNav />
+        <Providers>
+          <Header />
+          <Breadcrumbs />
+          {children}
+          <BottomNav />
+        </Providers>
       </body>
     </html>
   );

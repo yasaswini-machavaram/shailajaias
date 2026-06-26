@@ -2,9 +2,23 @@
 
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { getTestSeriesList, getTestSeriesById, API_URL, type TestSeries, type TestSeriesItem, type Quiz, type Question } from '@/lib/api';
+import { useStudentAuth } from '@/contexts/StudentAuthContext';
 
 const optionLabels = ['A', 'B', 'C', 'D'];
+
+const getSubjectFromTitle = (title: string): string => {
+    const lower = title.toLowerCase();
+    if (lower.includes('polity')) return 'Polity';
+    if (lower.includes('economy') || lower.includes('econ')) return 'Economy';
+    if (lower.includes('env') || lower.includes('ecology')) return 'Environment';
+    if (lower.includes('history') || lower.includes('hist')) return 'History';
+    if (lower.includes('geography') || lower.includes('geo')) return 'Geography';
+    if (lower.includes('science') || lower.includes('tech') || lower.includes('s&t')) return 'Science & Technology';
+    if (lower.includes('csat')) return 'CSAT';
+    return 'General';
+};
 
 // Helper to get soft tinted backgrounds for cards based on subject
 function getSubjectStyles(subjectName: string) {
@@ -77,6 +91,7 @@ export default function PrelimsTestSeriesPage() {
 }
 
 function PrelimsTestSeriesInner() {
+    const router = useRouter();
     const [seriesList, setSeriesList] = useState<TestSeries[]>([]);
     const [selectedSeries, setSelectedSeries] = useState<TestSeries | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -92,19 +107,73 @@ function PrelimsTestSeriesInner() {
     const [videoModalUrl, setVideoModalUrl] = useState<string | null>(null);
     const [showDoubtModal, setShowDoubtModal] = useState<TestSeriesItem | null>(null);
 
+    // Doubt states
+    const studentAuth = useStudentAuth();
+    const studentUser = studentAuth?.user || null;
+    const studentToken = studentAuth?.token || null;
+    const [doubtSubject, setDoubtSubject] = useState('Polity');
+    const [doubtTitle, setDoubtTitle] = useState('');
+    const [doubtDescription, setDoubtDescription] = useState('');
+    const [doubtQuestionIndex, setDoubtQuestionIndex] = useState<number | null>(null);
+    const [doubtQuestionText, setDoubtQuestionText] = useState('');
+    const [isSubmittingDoubt, setIsSubmittingDoubt] = useState(false);
+    const [doubtSubmitSuccess, setDoubtSubmitSuccess] = useState(false);
+    const [doubtError, setDoubtError] = useState('');
+
     // Online Exam Engine
     const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
     const [activeTestItem, setActiveTestItem] = useState<TestSeriesItem | null>(null);
     const [learnMode, setLearnMode] = useState<boolean>(true);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<number, number>>({});
+    const [markedForReview, setMarkedForReview] = useState<Record<number, boolean>>({});
     const [showScorecard, setShowScorecard] = useState(false);
     const [showReview, setShowReview] = useState(false);
+    const [showOverview, setShowOverview] = useState(false);
+
+    // Test Reports saving states
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const [saveError, setSaveError] = useState('');
 
     // Timer state
     const [timeRemaining, setTimeRemaining] = useState(0);
     const [testStartTime, setTestStartTime] = useState(0);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Auto-save pending report after login redirect
+    useEffect(() => {
+        const checkPendingReport = async () => {
+            const pendingReportStr = localStorage.getItem('pending_test_report');
+            if (pendingReportStr && studentAuth?.isLoggedIn && studentAuth?.token) {
+                try {
+                    const payload = JSON.parse(pendingReportStr);
+                    const res = await fetch(`${API_URL}/api/reports`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${studentAuth.token}`
+                        },
+                        body: JSON.stringify(payload),
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('Your previous test report was successfully saved to your profile!');
+                        setSaveStatus('saved');
+                    } else {
+                        console.error('Failed to auto-save pending report:', data.message);
+                    }
+                } catch (err) {
+                    console.error('Error auto-saving pending report:', err);
+                } finally {
+                    localStorage.removeItem('pending_test_report');
+                }
+            }
+        };
+
+        if (!isLoading) {
+            checkPendingReport();
+        }
+    }, [isLoading, studentAuth?.isLoggedIn, studentAuth?.token]);
 
     // Fetch initial published test series
     useEffect(() => {
@@ -220,6 +289,61 @@ function PrelimsTestSeriesInner() {
         return { sectional, fullLength };
     };
 
+    // Submit doubt to database
+    const handleSubmitDoubt = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!studentToken) {
+            setDoubtError('You must be logged in to submit a doubt.');
+            return;
+        }
+        if (!doubtDescription.trim()) {
+            setDoubtError('Please provide a description for your doubt.');
+            return;
+        }
+        setIsSubmittingDoubt(true);
+        setDoubtError('');
+        try {
+            const body: any = {
+                subject: doubtSubject,
+                title: doubtTitle || `Doubt: ${showDoubtModal?.title}`,
+                description: doubtDescription,
+            };
+
+            if (activeQuiz) {
+                body.quiz = activeQuiz._id;
+            }
+            if (selectedSeries) {
+                body.testSeries = selectedSeries._id;
+            }
+            if (doubtQuestionIndex !== null) {
+                body.questionIndex = doubtQuestionIndex;
+                body.questionText = doubtQuestionText;
+            }
+
+            const res = await fetch(`${API_URL}/api/doubts`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${studentToken}`
+                },
+                body: JSON.stringify(body)
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                setDoubtSubmitSuccess(true);
+                setDoubtDescription('');
+            } else {
+                setDoubtError(data.message || 'Failed to submit doubt.');
+            }
+        } catch (error) {
+            console.error('Submit doubt error:', error);
+            setDoubtError('Failed to submit doubt. Please check your connection.');
+        } finally {
+            setIsSubmittingDoubt(false);
+        }
+    };
+
     // Start Online Quiz
     const handleStartOnlineQuiz = (quiz: Quiz, testItem: TestSeriesItem) => {
         setActiveQuiz(quiz);
@@ -227,8 +351,10 @@ function PrelimsTestSeriesInner() {
         setLearnMode(true);
         setCurrentQuestionIndex(0);
         setAnswers({});
+        setMarkedForReview({});
         setShowScorecard(false);
         setShowReview(false);
+        setShowOverview(false);
         const totalSeconds = quiz.questions.length * 60;
         setTimeRemaining(totalSeconds);
         setTestStartTime(Date.now());
@@ -305,6 +431,62 @@ function PrelimsTestSeriesInner() {
         return Object.entries(map).map(([subject, data]) => ({ subject, ...data }));
     }, [activeQuiz, answers]);
 
+    const handleSaveReport = async () => {
+        if (!activeQuiz) return;
+        
+        const stats = getStats();
+        const totalSeconds = activeQuiz.questions.length * 60;
+        const timeTakenSeconds = totalSeconds - timeRemaining;
+
+        const payload = {
+            quiz: activeQuiz._id,
+            testSeries: selectedSeries?._id,
+            scorecard: {
+                totalScore: stats.totalScore,
+                maxMarks: stats.maxMarks,
+                correct: stats.correct,
+                incorrect: stats.incorrect,
+                unattempted: stats.unattempted,
+                accuracy: stats.accuracy,
+                negativeMarks: stats.negativeMarks,
+                timeTaken: timeTakenSeconds
+            },
+            answers: answers
+        };
+
+        if (!studentAuth?.isLoggedIn) {
+            // Save payload to localStorage for midway authentication
+            localStorage.setItem('pending_test_report', JSON.stringify(payload));
+            localStorage.setItem('redirect_after_login', '/tests/prelims-test-series');
+            alert('Please login to save this report. Redirecting to login page...');
+            router.push('/login');
+            return;
+        }
+
+        setSaveStatus('saving');
+        setSaveError('');
+        try {
+            const res = await fetch(`${API_URL}/api/reports`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${studentAuth.token}`
+                },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.success) {
+                setSaveStatus('saved');
+            } else {
+                setSaveStatus('error');
+                setSaveError(data.message || 'Failed to save report.');
+            }
+        } catch {
+            setSaveStatus('error');
+            setSaveError('Failed to connect to the server.');
+        }
+    };
+
     // Handle finish test (stop timer)
     const handleFinishTest = useCallback(() => {
         if (timerRef.current) clearInterval(timerRef.current);
@@ -330,6 +512,7 @@ function PrelimsTestSeriesInner() {
                                         if (timerRef.current) clearInterval(timerRef.current);
                                         setActiveQuiz(null);
                                         setActiveTestItem(null);
+                                        setShowOverview(false);
                                     }}
                                     className="inline-flex items-center gap-2 text-sm font-semibold text-[#1E3A5F] hover:text-[#D97706] mb-3 transition-colors group"
                                 >
@@ -347,17 +530,44 @@ function PrelimsTestSeriesInner() {
                             </div>
 
                             <div className="flex items-center gap-3">
-                                {/* Timer Badge */}
+                                {/* Timer & Submit Badge */}
                                 {!showScorecard && (
-                                    <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-mono text-lg font-extrabold border-2 transition-all ${
-                                        isTimerLow
-                                            ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
-                                            : 'bg-slate-50 border-gray-200 text-[#1E3A5F]'
-                                    }`}>
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        {formatTime(timeRemaining)}
+                                    <div className="flex items-center gap-3">
+                                        <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-mono text-lg font-extrabold border-2 transition-all ${
+                                            isTimerLow
+                                                ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
+                                                : 'bg-slate-50 border-gray-200 text-[#1E3A5F]'
+                                        }`}>
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            {formatTime(timeRemaining)}
+                                        </div>
+                                        {!showOverview ? (
+                                            <button
+                                                onClick={() => setShowOverview(true)}
+                                                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-2xl shadow-sm transition-all"
+                                            >
+                                                Overview
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={() => setShowOverview(false)}
+                                                className="px-4 py-2.5 bg-slate-600 hover:bg-slate-700 text-white font-bold text-sm rounded-2xl shadow-sm transition-all"
+                                            >
+                                                Back to Test
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => {
+                                                if (confirm('Are you want to end the test and submit?')) {
+                                                    handleFinishTest();
+                                                }
+                                            }}
+                                            className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-2xl shadow-sm transition-all"
+                                        >
+                                            Submit Test
+                                        </button>
                                     </div>
                                 )}
                                 <div className="flex gap-2">
@@ -369,7 +579,7 @@ function PrelimsTestSeriesInner() {
                         </div>
 
                         {/* Metadata row */}
-                        {!showScorecard && (
+                        {!showScorecard && !showOverview && (
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 flex flex-col justify-center items-center text-center">
                                     <span className="text-xl font-bold text-blue-700">{Object.keys(answers).length}</span>
@@ -513,6 +723,25 @@ function PrelimsTestSeriesInner() {
                                 {/* Action Buttons */}
                                 <div className="flex flex-col sm:flex-row justify-center gap-3 pt-2">
                                     <button
+                                        onClick={handleSaveReport}
+                                        disabled={saveStatus === 'saving' || saveStatus === 'saved'}
+                                        className={`px-6 py-3.5 font-bold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 ${
+                                            saveStatus === 'saved'
+                                                ? 'bg-green-600 text-white cursor-default'
+                                                : saveStatus === 'saving'
+                                                ? 'bg-gray-400 text-white cursor-wait'
+                                                : 'bg-indigo-600 hover:bg-indigo-700 text-white active:scale-[0.98]'
+                                        }`}
+                                    >
+                                        {saveStatus === 'saved' ? (
+                                            <>✓ Saved to Profile</>
+                                        ) : saveStatus === 'saving' ? (
+                                            <>Saving...</>
+                                        ) : (
+                                            <>💾 Save Report</>
+                                        )}
+                                    </button>
+                                    <button
                                         onClick={() => {
                                             setShowScorecard(false);
                                             setShowReview(true);
@@ -525,6 +754,7 @@ function PrelimsTestSeriesInner() {
                                     <button
                                         onClick={() => {
                                             setAnswers({});
+                                            setMarkedForReview({});
                                             setShowScorecard(false);
                                             setShowReview(false);
                                             setCurrentQuestionIndex(0);
@@ -539,6 +769,12 @@ function PrelimsTestSeriesInner() {
                                     {activeTestItem && (
                                         <button
                                             onClick={() => {
+                                                setDoubtQuestionIndex(null);
+                                                setDoubtQuestionText('');
+                                                setDoubtTitle(`Doubt regarding ${activeTestItem.title}`);
+                                                setDoubtSubject(activeTestItem.title ? getSubjectFromTitle(activeTestItem.title) : 'General');
+                                                setDoubtSubmitSuccess(false);
+                                                setDoubtError('');
                                                 setShowDoubtModal(activeTestItem);
                                             }}
                                             className="px-6 py-3.5 bg-[#D97706] hover:bg-[#B45309] text-white font-bold text-sm rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2"
@@ -551,11 +787,169 @@ function PrelimsTestSeriesInner() {
                                             if (timerRef.current) clearInterval(timerRef.current);
                                             setActiveQuiz(null);
                                             setActiveTestItem(null);
+                                            setShowOverview(false);
                                         }}
                                         className="px-6 py-3.5 bg-white border-2 border-gray-200 text-gray-500 font-bold text-sm rounded-xl hover:bg-gray-50 transition-colors"
                                     >
                                         ← Back to Series
                                     </button>
+                                </div>
+                                {saveError && (
+                                    <div className="text-center text-red-500 text-sm font-semibold mt-4 bg-red-50 border border-red-200 py-3 rounded-xl max-w-md mx-auto">
+                                        ⚠️ {saveError}
+                                    </div>
+                                )}
+                            </div>
+                        ) : showOverview ? (
+                            /* ─── TEST OVERVIEW SCREEN ─── */
+                            <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] p-6 md:p-10">
+                                {/* Header */}
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 border-b border-gray-100 pb-6">
+                                    <div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowOverview(false)}
+                                            className="inline-flex items-center gap-2 text-sm font-semibold text-[#1E3A5F] hover:text-[#D97706] mb-3 transition-colors group bg-none border-none p-0 cursor-pointer"
+                                        >
+                                            <svg className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                                            </svg>
+                                            Back to Test
+                                        </button>
+                                        <h2 className="text-2xl font-bold text-[#1E3A5F] font-headline">
+                                            Test Overview
+                                        </h2>
+                                        <p className="text-gray-500 text-sm mt-1">
+                                            Review your progress. Click on any question card to jump back to it.
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowOverview(false)}
+                                            className="px-5 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold text-sm rounded-xl transition-all bg-white"
+                                        >
+                                            Resume Test
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (confirm('Are you want to end the test and submit?')) {
+                                                    handleFinishTest();
+                                                }
+                                            }}
+                                            className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-sm rounded-xl transition-all shadow-sm"
+                                        >
+                                            Submit Test
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Stats summary cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                                    <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-center">
+                                        <span className="block text-2xl font-extrabold text-blue-700">{Object.keys(answers).length}</span>
+                                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Answered</span>
+                                    </div>
+                                    <div className="bg-purple-50 border border-purple-100 rounded-2xl p-4 text-center">
+                                        <span className="block text-2xl font-extrabold text-purple-700">
+                                            {Object.keys(markedForReview).filter(k => markedForReview[Number(k)]).length}
+                                        </span>
+                                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Marked for Review</span>
+                                    </div>
+                                    <div className="bg-slate-50 border border-gray-100 rounded-2xl p-4 text-center">
+                                        <span className="block text-2xl font-extrabold text-gray-600">
+                                            {totalQuestions - Object.keys(answers).length}
+                                        </span>
+                                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Unanswered / Skipped</span>
+                                    </div>
+                                </div>
+
+                                {/* Questions grid with previews */}
+                                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                                    {activeQuiz.questions.map((q, idx) => {
+                                        const isAttempted = answers[idx] !== undefined;
+                                        const isMarked = markedForReview[idx] === true;
+                                        
+                                        let statusBadge = (
+                                            <span className="text-[11px] font-bold text-gray-500 bg-gray-100 border border-gray-200 px-2.5 py-0.5 rounded-full uppercase">
+                                                Not Answered
+                                            </span>
+                                        );
+                                        if (isMarked) {
+                                            statusBadge = (
+                                                <span className="text-[11px] font-bold text-white bg-purple-600 px-2.5 py-0.5 rounded-full uppercase">
+                                                    Marked for Review {isAttempted && `(Selected: ${optionLabels[answers[idx]]})`}
+                                                </span>
+                                            );
+                                        } else if (isAttempted) {
+                                            statusBadge = (
+                                                <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full uppercase">
+                                                    Answered: Option {optionLabels[answers[idx]]}
+                                                </span>
+                                            );
+                                        }
+
+                                        return (
+                                            <div
+                                                key={idx}
+                                                onClick={() => {
+                                                    setCurrentQuestionIndex(idx);
+                                                    setShowOverview(false);
+                                                }}
+                                                className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 text-left ${
+                                                    idx === currentQuestionIndex 
+                                                        ? 'border-[#1E3A5F] bg-[#1E3A5F]/5 shadow-sm'
+                                                        : 'border-gray-100 hover:border-gray-200 hover:bg-slate-50/50 bg-white'
+                                                }`}
+                                            >
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-1.5">
+                                                        <span className="text-xs font-bold text-[#1E3A5F]">
+                                                            Question {idx + 1}
+                                                        </span>
+                                                        {statusBadge}
+                                                    </div>
+                                                    <p className="text-sm text-gray-600 truncate max-w-full font-sans font-light">
+                                                        {q.question}
+                                                    </p>
+                                                </div>
+                                                <button 
+                                                    type="button"
+                                                    className="text-xs font-bold text-[#1E3A5F] hover:text-[#D97706] whitespace-nowrap self-start md:self-auto bg-none border-none p-0 cursor-pointer"
+                                                >
+                                                    Jump to Q{idx + 1} →
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Bottom submit strip */}
+                                <div className="mt-8 pt-6 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+                                    <span className="text-xs text-gray-500 font-medium">
+                                        Ensure you have reviewed all flagged and skipped questions.
+                                    </span>
+                                    <div className="flex gap-3 w-full sm:w-auto">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowOverview(false)}
+                                            className="flex-1 sm:flex-initial px-6 h-11 border border-gray-200 text-gray-700 font-bold text-sm rounded-xl hover:bg-gray-50 transition-all bg-white"
+                                        >
+                                            Resume Test
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (confirm('Are you want to end the test and submit?')) {
+                                                    handleFinishTest();
+                                                }
+                                            }}
+                                            className="flex-1 sm:flex-initial px-6 h-11 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl transition-all shadow-md"
+                                        >
+                                            End & Submit Test
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ) : showReview ? (
@@ -637,6 +1031,21 @@ function PrelimsTestSeriesInner() {
                                         Back to Results
                                     </button>
                                     <button
+                                        type="button"
+                                        onClick={() => {
+                                            setDoubtQuestionIndex(currentQuestionIndex);
+                                            setDoubtQuestionText(currentQuestion.question);
+                                            setDoubtTitle(`Question ${currentQuestionIndex + 1} Doubt - ${activeTestItem?.title || 'Test'}`);
+                                            setDoubtSubject(currentQuestion.subject || (activeTestItem ? getSubjectFromTitle(activeTestItem.title) : 'General'));
+                                            setDoubtSubmitSuccess(false);
+                                            setDoubtError('');
+                                            setShowDoubtModal(activeTestItem || { title: 'Test Paper' } as any);
+                                        }}
+                                        className="px-5 py-3.5 bg-[#D97706] hover:bg-[#B45309] text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                                    >
+                                        ❓ Ask Doubt
+                                    </button>
+                                    <button
                                         onClick={() => setCurrentQuestionIndex(prev => Math.min(totalQuestions - 1, prev + 1))}
                                         disabled={currentQuestionIndex === totalQuestions - 1}
                                         className="flex-1 max-w-[180px] flex items-center justify-center gap-2 px-5 py-3.5 bg-[#1E3A5F] rounded-xl text-white font-bold text-sm shadow-md hover:bg-[#2A4E7D] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -700,8 +1109,10 @@ function PrelimsTestSeriesInner() {
                                         {activeQuiz.questions.map((_, idx) => {
                                             const isActive = idx === currentQuestionIndex;
                                             const isAttempted = answers[idx] !== undefined;
+                                            const isMarked = markedForReview[idx] === true;
                                             let bg = 'bg-gray-100 text-gray-400';
                                             if (isActive) bg = 'bg-[#1E3A5F] text-white ring-2 ring-[#1E3A5F]/30';
+                                            else if (isMarked) bg = 'bg-purple-600 text-white';
                                             else if (isAttempted) bg = 'bg-blue-100 text-blue-700';
                                             return (
                                                 <button
@@ -717,28 +1128,71 @@ function PrelimsTestSeriesInner() {
                                 </div>
 
                                 {/* Navigation Row */}
-                                <div className="flex items-center justify-between gap-4">
+                                <div className="flex flex-wrap items-center justify-between gap-4 mt-6">
                                     <button
                                         onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
                                         disabled={currentQuestionIndex === 0}
-                                        className="flex-1 max-w-[200px] flex items-center justify-center gap-2 px-6 py-4 bg-white border border-gray-200 rounded-xl text-[#1E3A5F] font-bold text-sm shadow-sm hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="px-5 py-3.5 bg-white border border-gray-200 rounded-xl text-[#1E3A5F] font-bold text-sm shadow-sm hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         Previous
                                     </button>
+
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setAnswers(prev => {
+                                                const next = { ...prev };
+                                                delete next[currentQuestionIndex];
+                                                return next;
+                                            })}
+                                            className="px-5 py-3.5 bg-white border border-gray-200 rounded-xl text-gray-600 hover:text-gray-800 font-bold text-sm shadow-sm hover:bg-gray-50 transition-all"
+                                        >
+                                            Clear Response
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowOverview(true)}
+                                            className="px-5 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-all shadow-sm"
+                                        >
+                                            Overview
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setMarkedForReview(prev => ({
+                                                    ...prev,
+                                                    [currentQuestionIndex]: !prev[currentQuestionIndex]
+                                                }));
+                                                if (currentQuestionIndex < totalQuestions - 1) {
+                                                    setCurrentQuestionIndex(prev => prev + 1);
+                                                }
+                                            }}
+                                            className="px-5 py-3.5 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 font-bold text-sm rounded-xl transition-all"
+                                        >
+                                            {markedForReview[currentQuestionIndex]
+                                                ? (currentQuestionIndex === totalQuestions - 1 ? 'Unmark Review' : 'Unmark & Next')
+                                                : (currentQuestionIndex === totalQuestions - 1 ? 'Mark for Review' : 'Mark for Review & Next')
+                                            }
+                                        </button>
+                                    </div>
                                     
                                     {currentQuestionIndex < totalQuestions - 1 ? (
                                         <button
                                             onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
                                             className="flex-1 max-w-[200px] flex items-center justify-center gap-2 px-6 py-4 bg-[#1E3A5F] rounded-xl text-white font-bold text-sm shadow-md hover:bg-[#2A4E7D] transition-all"
                                         >
-                                            Next
+                                            {answers[currentQuestionIndex] !== undefined ? 'Save & Next' : 'Skip & Next'}
                                         </button>
                                     ) : (
                                         <button
-                                            onClick={handleFinishTest}
+                                            onClick={() => {
+                                                if (confirm('Are you sure you want to end the test and submit?')) {
+                                                    handleFinishTest();
+                                                }
+                                            }}
                                             className="flex-1 max-w-[200px] flex items-center justify-center gap-2 px-6 py-4 bg-green-600 rounded-xl text-white font-bold text-sm shadow-md hover:bg-green-700 transition-all"
                                         >
-                                            Finish Test
+                                            Submit
                                         </button>
                                     )}
                                 </div>
@@ -1099,6 +1553,12 @@ function PrelimsTestSeriesInner() {
                                                                         type="button"
                                                                         onClick={() => {
                                                                             if (!test.isLocked) {
+                                                                                setDoubtQuestionIndex(null);
+                                                                                setDoubtQuestionText('');
+                                                                                setDoubtTitle(`Doubt regarding ${test.title}`);
+                                                                                setDoubtSubject(getSubjectFromTitle(test.title));
+                                                                                setDoubtSubmitSuccess(false);
+                                                                                setDoubtError('');
                                                                                 setShowDoubtModal(test);
                                                                             }
                                                                         }}
@@ -1182,9 +1642,12 @@ function PrelimsTestSeriesInner() {
             {/* Ask Doubt Info Modal */}
             {showDoubtModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-                    <div className="bg-white rounded-3xl max-w-md w-full p-6 md:p-8 shadow-2xl relative border border-gray-100">
+                    <div className="bg-white rounded-3xl max-w-md w-full p-6 md:p-8 shadow-2xl relative border border-gray-100 animate-scale-in">
                         <button
-                            onClick={() => setShowDoubtModal(null)}
+                            onClick={() => {
+                                setShowDoubtModal(null);
+                                setDoubtSubmitSuccess(false);
+                            }}
                             className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xl transition-colors font-bold"
                         >
                             ×
@@ -1193,35 +1656,149 @@ function PrelimsTestSeriesInner() {
                             <span className="text-3xl">❓</span>
                             <div>
                                 <h3 className="text-xl font-bold text-[#1E3A5F] font-headline">Ask Doubt</h3>
-                                <p className="text-gray-400 text-xs">Direct support from mentors</p>
+                                <p className="text-gray-400 text-xs">Direct support from UPSC mentors</p>
                             </div>
                         </div>
 
-                        <div className="space-y-4 text-sm text-gray-600 leading-relaxed mb-8">
-                            <p>Do you have a question or confusion regarding **{showDoubtModal.title}**?</p>
-                            <p>Our dedicated subject matter experts are ready to clarify your conceptual doubts directly.</p>
-                            
-                            <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-xs text-amber-900 font-semibold">
-                                Tip: Please take a screenshot of the question or write down the question number so our mentors can resolve your query faster.
+                        {!studentToken ? (
+                            <div className="text-center py-6">
+                                <p className="text-gray-600 text-sm mb-6">
+                                    You must be logged in to submit a doubt to our subject matter experts.
+                                </p>
+                                <div className="flex flex-col gap-2">
+                                    <Link
+                                        href="/login"
+                                        className="w-full py-3 bg-[#1E3A5F] hover:bg-[#2A4E7D] text-white text-center font-bold text-sm rounded-xl shadow-md transition-colors"
+                                    >
+                                        Log In Now
+                                    </Link>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowDoubtModal(null)}
+                                        className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 text-center font-bold text-sm rounded-xl transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+                        ) : doubtSubmitSuccess ? (
+                            <div className="text-center py-6">
+                                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl font-bold">
+                                    ✓
+                                </div>
+                                <h4 className="text-lg font-bold text-[#1E3A5F] mb-2 font-headline">Doubt Submitted!</h4>
+                                <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                                    Your doubt regarding <strong>{showDoubtModal.title}</strong> has been logged. Our subject experts will review it and reply shortly.
+                                </p>
+                                <div className="flex flex-col gap-2">
+                                    <Link
+                                        href="/profile"
+                                        onClick={() => {
+                                            localStorage.setItem('active_profile_tab', 'doubts');
+                                            setShowDoubtModal(null);
+                                            setDoubtSubmitSuccess(false);
+                                        }}
+                                        className="w-full py-3 bg-[#D97706] hover:bg-[#B45309] text-white text-center font-bold text-sm rounded-xl shadow-md transition-colors"
+                                    >
+                                        Go to My Doubts
+                                    </Link>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowDoubtModal(null);
+                                            setDoubtSubmitSuccess(false);
+                                        }}
+                                        className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 text-center font-bold text-sm rounded-xl transition-colors"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleSubmitDoubt} className="space-y-4">
+                                <div className="bg-slate-50 rounded-xl p-3 border border-gray-100 text-xs text-gray-600">
+                                    <p className="font-semibold text-[#1E3A5F] mb-0.5">Context:</p>
+                                    <p className="truncate"><strong>Test:</strong> {showDoubtModal.title}</p>
+                                    {doubtQuestionIndex !== null && (
+                                        <p className="mt-1">
+                                            <strong>Question #{doubtQuestionIndex + 1}:</strong>{" "}
+                                            <span className="italic">{doubtQuestionText.slice(0, 60)}...</span>
+                                        </p>
+                                    )}
+                                </div>
 
-                        <div className="flex flex-col gap-2.5">
-                            <a
-                                href={`https://wa.me/919999999999?text=Hi%20Shailaja%20IAS,%20I%20have%20a%20doubt%20on%20the%20test%20"${encodeURIComponent(showDoubtModal.title)}"`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="w-full py-3 bg-[#25D366] hover:bg-[#20ba59] text-white text-center font-bold text-sm rounded-xl shadow-md transition-colors flex items-center justify-center gap-1.5"
-                            >
-                                Send doubt via WhatsApp
-                            </a>
-                            <a
-                                href={`mailto:support@shailajaias.com?subject=Doubt%20on%20${encodeURIComponent(showDoubtModal.title)}&body=Dear%20Team,%20I%20have%20a%20doubt%20regarding%20the%20Prelims%20Test%20Series%20paper%20"${encodeURIComponent(showDoubtModal.title)}".`}
-                                className="w-full py-3 bg-[#1E3A5F] hover:bg-[#2A4E7D] text-white text-center font-bold text-sm rounded-xl shadow-md transition-colors flex items-center justify-center gap-1.5"
-                            >
-                                Contact via Email
-                            </a>
-                        </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-[#1E3A5F] mb-1.5 uppercase tracking-wider">
+                                        Subject / Topic
+                                    </label>
+                                    <select
+                                        value={doubtSubject}
+                                        onChange={(e) => setDoubtSubject(e.target.value)}
+                                        className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/20"
+                                    >
+                                        {['Polity', 'Economy', 'Environment', 'Science & Technology', 'International Relations', 'History', 'Geography', 'Art & Culture', 'Social Issues', 'Security', 'Ethics', 'CSAT', 'General'].map((sub) => (
+                                            <option key={sub} value={sub}>{sub}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-[#1E3A5F] mb-1.5 uppercase tracking-wider">
+                                        Doubt Title
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={doubtTitle}
+                                        onChange={(e) => setDoubtTitle(e.target.value)}
+                                        placeholder="Brief title for your doubt"
+                                        className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/20"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-[#1E3A5F] mb-1.5 uppercase tracking-wider">
+                                        Doubt Description
+                                    </label>
+                                    <textarea
+                                        value={doubtDescription}
+                                        onChange={(e) => setDoubtDescription(e.target.value)}
+                                        rows={4}
+                                        placeholder="Explain exactly what you find confusing (e.g., conceptual clarification, explanation mismatch, etc.)"
+                                        className="w-full p-3 border border-gray-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/20 resize-none"
+                                        required
+                                    />
+                                </div>
+
+                                {doubtError && (
+                                    <p className="text-xs text-red-600 font-bold bg-red-50 p-2 rounded-lg border border-red-100">
+                                        ⚠️ {doubtError}
+                                    </p>
+                                )}
+
+                                <div className="flex gap-3 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowDoubtModal(null)}
+                                        className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-xl transition-colors"
+                                        disabled={isSubmittingDoubt}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 py-3 bg-[#1E3A5F] hover:bg-[#2A4E7D] text-white font-bold text-sm rounded-xl shadow-md transition-colors flex items-center justify-center gap-1.5"
+                                        disabled={isSubmittingDoubt}
+                                    >
+                                        {isSubmittingDoubt ? (
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        ) : (
+                                            <span>Submit Doubt</span>
+                                        )}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
                     </div>
                 </div>
             )}

@@ -11,7 +11,7 @@ export interface AuthRequest extends Request {
 
 export interface JwtPayload {
     id: string;
-    email: string;
+    email?: string;
     role: 'admin' | 'student';
 }
 
@@ -53,6 +53,11 @@ export const protect = async (
 
         if (!user) {
             res.status(401).json({ error: 'User not found' });
+            return;
+        }
+
+        if (user.status === 'suspended') {
+            res.status(403).json({ error: 'Your account has been suspended. Please contact support.' });
             return;
         }
 

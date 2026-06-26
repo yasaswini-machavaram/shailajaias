@@ -1,6 +1,6 @@
+import "./env.js";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import connectDB from "./config/db.js";
@@ -15,13 +15,13 @@ import {
   searchRoutes,
   resourceRoutes,
   testSeriesRoutes,
+  adminUserRoutes,
+  doubtRoutes,
+  testReportRoutes,
 } from "./routes/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Load environment variables
-dotenv.config();
 
 // Connect to MongoDB
 connectDB();
@@ -70,6 +70,9 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/tests/series', testSeriesRoutes);
+app.use('/api/admin/users', adminUserRoutes);
+app.use('/api/doubts', doubtRoutes);
+app.use('/api/reports', testReportRoutes);
 
 // 404 handler
 app.use((_req, res) => {

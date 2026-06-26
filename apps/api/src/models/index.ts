@@ -7,3 +7,5 @@ export { Quiz, type IQuiz, type IQuestion } from './Quiz.js';
 export { CourseNode, type ICourseNode, type IContentTab, type ContentTabType } from './Course.js';
 export { ResourceCategory, type IResourceCategory, ResourceItem, type IResourceItem } from './Resource.js';
 export { TestSeries, type ITestSeries, type ITestSeriesItem } from './TestSeries.js';
+export { Doubt, type IDoubt, type IDoubtMessage } from './Doubt.js';
+export { TestReport, type ITestReport } from './TestReport.js';

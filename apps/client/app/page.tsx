@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useStudentAuth } from '@/contexts/StudentAuthContext';
 
 // ─── Motivational Quotes ─────────────────────────────────────────────────────
 const QUOTES = [
@@ -101,6 +102,18 @@ const MODULES = [
         accent: '#00695C',
         bg: '#E0F2F1',
     },
+    {
+        title: 'My Profile',
+        href: '/profile',
+        icon: (
+            <svg className="w-9 h-9" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+        ),
+        free: false,
+        accent: '#D97706',
+        bg: '#FEF3C7',
+    },
 ];
 
 // ─── Hero Banner Slides ──────────────────────────────────────────────────────
@@ -133,6 +146,7 @@ const BANNERS = [
 
 export default function LandingPage() {
     const router = useRouter();
+    const { isLoggedIn, user } = useStudentAuth();
     const [currentBanner, setCurrentBanner] = useState(0);
     const [quoteIdx, setQuoteIdx] = useState(0);
     const testimonialRef = useRef<HTMLDivElement>(null);
@@ -214,9 +228,39 @@ export default function LandingPage() {
                 </section>
 
                 {/* ══════════════════════════════════════════════════════════ */}
+                {/* PROFILE GREETING CARD                                      */}
+                {/* ══════════════════════════════════════════════════════════ */}
+                <section className="animate-fade-in-up" style={{ animationDelay: '60ms' }}>
+                    <div className="bg-white rounded-[2rem] p-5 md:p-6 shadow-[0_10px_40px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div className="flex items-center gap-3.5 w-full">
+                            <div className="w-12 h-12 rounded-full bg-[#1E3A5F]/10 flex items-center justify-center text-xl shrink-0">
+                                👤
+                            </div>
+                            <div>
+                                <h3 className="text-sm md:text-base font-bold text-[#1E3A5F]">
+                                    {isLoggedIn ? `Welcome back, ${user?.name || 'Student'}!` : 'Welcome, Aspirant!'}
+                                </h3>
+                                <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                    {isLoggedIn 
+                                        ? 'Track your test scores, view saved reports, and manage your doubts.' 
+                                        : 'Log in to track your test reports, save practice tests, and ask doubts.'}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => router.push(isLoggedIn ? '/profile' : '/login')}
+                            className="w-full md:w-auto px-5 py-2.5 bg-[#1E3A5F] hover:bg-[#152C4A] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-[0.98] shrink-0"
+                        >
+                            <span>{isLoggedIn ? 'Go to My Profile' : 'Sign In / Register'}</span>
+                            <span>➡️</span>
+                        </button>
+                    </div>
+                </section>
+
+                {/* ══════════════════════════════════════════════════════════ */}
                 {/* MODULE NAVIGATION CARDS                                   */}
                 {/* ══════════════════════════════════════════════════════════ */}
-                <section className="animate-fade-in-up" style={{ animationDelay: '80ms' }}>
+                <section className="animate-fade-in-up" style={{ animationDelay: '120ms' }}>
                     <div className="bg-white rounded-[2rem] p-5 md:p-8 shadow-[0_10px_40px_rgba(0,0,0,0.03)] border border-gray-100">
                         <div className="flex items-center justify-around gap-2 md:gap-6 flex-wrap">
                             {MODULES.map((mod, idx) => (
@@ -264,7 +308,7 @@ export default function LandingPage() {
                 {/* ══════════════════════════════════════════════════════════ */}
                 {/* MOTIVATIONAL QUOTE                                        */}
                 {/* ══════════════════════════════════════════════════════════ */}
-                <section className="animate-fade-in-up" style={{ animationDelay: '160ms' }}>
+                <section className="animate-fade-in-up" style={{ animationDelay: '180ms' }}>
                     <div className="bg-white rounded-2xl p-5 md:p-6 shadow-[0_4px_15px_rgba(0,0,0,0.02)] border border-gray-100 flex items-center gap-4">
                         <div className="flex-1">
                             <p className="text-[13px] md:text-[15px] font-semibold text-[#1E3A5F] italic leading-relaxed transition-all duration-500">
@@ -355,7 +399,7 @@ export default function LandingPage() {
                 {/* ══════════════════════════════════════════════════════════ */}
                 {/* ANNOUNCEMENTS                                             */}
                 {/* ══════════════════════════════════════════════════════════ */}
-                <section className="animate-fade-in-up" style={{ animationDelay: '320ms' }}>
+                <section className="animate-fade-in-up" style={{ animationDelay: '300ms' }}>
                     <div className="bg-white rounded-2xl p-5 md:p-6 shadow-[0_4px_15px_rgba(0,0,0,0.02)] border border-gray-100">
                         <h2 className="text-base font-bold text-[#1E3A5F] text-center mb-4">Announcements</h2>
                         <ul className="space-y-2.5">
@@ -377,7 +421,7 @@ export default function LandingPage() {
                 {/* ══════════════════════════════════════════════════════════ */}
                 {/* FOOTER                                                    */}
                 {/* ══════════════════════════════════════════════════════════ */}
-                <footer className="animate-fade-in-up" style={{ animationDelay: '400ms' }}>
+                <footer className="animate-fade-in-up" style={{ animationDelay: '360ms' }}>
                     <div className="bg-[#1E3A5F] rounded-[2rem] p-6 md:p-8 text-white">
                         <div className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-12">
                             {/* Brand */}

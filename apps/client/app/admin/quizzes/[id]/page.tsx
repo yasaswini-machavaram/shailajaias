@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../AuthContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -26,13 +26,15 @@ export default function EditQuizPage() {
     const { token } = useAuth();
     const router = useRouter();
     const params = useParams();
+    const searchParams = useSearchParams();
     const quizId = params.id as string;
+    const returnTo = searchParams.get('returnTo') || '/admin/quizzes';
 
     const [title, setTitle] = useState('');
     const [date, setDate] = useState('');
     const [setName, setSetName] = useState('');
     const [tags, setTags] = useState('');
-    const [quizType, setQuizType] = useState<'daily' | 'practice'>('daily');
+
     const [questions, setQuestions] = useState<QuestionForm[]>([{ ...emptyQuestion }]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,9 +56,7 @@ export default function EditQuizPage() {
                     setDate(quiz.date ? quiz.date.split('T')[0] : '');
                     setSetName(quiz.setName || '');
                     
-                    const isPractice = quiz.tags?.includes('prelims-practice');
-                    setQuizType(isPractice ? 'practice' : 'daily');
-                    setTags(quiz.tags ? quiz.tags.filter((t: string) => t !== 'prelims-practice').join(', ') : '');
+                    setTags(quiz.tags ? quiz.tags.join(', ') : '');
                     
                     setQuestions(
                         quiz.questions?.length > 0
@@ -137,10 +137,7 @@ export default function EditQuizPage() {
 
         setIsSubmitting(true);
         try {
-            let finalTags = tags.split(',').map((t) => t.trim()).filter((t) => t && t !== 'prelims-practice');
-            if (quizType === 'practice') {
-                finalTags.push('prelims-practice');
-            }
+            const finalTags = tags.split(',').map((t) => t.trim()).filter(Boolean);
 
             const response = await fetch(`${API_URL}/api/quizzes/${quizId}`, {
                 method: 'PUT',
@@ -160,7 +157,7 @@ export default function EditQuizPage() {
             const data = await response.json();
 
             if (data.success) {
-                router.push('/admin/quizzes');
+                router.push(returnTo);
             } else {
                 setError(data.message || 'Failed to update quiz');
             }
@@ -194,7 +191,7 @@ export default function EditQuizPage() {
                 )}
 
                 {/* Title, Date, Set Name, Quiz Type, Tags */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Title *</label>
                         <input
@@ -232,17 +229,7 @@ export default function EditQuizPage() {
                         />
                         <p className="text-xs text-gray-400 mt-1 text-right">{setName.length}/100</p>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Quiz Type *</label>
-                        <select
-                            value={quizType}
-                            onChange={(e) => setQuizType(e.target.value as 'daily' | 'practice')}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent font-medium"
-                        >
-                            <option value="daily">Daily Quiz</option>
-                            <option value="practice">Prelims Practice Test</option>
-                        </select>
-                    </div>
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Subject Tags</label>
                         <input
@@ -359,7 +346,7 @@ export default function EditQuizPage() {
                     </button>
                     <button
                         type="button"
-                        onClick={() => router.push('/admin/quizzes')}
+                        onClick={() => router.push(returnTo)}
                         className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
                     >
                         Cancel

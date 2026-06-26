@@ -8,7 +8,7 @@ const navItems = [
     { href: '/current-affairs', label: 'CA', icon: '📰' },
     { href: '/daily-quiz', label: 'Quiz', icon: '✍️' },
     { href: '/resources', label: 'Resources', icon: '📚' },
-    { href: '/search', label: 'Search', icon: '🔍' },
+    { href: '/profile', label: 'Profile', icon: '👤' },
 ];
 
 export default function BottomNav() {

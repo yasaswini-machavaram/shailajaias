@@ -21,7 +21,7 @@ const TEST_SUBMODULES = [
     {
         title: 'Prelims Practice Test',
         description: 'Manage subject-wise MCQ practice tests, configure subject filters, and control explanations.',
-        href: '/admin/quizzes?tab=practice',
+        href: '/admin/test-series/prelims-practice-test',
         bgColor: '#FCE4EC',       // light pink
         accentColor: '#C2185B',
         icon: '📘',
