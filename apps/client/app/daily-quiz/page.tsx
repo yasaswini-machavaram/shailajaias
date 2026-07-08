@@ -39,6 +39,17 @@ function DailyQuizInner() {
     const [answers, setAnswers] = useState<Record<string, number>>({}); // "quizId-qIdx" -> optionIdx
     const [adjacentDates, setAdjacentDates] = useState<{ previous: string | null; next: string | null }>({ previous: null, next: null });
     const pendingIndex = useRef<{ qz: number; qu: number } | null>(null);
+    const dateInputRef = useRef<HTMLInputElement>(null);
+
+    const triggerDatePicker = () => {
+        if (dateInputRef.current) {
+            try {
+                dateInputRef.current.showPicker();
+            } catch (err) {
+                dateInputRef.current.click();
+            }
+        }
+    };
 
     useEffect(() => {
         const fetchAll = async () => {
@@ -148,8 +159,10 @@ function DailyQuizInner() {
                 <div className="flex items-center justify-between gap-4 mb-4">
                     {/* Date Picker Button-style */}
                     <div className="relative group">
-                        <div
-                            className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm pointer-events-none"
+                        <button
+                            type="button"
+                            onClick={triggerDatePicker}
+                            className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
                         >
                             <span className="text-[#1E3A5F]">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -164,13 +177,22 @@ function DailyQuizInner() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                                 </svg>
                             </span>
-                        </div>
+                        </button>
                         {/* Invisible native date input on top — browser positions calendar popup correctly */}
                         <input
+                            ref={dateInputRef}
                             type="date"
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: '100%',
+                                opacity: 0,
+                                pointerEvents: 'none'
+                            }}
                             aria-label="Select quiz date"
                         />
                     </div>

@@ -9,7 +9,7 @@ import { TestReport } from '../models/index.js';
  */
 export const saveReport = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const { quiz, testSeries, scorecard, answers } = req.body;
+        const { quiz, testSeries, testSeriesUniqueId, testItemTitle, scorecard, answers } = req.body;
 
         if (!quiz || !scorecard || !answers) {
             res.status(400).json({ success: false, message: 'Quiz, scorecard and answers are required' });
@@ -25,6 +25,8 @@ export const saveReport = async (req: AuthRequest, res: Response): Promise<void>
             student: req.user._id,
             quiz,
             testSeries: testSeries || undefined,
+            testSeriesUniqueId: testSeriesUniqueId || undefined,
+            testItemTitle: testItemTitle || undefined,
             scorecard,
             answers,
         });

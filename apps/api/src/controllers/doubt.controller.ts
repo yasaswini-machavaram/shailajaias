@@ -11,6 +11,8 @@ export const createDoubt = async (req: AuthRequest, res: Response): Promise<void
     try {
         const {
             testSeries,
+            testSeriesUniqueId,
+            testItemTitle,
             quiz,
             questionIndex,
             questionText,
@@ -27,6 +29,8 @@ export const createDoubt = async (req: AuthRequest, res: Response): Promise<void
         const doubt = new Doubt({
             student: req.user?._id,
             testSeries: testSeries || undefined,
+            testSeriesUniqueId: testSeriesUniqueId || undefined,
+            testItemTitle: testItemTitle || undefined,
             quiz: quiz || undefined,
             questionIndex,
             questionText,
@@ -111,6 +115,7 @@ export const getDoubts = async (req: AuthRequest, res: Response): Promise<void> 
                     { student: { $in: userIds } },
                     { title: { $regex: search as string, $options: 'i' } },
                     { description: { $regex: search as string, $options: 'i' } },
+                    { testSeriesUniqueId: { $regex: search as string, $options: 'i' } },
                 ];
             }
 

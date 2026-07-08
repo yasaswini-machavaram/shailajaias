@@ -19,6 +19,8 @@ export default function QuizzesPage() {
     const { token } = useAuth();
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
 
     useEffect(() => {
@@ -43,20 +45,24 @@ export default function QuizzesPage() {
         }
     };
 
-    const deleteQuiz = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this quiz?')) return;
+    const confirmDelete = async () => {
+        if (!deleteTarget) return;
+        setIsDeleting(true);
 
         try {
-            const response = await fetch(`${API_URL}/api/quizzes/${id}`, {
+            const response = await fetch(`${API_URL}/api/quizzes/${deleteTarget.id}`, {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` },
             });
 
             if (response.ok) {
-                setQuizzes(quizzes.filter((q) => q._id !== id));
+                setQuizzes(quizzes.filter((q) => q._id !== deleteTarget.id));
             }
         } catch (error) {
             console.error('Failed to delete quiz:', error);
+        } finally {
+            setIsDeleting(false);
+            setDeleteTarget(null);
         }
     };
 
@@ -138,6 +144,8 @@ export default function QuizzesPage() {
                                                     tagStyle = 'bg-purple-100 text-purple-800 border border-purple-200 font-semibold';
                                                 } else if (tag === 'prelims-test-series') {
                                                     tagStyle = 'bg-blue-100 text-blue-800 border border-blue-200 font-semibold';
+                                                } else {
+                                                    tagStyle = 'bg-amber-50 text-amber-800 border border-amber-200 font-medium';
                                                 }
                                                 return (
                                                     <span key={tag} className={`px-2 py-0.5 rounded text-xs lowercase ${tagStyle}`}>
@@ -154,12 +162,12 @@ export default function QuizzesPage() {
                                         >
                                             Edit
                                         </Link>
-                                        <button
-                                            onClick={() => deleteQuiz(quiz._id)}
-                                            className="text-red-600 hover:underline text-sm"
-                                        >
-                                            Delete
-                                        </button>
+                                         <button
+                                             onClick={() => setDeleteTarget({ id: quiz._id, title: quiz.title })}
+                                             className="text-red-600 hover:underline text-sm"
+                                         >
+                                             Delete
+                                         </button>
                                     </td>
                                 </tr>
                             ))}
@@ -167,6 +175,41 @@ export default function QuizzesPage() {
                     </table>
                 )}
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {deleteTarget && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    style={{ background: 'rgba(0,0,0,0.5)' }}
+                    onClick={() => !isDeleting && setDeleteTarget(null)}
+                >
+                    <div
+                        className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Daily Quiz</h3>
+                        <p className="text-gray-600 text-sm mb-1">Are you sure you want to delete:</p>
+                        <p className="text-gray-900 font-medium text-sm mb-4 break-words whitespace-pre-wrap">&quot;{deleteTarget.title}&quot;</p>
+                        <p className="text-red-600 text-xs mb-5">This action cannot be undone.</p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setDeleteTarget(null)}
+                                disabled={isDeleting}
+                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                disabled={isDeleting}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                {isDeleting ? 'Deleting...' : 'Delete'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -4,6 +4,8 @@ export interface ITestReport extends Document {
     student: Types.ObjectId;
     quiz: Types.ObjectId;
     testSeries?: Types.ObjectId;
+    testSeriesUniqueId?: string;
+    testItemTitle?: string;
     scorecard: {
         totalScore: number;
         maxMarks: number;
@@ -36,6 +38,16 @@ const TestReportSchema = new Schema<ITestReport>(
             type: Schema.Types.ObjectId,
             ref: 'TestSeries',
             required: false,
+        },
+        testSeriesUniqueId: {
+            type: String,
+            required: false,
+            trim: true,
+        },
+        testItemTitle: {
+            type: String,
+            required: false,
+            trim: true,
         },
         scorecard: {
             totalScore: { type: Number, required: true },

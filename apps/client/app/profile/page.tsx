@@ -458,9 +458,21 @@ export default function ProfilePage() {
                                                 className="w-full text-left bg-white rounded-2xl p-4 border border-gray-100 hover:border-gray-200 transition-all shadow-sm flex flex-col gap-3 group"
                                             >
                                                 <div className="flex justify-between items-start gap-2">
-                                                    <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold rounded-md text-[10px] uppercase">
-                                                        {doubt.subject}
-                                                    </span>
+                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold rounded-md text-[10px] uppercase">
+                                                            {doubt.subject}
+                                                        </span>
+                                                        {doubt.testSeriesUniqueId && (
+                                                            <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold rounded-md text-[10px] uppercase border border-indigo-100">
+                                                                {doubt.testSeriesUniqueId}
+                                                            </span>
+                                                        )}
+                                                        {doubt.testItemTitle && (
+                                                            <span className="text-[10px] text-gray-400 font-medium truncate max-w-[150px]">
+                                                                • {doubt.testItemTitle}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <span className={`px-2.5 py-0.5 border rounded-full text-[10px] font-bold uppercase ${badgeColor}`}>
                                                         {doubt.status}
                                                     </span>
@@ -496,10 +508,17 @@ export default function ProfilePage() {
                                 >
                                     ← Back to Desk
                                 </button>
-                                <div className="flex items-center justify-between gap-2 mb-2">
-                                    <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold rounded-md text-[10px] uppercase">
-                                        {selectedDoubt.subject}
-                                    </span>
+                                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold rounded-md text-[10px] uppercase">
+                                                                            {selectedDoubt.subject}
+                                                                        </span>
+                                                                        {selectedDoubt.testSeriesUniqueId && (
+                                                                            <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold rounded-md text-[10px] uppercase border border-indigo-100">
+                                                                                {selectedDoubt.testSeriesUniqueId}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                     <span className={`px-2.5 py-0.5 border rounded-full text-[10px] font-bold uppercase ${
                                         selectedDoubt.status === 'resolved'
                                             ? 'bg-green-50 text-green-700 border-green-100'
@@ -514,10 +533,15 @@ export default function ProfilePage() {
                                     {selectedDoubt.title}
                                 </h3>
                                 
-                                {selectedDoubt.questionIndex !== undefined && (
+                                {(selectedDoubt.questionIndex !== undefined || selectedDoubt.testItemTitle) && (
                                     <div className="mt-2 text-[10px] font-semibold text-gray-500 bg-slate-50 p-2 rounded-lg border border-gray-100/50">
-                                        Context: Question #{selectedDoubt.questionIndex + 1}
-                                        {selectedDoubt.questionText && <span className="italic block font-normal mt-0.5 truncate text-gray-600">"{selectedDoubt.questionText}"</span>}
+                                        {selectedDoubt.testItemTitle && <div><strong>Test:</strong> {selectedDoubt.testItemTitle}</div>}
+                                        {selectedDoubt.questionIndex !== undefined && (
+                                            <div className="mt-0.5">
+                                                <strong>Question:</strong> #{selectedDoubt.questionIndex + 1}
+                                                {selectedDoubt.questionText && <span className="italic block font-normal mt-0.5 truncate text-gray-600">"{selectedDoubt.questionText}"</span>}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -855,9 +879,14 @@ export default function ProfilePage() {
                         /* ─── REPORT SCORECARD VIEW ─── */
                         <div className="space-y-6">
                             {/* Score Card */}
-                            <div className="bg-gradient-to-br from-[#1E3A5F] to-[#2A4E7D] rounded-3xl p-6 text-center text-white shadow-md">
+                            <div className="bg-gradient-to-br from-[#1E3A5F] to-[#2A4E7D] rounded-3xl p-6 text-center text-white shadow-md animate-fade-in">
+                                {selectedReport.testSeriesUniqueId && (
+                                    <span className="inline-block px-2.5 py-0.5 bg-white/20 text-white text-[10px] font-bold rounded-full uppercase tracking-wider mb-2">
+                                        {selectedReport.testSeriesUniqueId}
+                                    </span>
+                                )}
                                 <h3 className="text-lg font-bold font-headline mb-1">
-                                    {selectedReport.quiz?.title || 'Online Test'}
+                                    {selectedReport.testItemTitle || selectedReport.quiz?.title || 'Online Test'}
                                 </h3>
                                 <p className="text-white/60 text-xs font-medium">
                                     Attempted on {formatDisplayDate(selectedReport.createdAt)}
@@ -983,9 +1012,16 @@ export default function ProfilePage() {
                                             className="w-full text-left bg-white rounded-xl p-4 border border-gray-100 hover:border-blue-200 shadow-sm transition-all flex items-center justify-between group active:scale-[0.99] disabled:opacity-60"
                                         >
                                             <div className="flex-1 min-w-0 pr-2">
-                                                <h4 className="text-xs font-bold text-[#1E3A5F] truncate mb-0.5">
-                                                    {report.quiz?.title || 'Online Exam'}
-                                                </h4>
+                                                <div className="flex items-center gap-1.5 mb-0.5">
+                                                    <h4 className="text-xs font-bold text-[#1E3A5F] truncate">
+                                                        {report.testItemTitle || report.quiz?.title || 'Online Exam'}
+                                                    </h4>
+                                                    {report.testSeriesUniqueId && (
+                                                        <span className="inline-block px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-bold rounded border border-indigo-100 uppercase tracking-wide flex-shrink-0">
+                                                            {report.testSeriesUniqueId}
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <p className="text-[10px] text-[#94A3B8] font-medium mb-1.5">
                                                     {formatDisplayDate(report.createdAt)}
                                                 </p>

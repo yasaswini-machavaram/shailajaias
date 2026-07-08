@@ -76,6 +76,8 @@ export default function AdminResourcesPage() {
     const [catPublished, setCatPublished] = useState(true);
     const [catSubmitting, setCatSubmitting] = useState(false);
     const [catError, setCatError] = useState('');
+    const [deleteCatTarget, setDeleteCatTarget] = useState<{ id: string; title: string } | null>(null);
+    const [isDeletingCat, setIsDeletingCat] = useState(false);
 
     // ─── Item State ───
     const [items, setItems] = useState<ResourceItem[]>([]);
@@ -92,6 +94,8 @@ export default function AdminResourcesPage() {
     const [pdfFile, setPdfFile] = useState<File | null>(null);
     const [itemSubmitting, setItemSubmitting] = useState(false);
     const [itemError, setItemError] = useState('');
+    const [deleteItemTarget, setDeleteItemTarget] = useState<{ id: string; title: string } | null>(null);
+    const [isDeletingItem, setIsDeletingItem] = useState(false);
 
     // ─── Active Tab ───
     const [activeTab, setActiveTab] = useState<'categories' | 'items'>('categories');
@@ -195,17 +199,23 @@ export default function AdminResourcesPage() {
         }
     };
 
-    const deleteCat = async (id: string) => {
-        if (!confirm('Delete this category and ALL its items? This cannot be undone.')) return;
+    const confirmDeleteCat = async () => {
+        if (!deleteCatTarget) return;
+        setIsDeletingCat(true);
         try {
-            const res = await fetch(`${API_URL}/api/resources/categories/${id}`, {
+            const res = await fetch(`${API_URL}/api/resources/categories/${deleteCatTarget.id}`, {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (res.ok) {
-                setCategories(categories.filter(c => c._id !== id));
+                setCategories(categories.filter(c => c._id !== deleteCatTarget.id));
             }
-        } catch (err) { console.error('Delete category error:', err); }
+        } catch (err) {
+            console.error('Delete category error:', err);
+        } finally {
+            setIsDeletingCat(false);
+            setDeleteCatTarget(null);
+        }
     };
 
     const addCustomTag = () => {
@@ -335,18 +345,24 @@ export default function AdminResourcesPage() {
         }
     };
 
-    const deleteItem = async (id: string) => {
-        if (!confirm('Delete this resource item?')) return;
+    const confirmDeleteItem = async () => {
+        if (!deleteItemTarget) return;
+        setIsDeletingItem(true);
         try {
-            const res = await fetch(`${API_URL}/api/resources/items/${id}`, {
+            const res = await fetch(`${API_URL}/api/resources/items/${deleteItemTarget.id}`, {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (res.ok) {
-                setItems(items.filter(i => i._id !== id));
+                setItems(items.filter(i => i._id !== deleteItemTarget.id));
                 fetchCategories(); // Update counts
             }
-        } catch (err) { console.error('Delete item error:', err); }
+        } catch (err) {
+            console.error('Delete item error:', err);
+        } finally {
+            setIsDeletingItem(false);
+            setDeleteItemTarget(null);
+        }
     };
 
     // Get tags for the currently selected category in the item form
@@ -465,7 +481,7 @@ export default function AdminResourcesPage() {
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <button onClick={() => openCatForm(cat)} className="px-3 py-1.5 text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors">Edit</button>
-                                                    <button onClick={() => deleteCat(cat._id)} className="px-3 py-1.5 text-sm bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition-colors">Delete</button>
+                                                    <button onClick={() => setDeleteCatTarget({ id: cat._id, title: cat.title })} className="px-3 py-1.5 text-sm bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition-colors">Delete</button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -529,9 +545,11 @@ export default function AdminResourcesPage() {
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {items.map((item) => {
-                                        const catName = typeof item.category === 'string'
+                                        const catName = !item.category
+                                            ? '—'
+                                            : typeof item.category === 'string'
                                             ? categories.find(c => c._id === item.category)?.title || '—'
-                                            : item.category.title;
+                                            : item.category.title || '—';
 
                                         return (
                                             <tr key={item._id} className="hover:bg-gray-50">
@@ -564,7 +582,7 @@ export default function AdminResourcesPage() {
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex justify-end gap-2">
                                                         <button onClick={() => openItemForm(item)} className="px-3 py-1.5 text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors">Edit</button>
-                                                        <button onClick={() => deleteItem(item._id)} className="px-3 py-1.5 text-sm bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition-colors">Delete</button>
+                                                        <button onClick={() => setDeleteItemTarget({ id: item._id, title: item.title })} className="px-3 py-1.5 text-sm bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition-colors">Delete</button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -605,7 +623,9 @@ export default function AdminResourcesPage() {
                                     placeholder="e.g., Standard Text Books"
                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     required
+                                    maxLength={100}
                                 />
+                                <p className="text-xs text-gray-400 mt-1 text-right">{catTitle.length}/100</p>
                             </div>
 
                             {/* Description */}
@@ -617,7 +637,9 @@ export default function AdminResourcesPage() {
                                     onChange={e => setCatDesc(e.target.value)}
                                     placeholder="Brief description (optional)"
                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    maxLength={250}
                                 />
+                                <p className="text-xs text-gray-400 mt-1 text-right">{catDesc.length}/250</p>
                             </div>
 
                             {/* Icon & Color */}
@@ -684,6 +706,7 @@ export default function AdminResourcesPage() {
                                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }}
                                         placeholder="Add custom tag..."
                                         className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        maxLength={30}
                                     />
                                     <button type="button" onClick={addCustomTag} className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">Add</button>
                                 </div>
@@ -772,7 +795,9 @@ export default function AdminResourcesPage() {
                                     placeholder="e.g., Ancient & Medieval History"
                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     required
+                                    maxLength={200}
                                 />
+                                <p className="text-xs text-gray-400 mt-1 text-right">{itemTitle.length}/200</p>
                             </div>
 
                             {/* Category & Tag */}
@@ -827,7 +852,9 @@ export default function AdminResourcesPage() {
                                     onChange={e => setItemDesc(e.target.value)}
                                     placeholder="Brief description (optional)"
                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    maxLength={250}
                                 />
+                                <p className="text-xs text-gray-400 mt-1 text-right">{itemDesc.length}/250</p>
                             </div>
 
                             {/* PDF Upload */}
@@ -891,6 +918,76 @@ export default function AdminResourcesPage() {
                                 >Cancel</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Category Delete Confirmation Modal */}
+            {deleteCatTarget && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    style={{ background: 'rgba(0,0,0,0.5)' }}
+                    onClick={() => !isDeletingCat && setDeleteCatTarget(null)}
+                >
+                    <div
+                        className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Category</h3>
+                        <p className="text-gray-600 text-sm mb-1">Are you sure you want to delete category:</p>
+                        <p className="text-gray-900 font-medium text-sm mb-4 break-words whitespace-pre-wrap">&quot;{deleteCatTarget.title}&quot;</p>
+                        <p className="text-red-600 text-xs mb-5">This action will delete the category and ALL its items! This cannot be undone.</p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setDeleteCatTarget(null)}
+                                disabled={isDeletingCat}
+                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDeleteCat}
+                                disabled={isDeletingCat}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                {isDeletingCat ? 'Deleting...' : 'Delete'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Item Delete Confirmation Modal */}
+            {deleteItemTarget && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    style={{ background: 'rgba(0,0,0,0.5)' }}
+                    onClick={() => !isDeletingItem && setDeleteItemTarget(null)}
+                >
+                    <div
+                        className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Resource Item</h3>
+                        <p className="text-gray-600 text-sm mb-1">Are you sure you want to delete resource:</p>
+                        <p className="text-gray-900 font-medium text-sm mb-4 break-words whitespace-pre-wrap">&quot;{deleteItemTarget.title}&quot;</p>
+                        <p className="text-red-600 text-xs mb-5">This action cannot be undone.</p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setDeleteItemTarget(null)}
+                                disabled={isDeletingItem}
+                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDeleteItem}
+                                disabled={isDeletingItem}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                {isDeletingItem ? 'Deleting...' : 'Delete'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -103,10 +103,46 @@ function PrelimsPracticeTestInner() {
     const [showReview, setShowReview] = useState(false);
     const [hasStartedTest, setHasStartedTest] = useState(false);
 
+    // Custom warning and submit modals
+    const [showSubmitConfirmModal, setShowSubmitConfirmModal] = useState(false);
+    const [showDiscardConfirmModal, setShowDiscardConfirmModal] = useState(false);
+
     // Timer state (test mode only)
     const [timeRemaining, setTimeRemaining] = useState(0);
     const [testStartTime, setTestStartTime] = useState(0);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+    const totalQuestions = activeQuiz?.questions?.length || 0;
+
+    // Prevent accidental reload or close during active test
+    useEffect(() => {
+        if (!activeQuiz || showScorecard) return;
+
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            e.preventDefault();
+            e.returnValue = 'Are you sure you want to discard this test?';
+            return 'Are you sure you want to discard this test?';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [activeQuiz, showScorecard]);
+
+    // Auto-scroll active question number into view in scrollable grid
+    useEffect(() => {
+        if (scrollContainerRef.current) {
+            const activeBtn = scrollContainerRef.current.children[currentQuestionIndex] as HTMLElement;
+            if (activeBtn) {
+                activeBtn.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'nearest',
+                    inline: 'center',
+                });
+            }
+        }
+    }, [currentQuestionIndex]);
 
     // Fetch prelims practice quizzes
     useEffect(() => {
@@ -263,6 +299,91 @@ function PrelimsPracticeTestInner() {
         setShowScorecard(true);
     }, []);
 
+    const renderPracticeModals = () => {
+        return (
+            <>
+                {/* Submit Test Confirmation Modal */}
+                {showSubmitConfirmModal && (
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+                        <div className="bg-white rounded-3xl max-w-md w-full p-6 md:p-8 shadow-2xl relative border border-gray-100 animate-scale-in text-center animate-fade-in">
+                            <div className="w-16 h-16 bg-blue-50 text-[#1E3A5F] rounded-full flex items-center justify-center mx-auto mb-4 text-3xl font-bold">
+                                📥
+                            </div>
+                            <h3 className="text-xl font-bold text-[#1E3A5F] mb-2 font-headline">Submit Test?</h3>
+                            <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                                Are you sure you want to end this test and view your scorecard? You will not be able to modify your answers after submitting.
+                            </p>
+                            <div className="grid grid-cols-2 gap-4 text-xs font-semibold text-gray-500 bg-slate-50 p-4 rounded-2xl mb-6 border border-gray-100">
+                                <div className="text-center">
+                                    <span className="block text-lg font-bold text-[#1E3A5F]">{Object.keys(answers).length}</span>
+                                    <span>Answered</span>
+                                </div>
+                                <div className="text-center">
+                                    <span className="block text-lg font-bold text-gray-500">{totalQuestions - Object.keys(answers).length}</span>
+                                    <span>Unanswered</span>
+                                </div>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSubmitConfirmModal(false)}
+                                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-xl transition-colors"
+                                >
+                                    Keep Answering
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowSubmitConfirmModal(false);
+                                        handleFinishTest();
+                                    }}
+                                    className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold text-sm rounded-xl shadow-md transition-colors"
+                                >
+                                    Yes, Submit
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Discard Progress Warning Modal */}
+                {showDiscardConfirmModal && (
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+                        <div className="bg-white rounded-3xl max-w-md w-full p-6 md:p-8 shadow-2xl relative border border-gray-100 animate-scale-in text-center animate-fade-in">
+                            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl font-bold">
+                                ⚠️
+                            </div>
+                            <h3 className="text-xl font-bold text-red-600 mb-2 font-headline">Discard Test Progress?</h3>
+                            <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                                Are you sure you want to exit? Your current test progress and all marked answers will be discarded. This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDiscardConfirmModal(false)}
+                                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-xl transition-colors"
+                                >
+                                    Resume Test
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowDiscardConfirmModal(false);
+                                        if (timerRef.current) clearInterval(timerRef.current);
+                                        setActiveQuiz(null);
+                                    }}
+                                    className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl shadow-md transition-colors"
+                                >
+                                    Yes, Discard
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </>
+        );
+    };
+
     // Subtitle extractor
     const getQuizTopics = (quiz: Quiz) => {
         // Extract subjects/chapters from quiz setName, title, or tags
@@ -280,7 +401,6 @@ function PrelimsPracticeTestInner() {
     if (activeQuiz) {
         const currentQuestion = activeQuiz.questions[currentQuestionIndex];
         const isAnswered = answers[currentQuestionIndex] !== undefined;
-        const totalQuestions = activeQuiz.questions.length;
         const stats = getStats();
         const isTimerLow = timeRemaining <= 60;
 
@@ -293,8 +413,12 @@ function PrelimsPracticeTestInner() {
                             <div>
                                 <button
                                     onClick={() => {
-                                        if (timerRef.current) clearInterval(timerRef.current);
-                                        setActiveQuiz(null);
+                                        if (showScorecard) {
+                                            if (timerRef.current) clearInterval(timerRef.current);
+                                            setActiveQuiz(null);
+                                        } else {
+                                            setShowDiscardConfirmModal(true);
+                                        }
                                     }}
                                     className="inline-flex items-center gap-2 text-sm font-semibold text-[#1E3A5F] hover:text-[#D97706] mb-3 transition-colors group"
                                 >
@@ -326,11 +450,7 @@ function PrelimsPracticeTestInner() {
                                             {formatTime(timeRemaining)}
                                         </div>
                                         <button
-                                            onClick={() => {
-                                                if (confirm('Are you sure you want to end the test and submit?')) {
-                                                    handleFinishTest();
-                                                }
-                                            }}
+                                            onClick={() => setShowSubmitConfirmModal(true)}
                                             className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-2xl shadow-sm transition-all"
                                         >
                                             Submit Test
@@ -753,7 +873,10 @@ function PrelimsPracticeTestInner() {
 
                                 {/* Question Navigation Grid */}
                                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6">
-                                    <div className="flex flex-wrap gap-1.5">
+                                    <div 
+                                        ref={scrollContainerRef}
+                                        className="flex flex-nowrap gap-1.5 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-200 scroll-smooth"
+                                    >
                                         {activeQuiz.questions.map((_, idx) => {
                                             const isActive = idx === currentQuestionIndex;
                                             const isAttempted = answers[idx] !== undefined;
@@ -766,7 +889,7 @@ function PrelimsPracticeTestInner() {
                                                 <button
                                                     key={idx}
                                                     onClick={() => setCurrentQuestionIndex(idx)}
-                                                    className={`w-9 h-9 rounded-lg text-xs font-bold flex items-center justify-center transition-all hover:scale-105 ${bg}`}
+                                                    className={`w-9 h-9 rounded-lg text-xs font-bold flex items-center justify-center transition-all hover:scale-105 flex-shrink-0 ${bg}`}
                                                 >
                                                     {idx + 1}
                                                 </button>
@@ -826,11 +949,7 @@ function PrelimsPracticeTestInner() {
                                         </button>
                                     ) : !learnMode ? (
                                         <button
-                                            onClick={() => {
-                                                if (confirm('Are you sure you want to end the test and submit?')) {
-                                                    handleFinishTest();
-                                                }
-                                            }}
+                                            onClick={() => setShowSubmitConfirmModal(true)}
                                             className="flex-1 max-w-[200px] flex items-center justify-center gap-2 px-6 py-4 bg-green-600 rounded-xl text-white font-bold text-sm shadow-md hover:bg-green-700 transition-all"
                                         >
                                             Submit
@@ -843,6 +962,7 @@ function PrelimsPracticeTestInner() {
                         )}
                     </div>
                 </main>
+                {renderPracticeModals()}
             </div>
         );
     }
@@ -1074,6 +1194,7 @@ function PrelimsPracticeTestInner() {
                     </div>
                 </div>
             )}
+            {renderPracticeModals()}
         </div>
     );
 }

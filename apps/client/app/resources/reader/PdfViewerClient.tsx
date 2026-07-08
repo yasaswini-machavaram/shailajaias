@@ -30,6 +30,30 @@ export default function PdfViewerClient() {
     const [scale, setScale] = useState(1.0);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
+    const [isDownloading, setIsDownloading] = useState(false);
+
+    const handleDownload = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        if (isDownloading) return;
+        setIsDownloading(true);
+        try {
+            const response = await fetch(pdfUrl);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `${decodeURIComponent(title)}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (err) {
+            console.error('Download error:', err);
+            window.open(pdfUrl, '_blank');
+        } finally {
+            setIsDownloading(false);
+        }
+    };
 
     const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
         setNumPages(numPages);
@@ -74,18 +98,20 @@ export default function PdfViewerClient() {
                         </div>
 
                         {/* Download */}
-                        <a
-                            href={pdfUrl}
-                            download={`${decodeURIComponent(title)}.pdf`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Download PDF"
-                            className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors"
+                        <button
+                            onClick={handleDownload}
+                            disabled={isDownloading}
+                            title={isDownloading ? "Downloading..." : "Download PDF"}
+                            className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-50"
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                        </a>
+                            {isDownloading ? (
+                                <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                            )}
+                        </button>
 
                         {/* Full screen open */}
                         <a

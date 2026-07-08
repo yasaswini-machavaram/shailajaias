@@ -24,6 +24,8 @@ export default function BurningIssuesAdminPage() {
     const { token } = useAuth();
     const [issues, setIssues] = useState<BurningIssue[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [deleteTarget, setDeleteTarget] = useState<{ id: string; topic: string } | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         fetchIssues();
@@ -47,20 +49,24 @@ export default function BurningIssuesAdminPage() {
         }
     };
 
-    const deleteIssue = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this burning issue and all its images?')) return;
+    const confirmDelete = async () => {
+        if (!deleteTarget) return;
+        setIsDeleting(true);
 
         try {
-            const response = await fetch(`${API_URL}/api/burning-issues/${id}`, {
+            const response = await fetch(`${API_URL}/api/burning-issues/${deleteTarget.id}`, {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` },
             });
 
             if (response.ok) {
-                setIssues(issues.filter((i) => i._id !== id));
+                setIssues(issues.filter((i) => i._id !== deleteTarget.id));
             }
         } catch (error) {
             console.error('Failed to delete burning issue:', error);
+        } finally {
+            setIsDeleting(false);
+            setDeleteTarget(null);
         }
     };
 
@@ -137,16 +143,51 @@ export default function BurningIssuesAdminPage() {
 
                                 {/* Actions */}
                                 <div className="flex gap-2 mt-4">
-                                    <button
-                                        onClick={() => deleteIssue(issue._id)}
-                                        className="flex-1 px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 text-sm text-center rounded-lg transition-colors"
-                                    >
-                                        Delete
-                                    </button>
+                                     <button
+                                         onClick={() => setDeleteTarget({ id: issue._id, topic: issue.topic })}
+                                         className="flex-1 px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 text-sm text-center rounded-lg transition-colors"
+                                     >
+                                         Delete
+                                     </button>
                                 </div>
                             </div>
                         </div>
                     ))}
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteTarget && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    style={{ background: 'rgba(0,0,0,0.5)' }}
+                    onClick={() => !isDeleting && setDeleteTarget(null)}
+                >
+                    <div
+                        className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Burning Issue</h3>
+                        <p className="text-gray-600 text-sm mb-1">Are you sure you want to delete:</p>
+                        <p className="text-gray-900 font-medium text-sm mb-4 break-words whitespace-pre-wrap">&quot;{deleteTarget.topic}&quot;</p>
+                        <p className="text-red-600 text-xs mb-5">This action cannot be undone and will delete all associated slide images.</p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setDeleteTarget(null)}
+                                disabled={isDeleting}
+                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                disabled={isDeleting}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                {isDeleting ? 'Deleting...' : 'Delete'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

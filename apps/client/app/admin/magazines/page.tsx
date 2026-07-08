@@ -62,6 +62,8 @@ export default function AdminMagazinesPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [editId, setEditId] = useState<string | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         if (token) fetchMagazines();
@@ -162,20 +164,24 @@ export default function AdminMagazinesPage() {
         }
     };
 
-    const deleteMagazine = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this magazine?')) return;
+    const confirmDelete = async () => {
+        if (!deleteTarget) return;
+        setIsDeleting(true);
 
         try {
-            const res = await fetch(`${API_URL}/api/magazines/${id}`, {
+            const res = await fetch(`${API_URL}/api/magazines/${deleteTarget.id}`, {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` },
             });
 
             if (res.ok) {
-                setMagazines(magazines.filter((m) => m._id !== id));
+                setMagazines(magazines.filter((m) => m._id !== deleteTarget.id));
             }
         } catch (error) {
             console.error('Failed to delete magazine:', error);
+        } finally {
+            setIsDeleting(false);
+            setDeleteTarget(null);
         }
     };
 
@@ -305,7 +311,7 @@ export default function AdminMagazinesPage() {
                                                 Edit
                                             </button>
                                             <button
-                                                onClick={() => deleteMagazine(mag._id)}
+                                                onClick={() => setDeleteTarget({ id: mag._id, title: mag.title })}
                                                 className="px-3 py-1.5 text-sm bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition-colors"
                                             >
                                                 Delete
@@ -461,6 +467,41 @@ export default function AdminMagazinesPage() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteTarget && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    style={{ background: 'rgba(0,0,0,0.5)' }}
+                    onClick={() => !isDeleting && setDeleteTarget(null)}
+                >
+                    <div
+                        className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Magazine</h3>
+                        <p className="text-gray-600 text-sm mb-1">Are you sure you want to delete:</p>
+                        <p className="text-gray-900 font-medium text-sm mb-4 break-words whitespace-pre-wrap">&quot;{deleteTarget.title}&quot;</p>
+                        <p className="text-red-600 text-xs mb-5">This action cannot be undone.</p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setDeleteTarget(null)}
+                                disabled={isDeleting}
+                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                disabled={isDeleting}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                {isDeleting ? 'Deleting...' : 'Delete'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

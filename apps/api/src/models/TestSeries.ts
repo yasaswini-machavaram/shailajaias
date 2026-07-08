@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
+import { getNextSequence } from './Counter.js';
 
 export interface ITestSeriesItem {
     title: string;
@@ -14,6 +15,7 @@ export interface ITestSeriesItem {
 }
 
 export interface ITestSeries extends Document {
+    uniqueId: string;
     title: string;
     description?: string;
     brochureUrl?: string;
@@ -71,6 +73,12 @@ const TestSeriesItemSchema = new Schema<ITestSeriesItem>(
 
 const TestSeriesSchema = new Schema<ITestSeries>(
     {
+        uniqueId: {
+            type: String,
+            unique: true,
+            sparse: true,
+            index: true,
+        },
         title: {
             type: String,
             required: [true, 'Test series title is required'],
@@ -109,6 +117,14 @@ const TestSeriesSchema = new Schema<ITestSeries>(
         timestamps: true,
     }
 );
+
+// Auto-generate uniqueId on creation
+TestSeriesSchema.pre('save', async function () {
+    if (this.isNew && !this.uniqueId) {
+        const seq = await getNextSequence('test_series');
+        this.uniqueId = `PTS-${seq}`;
+    }
+});
 
 // Simple index on title
 TestSeriesSchema.index({ title: 'text' });

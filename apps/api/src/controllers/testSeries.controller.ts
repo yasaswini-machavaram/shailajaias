@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { TestSeries, Quiz } from '../models/index.js';
+import { TestSeries, Quiz, getNextSequence } from '../models/index.js';
 import { parseQuizExcel } from '../services/excel.service.js';
 import fs from 'fs';
 import path from 'path';
@@ -8,6 +8,16 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const UPLOADS_DIR = path.resolve(__dirname, '../../uploads');
+
+// Helper: backfill uniqueId for existing docs missing it
+async function backfillUniqueId(series: any): Promise<void> {
+    if (!series.uniqueId) {
+        const seq = await getNextSequence('test_series');
+        series.uniqueId = `PTS-${seq}`;
+        await TestSeries.updateOne({ _id: series._id }, { $set: { uniqueId: series.uniqueId } });
+    }
+}
+
 
 // @desc    Get all test series groups
 // @route   GET /api/tests/series
@@ -24,6 +34,11 @@ export const getTestSeriesList = async (req: Request, res: Response): Promise<vo
         const series = await TestSeries.find(filter)
             .sort({ createdAt: -1 })
             .lean();
+
+        // Backfill uniqueId for any existing docs missing it
+        for (const s of series) {
+            await backfillUniqueId(s);
+        }
 
         res.json({ success: true, data: series });
     } catch (error) {
@@ -48,6 +63,9 @@ export const getTestSeriesById = async (req: Request, res: Response): Promise<vo
             res.status(404).json({ success: false, message: 'Test series not found' });
             return;
         }
+
+        // Backfill uniqueId if missing
+        await backfillUniqueId(series);
 
         res.json({ success: true, data: series });
     } catch (error) {

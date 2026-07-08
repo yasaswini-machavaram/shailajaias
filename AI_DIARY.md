@@ -481,8 +481,8 @@ Admin creates content
   - Bottom nav points to `/resources`
   - 9 API endpoints under `/api/resources/`
 - **Student Login/Registration (Dev Mock OTP)**: Phone number input and 6-digit OTP code flow bypasses real SMS networks by printing OTP keys directly to developer consoles. Supports automatic registration/login with JWT and session states. Swaps directly to WhatsApp OTPless in production.
-- **Student Profile details editing**: Interactive `/profile` details card lets users update Name and Email with inline alerts.
-- **UPSC Doubt Resolution System**: Comprehensive student-mentor doubt ticket portal. Allows students to submit subject-specific questions directly from prelims test-series review panels or general queries from `/profile` tab. Features interactive discussion threads, follow-up messages, and an admin workspace desk at `/admin/doubts` with quick reply and status updates.
+- **Student Profile details editing**: Interactive `/profile` details card lets users update Name and Email with inline alerts. Fully synced with admin portal changes in the background, including auto-logout on account suspension.
+- **UPSC Doubt Resolution System**: Comprehensive student-mentor doubt ticket portal. Allows students to submit subject-specific questions directly from prelims test-series review panels or general queries from `/profile` tab. Features interactive discussion threads, follow-up messages, and an admin workspace desk at `/admin/doubts` with quick reply and status updates, fully integrated with real-time automatic polling.
 - **UPSC Test Reports saving & tracking**: Persistent exam scorecard saving for logged-in students. Allows users to save prelims test results to a "Test Reports" dashboard under `/profile`. Includes detailed analysis metrics, subject-wise breakdown, and detailed review option (fetching questions and explanations dynamically without DB duplication). Supports midway authentication with temporary localStorage caching during redirects.
 
 ### 🚧 PARTIALLY BUILT / NEEDS WORK
@@ -524,6 +524,84 @@ Admin creates content
 1. **[FIXED] Prelims Test Series Multi-Group Navigation** — Client page at `/tests/prelims-test-series` used to auto-select `list[0]` on load. Now shows card-based landing page when multiple groups exist, auto-drills only when 1 group. "← Back to All Series" button in detail view.
 
 ## 📅 CHANGELOG (Update after every session)
+
+### Session: 2026-07-08 (9) — User Portal Date Pickers, Forced Downloads, and Breadcrumbs Fixes
+- **Who:** AI (Antigravity)
+- **What:**
+  1. **Programmatic Date Picker Trigger**: Refactored `DatePicker.tsx` and `daily-quiz/page.tsx` to use the programmatic `showPicker()` API on user button clicks, resolving the issue where the calendar popup would detach and render in the top-left corner of the page.
+  2. **Direct PDF System Downloads**: Replaced standard cross-origin `<a>` download links with client-side blob fetches (`URL.createObjectURL(blob)`) on the download button in both Magazines Reader (`magazines/reader/PdfViewerClient.tsx`) and Resources Reader (`resources/reader/PdfViewerClient.tsx`), forcing files to download directly to the system.
+  3. **Breadcrumbs Header Overlap Buffer**: Increased top padding in `Breadcrumbs.tsx` to `pt-[80px]` to provide a 16px safe margin below the fixed 64px header, preventing layout shifts or wrapping from hiding breadcrumbs.
+- **Files modified:**
+  - `apps/client/components/DatePicker.tsx`
+  - `apps/client/components/Breadcrumbs.tsx`
+  - `apps/client/app/daily-quiz/page.tsx`
+  - `apps/client/app/magazines/reader/PdfViewerClient.tsx`
+  - `apps/client/app/resources/reader/PdfViewerClient.tsx`
+
+### Session: 2026-07-08 (8) — PTS Unique ID, Scrollable Question Bar & Redesigned Test Overview
+- **Who:** AI (Antigravity)
+- **What:**
+  1. **Counter Model**: Created an atomic sequential counter model (`Counter.ts`) in the database to generate sequence IDs starting at `PTS-101`.
+  2. **Auto-Increment uniqueId**: Added `uniqueId` to the `TestSeries` schema with a `pre('save')` hook to automatically assign the generated PTS ID on new documents, and wrote backfill logic in `getTestSeriesList` and `getTestSeriesById` controllers to dynamically assign and save IDs to existing documents.
+  3. **Scorecard Ask Doubt Fix**: Fixed the "Ask Doubt" button in `tests/prelims-test-series/page.tsx` to always render and fallback gracefully to the active quiz details if the test item pointer is null.
+  4. **Traceable ID Linkage**: Threaded `testSeriesUniqueId` and `testItemTitle` into Doubt and TestReport models, saving these tracking fields in doubt submissions and report saves.
+  5. **UI Badging**: Displayed the `PTS-XXX` indicator badge on student test headers, scorecard results, profile saved reports list, profile doubts ticket cards, admin doubts manager workspace, and admin test series groups list cards.
+  6. **Horizontally Scrollable Question Bar**: Converted the question number navigation bar in student test panels to a single horizontal row (`flex-nowrap overflow-x-auto`) to prevent vertical wrapping.
+  7. **Auto-Scrolling Sync**: Implemented custom scroll synchronization using `scrollContainerRef`. When the active question index changes, the navigation bar smoothly scrolls to center the selected question button.
+  12. **Form Date Validation Fix**: Replaced HTML5 native `min`/`max` bounds on the Publication Date and Release Date inputs with comprehensive JS-side validations (including `isNaN` date formatting and range checks) across Articles (Create/Edit), Quizzes (Create/Edit/Import), and Prelims Practice Tests (Create/Import) to ensure validation failures trigger clear, red error alert banners at the top of the form instead of silent input focus.
+  13. **Global Responsiveness Layout**: Added a max-width container to the admin panel layout (`max-w-[1600px] mx-auto w-full px-4 md:px-8 py-6`) to prevent screen-stretch and layout degradation on wide display dimensions.
+  14. **KPI Cards Displays Fix**: Swapped the duplicate value count displays inside KPI dashboard cards with clean emoji tags matching the card topics.
+  15. **Custom styled warning modals**: Replaced browser-native `confirm(...)` dialogs with unified custom CSS overlays inside Articles, Burning Issues, Magazines, Quizzes, and Resources modules.
+  16. **Quiz tag selector Consistency**: Upgraded plain text "Subject Tags" inputs inside Quizzes (Create/Edit/Import) forms to use Articles-style selectable preset chips and custom chips selectors, color-coding custom tags in the main quizzes list table.
+  17. **Resources Module safety**: Add checks to category field values to prevent client-side page crashes when categories are undefined. Added input constraints to Category and Item forms.
+- **Files created:**
+  - `apps/api/src/models/Counter.ts`
+- **Files modified:**
+  - `apps/api/src/models/TestSeries.ts`
+  - `apps/api/src/models/Doubt.ts`
+  - `apps/api/src/models/TestReport.ts`
+  - `apps/api/src/models/index.ts`
+  - `apps/api/src/controllers/doubt.controller.ts`
+  - `apps/api/src/controllers/testReport.controller.ts`
+  - `apps/api/src/controllers/testSeries.controller.ts`
+  - `packages/types/index.ts`
+  - `apps/client/lib/api.ts`
+  - `apps/client/app/tests/prelims-test-series/page.tsx`
+  - `apps/client/app/tests/prelims-practice-test/page.tsx`
+  - `apps/client/app/admin/layout.tsx`
+  - .../admin/page.tsx`
+  - `apps/client/app/admin/page.tsx`
+  - `apps/client/app/admin/articles/page.tsx`
+  - `apps/client/app/admin/articles/new/page.tsx`
+  - `apps/client/app/admin/articles/[id]/page.tsx`
+  - `apps/client/app/admin/burning-issues/page.tsx`
+  - `apps/client/app/admin/magazines/page.tsx`
+  - `apps/client/app/admin/quizzes/page.tsx`
+  - `apps/client/app/admin/quizzes/new/page.tsx`
+  - `apps/client/app/admin/quizzes/[id]/page.tsx`
+  - `apps/client/app/admin/quizzes/import/page.tsx`
+  - `apps/client/app/admin/test-series/prelims-practice-test/page.tsx`
+  - `apps/client/app/admin/resources/page.tsx`
+  - `apps/client/app/profile/page.tsx`
+  - `apps/client/app/admin/doubts/page.tsx`
+  - `apps/client/app/admin/test-series/prelims-test-series/page.tsx`
+
+
+### Session: 2026-07-08 (7) — Admin Portal User Details and Doubts Sync
+- **Who:** AI (Antigravity)
+- **What:**
+  1. **Student Session Sync & Auto-Logout**: Enhanced `StudentAuthContext` to fetch `/api/auth/me` in the background (every 20 seconds). If the user account is suspended or the session is invalidated (status 403 or 401), the context automatically logs out the student and shows a suspension alert.
+  2. **Student Doubt Thread Polling**: Integrated a 10-second polling interval in the student profile doubts tab to silently query `/api/doubts` and `/api/doubts/:id` (for open queries), allowing threads to live-update automatically.
+  3. **Admin Doubt Desk Polling**: Added a 10-second silent polling mechanism inside `/admin/doubts` to sync the doubts queue and active mentor-student reply workspace without full page reloads.
+  4. **API Cache Prevention**: Configured cache-busting timestamp parameters (`_t=${Date.now()}`) and passed `'Cache-Control': 'no-cache'` headers for all GET requests in `/admin/users` and `/admin/doubts` to prevent stale responses.
+  5. **Robust Identity Checking**: Swapped comparisons and filters from strict `.id` or `._id` checks to a fallback `_id || id` pattern in mapping functions.
+- **Files modified:**
+  - `apps/client/contexts/StudentAuthContext.tsx`
+  - `apps/client/app/profile/page.tsx`
+  - `apps/client/app/admin/doubts/page.tsx`
+  - `apps/client/app/admin/users/page.tsx`
+- **Gotchas:**
+  - Standard client `fetch` calls in Next.js App Router client pages can retrieve cached results on reload. Adding no-store query parameters ensures the latest database updates are pulled immediately.
 
 ### Session: 2026-06-25 (6) — UPSC Prelims Test Reports saving & tracking
 - **Who:** AI (Antigravity)

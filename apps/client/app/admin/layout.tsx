@@ -168,7 +168,9 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
 
             {/* Main Content */}
             <main className="flex-1 overflow-auto">
-                {children}
+                <div className="max-w-[1600px] mx-auto w-full px-4 md:px-8 py-6">
+                    {children}
+                </div>
             </main>
         </div>
     );

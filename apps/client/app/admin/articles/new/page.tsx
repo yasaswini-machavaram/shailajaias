@@ -66,8 +66,13 @@ export default function NewArticlePage() {
         e.preventDefault();
         setError('');
 
-        // Validate date is within reasonable range
-        const dateYear = new Date(date).getFullYear();
+        // Validate date is valid and within reasonable range
+        const parsedDate = new Date(date);
+        if (isNaN(parsedDate.getTime())) {
+            setError('Please enter a valid publication date.');
+            return;
+        }
+        const dateYear = parsedDate.getFullYear();
         if (dateYear < 2020 || dateYear > 2030) {
             setError('Date must be between 2020 and 2030.');
             return;
@@ -223,8 +228,6 @@ export default function NewArticlePage() {
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
                             required
-                            min="2020-01-01"
-                            max="2030-12-31"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         />
                     </div>
@@ -238,7 +241,9 @@ export default function NewArticlePage() {
                             onChange={(e) => setSourceName(e.target.value)}
                             placeholder="e.g. India's rural models: The Hindu"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                            maxLength={120}
                         />
+                        <p className="text-xs text-gray-400 mt-1 text-right">{sourceName.length}/120</p>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -250,7 +255,9 @@ export default function NewArticlePage() {
                             onChange={(e) => setSourceUrl(e.target.value)}
                             placeholder="https://www.thehindu.com/..."
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                            maxLength={500}
                         />
+                        <p className="text-xs text-gray-400 mt-1 text-right">{sourceUrl.length}/500</p>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -262,7 +269,9 @@ export default function NewArticlePage() {
                             onChange={(e) => isMains ? setVisualSummaryUrl(e.target.value) : setImageUrl(e.target.value)}
                             placeholder="Paste image URL or Google Drive link"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                            maxLength={500}
                         />
+                        <p className="text-xs text-gray-400 mt-1 text-right">{(isMains ? visualSummaryUrl : imageUrl).length}/500</p>
                         {(isMains ? visualSummaryUrl : imageUrl) && (
                             <div className="mt-2 rounded-lg overflow-hidden border border-gray-200">
                                 <img
@@ -305,6 +314,7 @@ export default function NewArticlePage() {
                             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }}
                             placeholder="Add custom tag…"
                             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                            maxLength={30}
                         />
                         <button
                             type="button"

@@ -394,7 +394,7 @@ export default function ArticlesPage() {
                     >
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Article</h3>
                         <p className="text-gray-600 text-sm mb-1">Are you sure you want to delete:</p>
-                        <p className="text-gray-900 font-medium text-sm mb-4">&quot;{deleteTarget.title}&quot;</p>
+                        <p className="text-gray-900 font-medium text-sm mb-4 break-words whitespace-pre-wrap">&quot;{deleteTarget.title}&quot;</p>
                         <p className="text-red-600 text-xs mb-5">This action cannot be undone.</p>
                         <div className="flex gap-3 justify-end">
                             <button

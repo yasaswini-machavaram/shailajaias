@@ -58,11 +58,11 @@ export default function AdminDashboard() {
     }, [token]);
 
     const statCards = [
-        { label: 'Total Articles', value: stats.articles, color: 'from-blue-500 to-blue-600', href: '/admin/articles' },
-        { label: 'Burning Issues', value: stats.burningIssues, color: 'from-orange-500 to-orange-600', href: '/admin/burning-issues' },
-        { label: 'Magazines', value: stats.magazines, color: 'from-purple-500 to-purple-600', href: '/admin/magazines' },
-        { label: 'Quizzes', value: stats.quizzes, color: 'from-green-500 to-green-600', href: '/admin/quizzes' },
-        { label: 'Courses', value: stats.courses, color: 'from-amber-500 to-amber-600', href: '/admin/courses' },
+        { label: 'Total Articles', value: stats.articles, color: 'from-blue-500 to-blue-600', href: '/admin/articles', icon: '📝' },
+        { label: 'Burning Issues', value: stats.burningIssues, color: 'from-orange-500 to-orange-600', href: '/admin/burning-issues', icon: '🔥' },
+        { label: 'Magazines', value: stats.magazines, color: 'from-purple-500 to-purple-600', href: '/admin/magazines', icon: '📚' },
+        { label: 'Quizzes', value: stats.quizzes, color: 'from-green-500 to-green-600', href: '/admin/quizzes', icon: '❓' },
+        { label: 'Courses', value: stats.courses, color: 'from-amber-500 to-amber-600', href: '/admin/courses', icon: '🎓' },
     ];
 
     const quickActions = [
@@ -90,7 +90,7 @@ export default function AdminDashboard() {
                         className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
                     >
                         <div className={`inline-flex items-center justify-center w-12 h-12 rounded-lg bg-gradient-to-r ${card.color} mb-4`}>
-                            <span className="text-2xl text-white font-bold">{isLoading ? '...' : card.value}</span>
+                            <span className="text-2xl text-white font-bold">{card.icon}</span>
                         </div>
                         <h3 className="text-gray-500 text-sm font-medium">{card.label}</h3>
                         <p className="text-2xl font-bold text-gray-900 mt-1">

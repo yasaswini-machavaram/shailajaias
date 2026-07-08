@@ -19,6 +19,7 @@ interface TestItemForm {
 
 interface TestSeriesForm {
     _id?: string;
+    uniqueId?: string;
     title: string;
     description: string;
     brochureUrl: string;
@@ -275,6 +276,7 @@ export default function AdminPrelimsTestSeriesPage() {
     const handleEditClick = (series: any) => {
         setForm({
             _id: series._id,
+            uniqueId: series.uniqueId,
             title: series.title,
             description: series.description || '',
             brochureUrl: series.brochureUrl || '',
@@ -415,6 +417,11 @@ export default function AdminPrelimsTestSeriesPage() {
                                             }`}>
                                                 {series.isPublished ? 'Published' : 'Draft'}
                                             </span>
+                                            {series.uniqueId && (
+                                                <span className="px-2.5 py-0.5 bg-indigo-100 text-indigo-800 rounded-md text-[10px] font-bold uppercase tracking-wider border border-indigo-200">
+                                                    {series.uniqueId}
+                                                </span>
+                                            )}
                                             <span className="text-[10px] text-slate-400 font-bold">
                                                 {series.tests?.length || 0} Test Papers
                                             </span>
@@ -470,7 +477,7 @@ export default function AdminPrelimsTestSeriesPage() {
                                 ← Back to list
                             </button>
                             <h2 className="text-3xl font-bold text-slate-800 font-headline">
-                                {form._id ? 'Edit Test Series Group' : 'Create Test Series Group'}
+                                {form._id ? `Edit Test Series Group (${form.uniqueId || 'PTS-XXX'})` : 'Create Test Series Group'}
                             </h2>
                         </div>
                     </div>

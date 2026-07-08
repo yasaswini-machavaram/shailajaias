@@ -10,6 +10,8 @@ export interface IDoubtMessage {
 export interface IDoubt extends Document {
     student: Types.ObjectId;
     testSeries?: Types.ObjectId;
+    testSeriesUniqueId?: string;
+    testItemTitle?: string;
     quiz?: Types.ObjectId;
     questionIndex?: number;
     questionText?: string;
@@ -58,6 +60,17 @@ const DoubtSchema = new Schema<IDoubt>(
             type: Schema.Types.ObjectId,
             ref: 'TestSeries',
             required: false,
+        },
+        testSeriesUniqueId: {
+            type: String,
+            required: false,
+            trim: true,
+            index: true,
+        },
+        testItemTitle: {
+            type: String,
+            required: false,
+            trim: true,
         },
         quiz: {
             type: Schema.Types.ObjectId,

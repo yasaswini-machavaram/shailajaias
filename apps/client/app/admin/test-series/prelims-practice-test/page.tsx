@@ -145,7 +145,12 @@ export default function PrelimsPracticeTestPage() {
         setErrorMessage('');
         setSuccessMessage('');
 
-        const dateYear = new Date(createDate).getFullYear();
+        const parsedCreateDate = new Date(createDate);
+        if (isNaN(parsedCreateDate.getTime())) {
+            setErrorMessage('Please enter a valid date.');
+            return;
+        }
+        const dateYear = parsedCreateDate.getFullYear();
         if (dateYear < 2020 || dateYear > 2030) {
             setErrorMessage('Date must be between 2020 and 2030.');
             return;
@@ -222,6 +227,17 @@ export default function PrelimsPracticeTestPage() {
 
         if (!excelFile) {
             setErrorMessage('Please select an Excel file');
+            return;
+        }
+
+        const parsedImportDate = new Date(importDate);
+        if (isNaN(parsedImportDate.getTime())) {
+            setErrorMessage('Please enter a valid date.');
+            return;
+        }
+        const dateYear = parsedImportDate.getFullYear();
+        if (dateYear < 2020 || dateYear > 2030) {
+            setErrorMessage('Date must be between 2020 and 2030.');
             return;
         }
 
@@ -469,8 +485,6 @@ export default function PrelimsPracticeTestPage() {
                                     value={createDate}
                                     onChange={(e) => setCreateDate(e.target.value)}
                                     required
-                                    min="2020-01-01"
-                                    max="2030-12-31"
                                     className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 focus:border-transparent bg-white shadow-2xs font-semibold text-slate-800"
                                 />
                             </div>
@@ -694,8 +708,6 @@ export default function PrelimsPracticeTestPage() {
                                         value={importDate}
                                         onChange={(e) => setImportDate(e.target.value)}
                                         required
-                                        min="2020-01-01"
-                                        max="2030-12-31"
                                         className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 focus:border-transparent font-semibold text-slate-800"
                                     />
                                 </div>

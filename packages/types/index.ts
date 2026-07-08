@@ -147,6 +147,8 @@ export interface IDoubt {
   _id?: string;
   student: string | { id: string; name: string; phone?: string; email?: string };
   testSeries?: string;
+  testSeriesUniqueId?: string;
+  testItemTitle?: string;
   quiz?: string;
   questionIndex?: number;
   questionText?: string;
@@ -165,6 +167,8 @@ export interface ITestReport {
   student: string;
   quiz: string | { _id: string; title: string; questions?: any[] };
   testSeries?: string | { _id: string; title: string };
+  testSeriesUniqueId?: string;
+  testItemTitle?: string;
   scorecard: {
     totalScore: number;
     maxMarks: number;

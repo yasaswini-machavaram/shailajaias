@@ -8,7 +8,7 @@ interface DatePickerProps {
 }
 
 export default function DatePicker({ selectedDate, onDateChange }: DatePickerProps) {
-    const ref = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     const formatDate = (date: Date) => {
         return date.toLocaleDateString('en-IN', {
@@ -40,12 +40,23 @@ export default function DatePicker({ selectedDate, onDateChange }: DatePickerPro
         }
     };
 
+    const triggerPicker = () => {
+        if (inputRef.current) {
+            try {
+                inputRef.current.showPicker();
+            } catch (err) {
+                inputRef.current.click();
+            }
+        }
+    };
+
     const isToday = selectedDate.toDateString() === new Date().toDateString();
 
     return (
-        <div ref={ref} className="relative inline-flex items-center gap-2">
+        <div className="relative inline-flex items-center gap-2">
             {/* Prev Button */}
             <button
+                type="button"
                 onClick={goToPrevDay}
                 className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
                 aria-label="Previous day"
@@ -53,27 +64,41 @@ export default function DatePicker({ selectedDate, onDateChange }: DatePickerPro
                 ‹
             </button>
 
-            {/* Date Display — native input overlays the styled button */}
+            {/* Date Display Button */}
             <div className="relative">
-                <div className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg pointer-events-none">
-                    <span className="font-medium">{formatDate(selectedDate)}</span>
+                <button
+                    type="button"
+                    onClick={triggerPicker}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium text-gray-700 transition-all"
+                >
+                    <span>{formatDate(selectedDate)}</span>
                     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                </div>
-                {/* Invisible native date input on top — browser positions calendar popup correctly */}
+                </button>
+                {/* Native input positioned exactly under/over the button but visually hidden */}
                 <input
+                    ref={inputRef}
                     type="date"
                     value={selectedDate.toISOString().split('T')[0]}
                     max={new Date().toISOString().split('T')[0]}
                     onChange={handleInputChange}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        opacity: 0,
+                        pointerEvents: 'none'
+                    }}
                     aria-label="Select date"
                 />
             </div>
 
             {/* Next Button */}
             <button
+                type="button"
                 onClick={goToNextDay}
                 disabled={isToday}
                 className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${isToday

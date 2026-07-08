@@ -23,6 +23,8 @@ interface IDoubt {
         _id: string;
         title: string;
     };
+    testSeriesUniqueId?: string;
+    testItemTitle?: string;
     quiz?: {
         _id: string;
         title: string;
@@ -289,9 +291,16 @@ export default function AdminDoubtsPage() {
                                         }`}
                                     >
                                         <div className="flex justify-between items-center">
-                                            <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold rounded text-[10px] uppercase">
-                                                {doubt.subject}
-                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold rounded text-[10px] uppercase">
+                                                    {doubt.subject}
+                                                </span>
+                                                {doubt.testSeriesUniqueId && (
+                                                    <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold rounded text-[10px] uppercase border border-indigo-100">
+                                                        {doubt.testSeriesUniqueId}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <span className={`px-2 py-0.5 border rounded-full text-[9px] font-bold uppercase ${badgeColor}`}>
                                                 {doubt.status}
                                             </span>
@@ -304,6 +313,7 @@ export default function AdminDoubtsPage() {
 
                                         <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold mt-1">
                                             <span>👤 {doubt.student?.name || 'Student'}</span>
+                                            {doubt.testItemTitle && <span className="max-w-[120px] truncate text-indigo-600">🎯 {doubt.testItemTitle}</span>}
                                             <span>📅 {formatDisplayDate(doubt.createdAt)}</span>
                                         </div>
                                     </button>
@@ -355,6 +365,11 @@ export default function AdminDoubtsPage() {
                                         <span className="px-2 py-0.5 bg-slate-200 text-slate-700 font-bold rounded text-[10px] uppercase">
                                             {selectedDoubt.subject}
                                         </span>
+                                        {selectedDoubt.testSeriesUniqueId && (
+                                            <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold rounded text-[10px] uppercase border border-indigo-100">
+                                                {selectedDoubt.testSeriesUniqueId}
+                                            </span>
+                                        )}
                                         <span className={`px-2.5 py-0.5 border rounded-full text-[9px] font-bold uppercase ${
                                             selectedDoubt.status === 'resolved'
                                                 ? 'bg-green-50 text-green-700 border-green-200'
@@ -402,10 +417,12 @@ export default function AdminDoubtsPage() {
                             {/* Thread area */}
                             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
                                 {/* Context Info */}
-                                {(selectedDoubt.testSeries || selectedDoubt.quiz) && (
+                                {(selectedDoubt.testSeries || selectedDoubt.quiz || selectedDoubt.testSeriesUniqueId || selectedDoubt.testItemTitle) && (
                                     <div className="bg-white rounded-lg p-3 border border-slate-200 text-xs text-slate-600">
                                         <p className="font-bold text-slate-800 mb-1">Attached Context:</p>
-                                        {selectedDoubt.testSeries && <p><strong>Test Series:</strong> {selectedDoubt.testSeries.title}</p>}
+                                        {selectedDoubt.testSeriesUniqueId && <p><strong>Series ID:</strong> <span className="bg-indigo-50 text-indigo-700 font-bold px-1 py-0.5 rounded border border-indigo-100 uppercase tracking-wide">{selectedDoubt.testSeriesUniqueId}</span></p>}
+                                        {selectedDoubt.testSeries && <p><strong>Test Series Group:</strong> {selectedDoubt.testSeries.title}</p>}
+                                        {selectedDoubt.testItemTitle && <p><strong>Test Paper:</strong> {selectedDoubt.testItemTitle}</p>}
                                         {selectedDoubt.quiz && <p><strong>Quiz:</strong> {selectedDoubt.quiz.title}</p>}
                                         {selectedDoubt.questionIndex !== undefined && (
                                             <p className="mt-1">

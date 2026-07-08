@@ -80,6 +80,7 @@ export interface TestSeriesItem {
 
 export interface TestSeries {
     _id: string;
+    uniqueId?: string;
     title: string;
     description?: string;
     brochureUrl?: string;
