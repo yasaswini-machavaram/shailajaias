@@ -10,6 +10,7 @@ export interface IUser extends Document {
     role: 'admin' | 'student';
     authProvider: 'local' | 'whatsapp';
     status: 'active' | 'suspended';
+    tokenVersion: number;
     enrolledCourses: mongoose.Types.ObjectId[];
     enrolledTestSeries: mongoose.Types.ObjectId[];
     createdAt: Date;
@@ -56,6 +57,10 @@ const UserSchema = new Schema<IUser>(
             type: String,
             enum: ['active', 'suspended'],
             default: 'active',
+        },
+        tokenVersion: {
+            type: Number,
+            default: 0,
         },
         enrolledCourses: [
             {

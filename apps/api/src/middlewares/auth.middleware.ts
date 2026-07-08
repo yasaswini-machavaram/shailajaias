@@ -1,9 +1,13 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/index.js';
+import { User, Session } from '../models/index.js';
 import type { IUser } from '../models/index.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
+
+// Debounce session lastActive updates to once per 60 seconds per device
+const sessionUpdateCache = new Map<string, number>();
+const SESSION_UPDATE_INTERVAL = 60_000; // 1 minute
 
 export interface AuthRequest extends Request {
     user?: IUser;
@@ -13,10 +17,12 @@ export interface JwtPayload {
     id: string;
     email?: string;
     role: 'admin' | 'student';
+    tokenVersion?: number;
+    deviceId?: string;
 }
 
 /**
- * Generate JWT token
+ * Generate JWT token (admin portal — no session tracking)
  */
 export const generateToken = (user: IUser): string => {
     const payload: JwtPayload = {
@@ -30,6 +36,7 @@ export const generateToken = (user: IUser): string => {
 
 /**
  * Verify JWT token middleware
+ * Also validates tokenVersion and touches session lastActive (debounced)
  */
 export const protect = async (
     req: AuthRequest,
@@ -59,6 +66,28 @@ export const protect = async (
         if (user.status === 'suspended') {
             res.status(403).json({ error: 'Your account has been suspended. Please contact support.' });
             return;
+        }
+
+        // Validate tokenVersion (if present in token — student tokens have it)
+        if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== user.tokenVersion) {
+            res.status(401).json({ error: 'Session expired. You have been logged out from all devices. Please log in again.' });
+            return;
+        }
+
+        // Touch session lastActive (debounced to once per minute per device)
+        if (decoded.deviceId) {
+            const cacheKey = `${decoded.id}:${decoded.deviceId}`;
+            const lastUpdate = sessionUpdateCache.get(cacheKey) || 0;
+            const now = Date.now();
+
+            if (now - lastUpdate > SESSION_UPDATE_INTERVAL) {
+                sessionUpdateCache.set(cacheKey, now);
+                // Fire and forget — don't block the request
+                Session.updateOne(
+                    { userId: decoded.id, deviceId: decoded.deviceId },
+                    { lastActive: new Date() }
+                ).exec().catch(() => { /* silently ignore */ });
+            }
         }
 
         req.user = user;

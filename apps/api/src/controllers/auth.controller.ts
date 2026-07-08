@@ -1,9 +1,10 @@
 import type { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/index.js';
+import { User, Session } from '../models/index.js';
 
 // Use same secret as middleware
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
+const MAX_DEVICES = 3;
 
 // OTPless credentials
 const OTPLESS_CLIENT_ID = process.env.OTPLESS_CLIENT_ID || '';
@@ -12,11 +13,76 @@ const OTPLESS_CLIENT_SECRET = process.env.OTPLESS_CLIENT_SECRET || '';
 // In-memory OTP store for dev mode
 const otpStore = new Map<string, { otp: string; expiresAt: number }>();
 
-// Generate JWT token
-const generateToken = (id: string): string => {
-    return jwt.sign({ id }, JWT_SECRET, {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Generate JWT token with tokenVersion and deviceId embedded */
+const generateToken = (id: string, tokenVersion: number, deviceId: string): string => {
+    return jwt.sign({ id, tokenVersion, deviceId }, JWT_SECRET, {
         expiresIn: '30d',
     });
+};
+
+/** Parse User-Agent string into a human-readable device name */
+const parseDeviceName = (ua: string): string => {
+    if (!ua) return 'Unknown Device';
+
+    let browser = 'Browser';
+    let os = 'Device';
+
+    // Detect browser
+    if (ua.includes('Edg/') || ua.includes('Edge')) browser = 'Edge';
+    else if (ua.includes('OPR') || ua.includes('Opera')) browser = 'Opera';
+    else if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
+    else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
+    else if (ua.includes('Firefox')) browser = 'Firefox';
+
+    // Detect OS
+    if (ua.includes('iPhone')) os = 'iPhone';
+    else if (ua.includes('iPad')) os = 'iPad';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('Mac OS X') || ua.includes('Macintosh')) os = 'macOS';
+    else if (ua.includes('Windows')) os = 'Windows';
+    else if (ua.includes('Linux')) os = 'Linux';
+
+    return `${browser} on ${os}`;
+};
+
+/** Create or update a session and enforce the device limit */
+const upsertSession = async (
+    userId: string,
+    deviceId: string,
+    userAgent: string
+): Promise<{ allowed: boolean; error?: string }> => {
+    // Check if this device already has a session
+    const existingSession = await Session.findOne({ userId, deviceId });
+
+    if (existingSession) {
+        // Same device logging in again — just update
+        existingSession.lastActive = new Date();
+        existingSession.deviceName = parseDeviceName(userAgent);
+        await existingSession.save();
+        return { allowed: true };
+    }
+
+    // New device — check device count
+    const sessionCount = await Session.countDocuments({ userId });
+
+    if (sessionCount >= MAX_DEVICES) {
+        return {
+            allowed: false,
+            error: `You are already logged in on ${MAX_DEVICES} devices. Please log out from one device first, or use "Logout All Devices" from your profile.`,
+        };
+    }
+
+    // Create new session
+    await Session.create({
+        userId,
+        deviceId,
+        deviceName: parseDeviceName(userAgent),
+        lastActive: new Date(),
+    });
+
+    return { allowed: true };
 };
 
 /**
@@ -57,6 +123,8 @@ const verifyOtplessToken = async (token: string): Promise<{
     }
 };
 
+// ─── Endpoints ────────────────────────────────────────────────────────────────
+
 // @desc    Register a new user
 // @route   POST /api/auth/register
 // @access  Public
@@ -86,7 +154,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
-                token: generateToken(user._id.toString()),
+                token: generateToken(user._id.toString(), user.tokenVersion, 'admin-portal'),
             },
         });
     } catch (error) {
@@ -129,7 +197,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
-                token: generateToken(user._id.toString()),
+                token: generateToken(user._id.toString(), user.tokenVersion, 'admin-portal'),
             },
         });
     } catch (error) {
@@ -143,12 +211,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 // @access  Public
 export const whatsappLogin = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { token } = req.body;
+        const { token, deviceId } = req.body;
 
         if (!token) {
             res.status(400).json({ success: false, message: 'OTPless token is required' });
             return;
         }
+
+        const clientDeviceId = deviceId || 'unknown-device';
+        const userAgent = req.headers['user-agent'] || '';
 
         // Verify OTPless token
         const verification = await verifyOtplessToken(token);
@@ -164,7 +235,13 @@ export const whatsappLogin = async (req: Request, res: Response): Promise<void> 
         let user = await User.findOne({ phone });
 
         if (user) {
-            // Returning student — generate JWT and return
+            // Enforce device limit
+            const sessionResult = await upsertSession(user._id.toString(), clientDeviceId, userAgent);
+            if (!sessionResult.allowed) {
+                res.status(409).json({ success: false, message: sessionResult.error });
+                return;
+            }
+
             res.json({
                 success: true,
                 data: {
@@ -172,7 +249,7 @@ export const whatsappLogin = async (req: Request, res: Response): Promise<void> 
                     name: user.name,
                     phone: user.phone,
                     role: user.role,
-                    token: generateToken(user._id.toString()),
+                    token: generateToken(user._id.toString(), user.tokenVersion, clientDeviceId),
                     isNewUser: false,
                 },
             });
@@ -185,6 +262,14 @@ export const whatsappLogin = async (req: Request, res: Response): Promise<void> 
                 authProvider: 'whatsapp',
             });
 
+            // Create first session (no limit check needed for new users)
+            await Session.create({
+                userId: user._id,
+                deviceId: clientDeviceId,
+                deviceName: parseDeviceName(userAgent),
+                lastActive: new Date(),
+            });
+
             res.status(201).json({
                 success: true,
                 data: {
@@ -192,7 +277,7 @@ export const whatsappLogin = async (req: Request, res: Response): Promise<void> 
                     name: user.name,
                     phone: user.phone,
                     role: user.role,
-                    token: generateToken(user._id.toString()),
+                    token: generateToken(user._id.toString(), user.tokenVersion, clientDeviceId),
                     isNewUser: true,
                 },
             });
@@ -267,12 +352,15 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
 // @access  Public
 export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { phone, otp } = req.body;
+        const { phone, otp, deviceId } = req.body;
 
         if (!phone || !otp) {
             res.status(400).json({ success: false, message: 'Phone number and OTP are required' });
             return;
         }
+
+        const clientDeviceId = deviceId || 'unknown-device';
+        const userAgent = req.headers['user-agent'] || '';
 
         // Retrieve OTP
         const record = otpStore.get(phone);
@@ -308,6 +396,13 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
                 return;
             }
 
+            // Enforce device limit
+            const sessionResult = await upsertSession(user._id.toString(), clientDeviceId, userAgent);
+            if (!sessionResult.allowed) {
+                res.status(409).json({ success: false, message: sessionResult.error });
+                return;
+            }
+
             res.json({
                 success: true,
                 data: {
@@ -317,7 +412,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
                     email: user.email,
                     role: user.role,
                     status: user.status,
-                    token: generateToken(user._id.toString()),
+                    token: generateToken(user._id.toString(), user.tokenVersion, clientDeviceId),
                     isNewUser: false,
                 },
             });
@@ -331,6 +426,14 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
                 status: 'active',
             });
 
+            // Create first session
+            await Session.create({
+                userId: user._id,
+                deviceId: clientDeviceId,
+                deviceName: parseDeviceName(userAgent),
+                lastActive: new Date(),
+            });
+
             res.status(201).json({
                 success: true,
                 data: {
@@ -339,7 +442,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
                     phone: user.phone,
                     role: user.role,
                     status: user.status,
-                    token: generateToken(user._id.toString()),
+                    token: generateToken(user._id.toString(), user.tokenVersion, clientDeviceId),
                     isNewUser: true,
                 },
             });
@@ -407,3 +510,156 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
     }
 };
 
+// ─── New Session Management Endpoints ─────────────────────────────────────────
+
+// @desc    Refresh token (silent refresh)
+// @route   POST /api/auth/refresh-token
+// @access  Private
+export const refreshToken = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const authUser = (req as Request & { user?: { _id: string } }).user;
+        if (!authUser) {
+            res.status(401).json({ success: false, message: 'Not authorized' });
+            return;
+        }
+
+        // Extract deviceId from the current JWT
+        const token = req.headers.authorization?.split(' ')[1];
+        if (!token) {
+            res.status(401).json({ success: false, message: 'No token' });
+            return;
+        }
+
+        const decoded = jwt.decode(token) as { id: string; tokenVersion?: number; deviceId?: string } | null;
+        const deviceId = decoded?.deviceId || req.body.deviceId || 'unknown-device';
+
+        // Verify user and session
+        const user = await User.findById(authUser._id);
+        if (!user) {
+            res.status(401).json({ success: false, message: 'User not found' });
+            return;
+        }
+
+        // Verify session still exists
+        const session = await Session.findOne({ userId: user._id, deviceId });
+        if (!session) {
+            res.status(401).json({ success: false, message: 'Session expired. Please log in again.' });
+            return;
+        }
+
+        // Update session activity
+        session.lastActive = new Date();
+        await session.save();
+
+        // Issue new token
+        const newToken = generateToken(user._id.toString(), user.tokenVersion, deviceId);
+
+        res.json({
+            success: true,
+            token: newToken,
+        });
+    } catch (error) {
+        console.error('Refresh token error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @desc    Logout from all devices
+// @route   POST /api/auth/logout-all
+// @access  Private
+export const logoutAll = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const authUser = (req as Request & { user?: { _id: string } }).user;
+        if (!authUser) {
+            res.status(401).json({ success: false, message: 'Not authorized' });
+            return;
+        }
+
+        // Increment tokenVersion — invalidates ALL existing JWTs
+        await User.findByIdAndUpdate(authUser._id, { $inc: { tokenVersion: 1 } });
+
+        // Delete all session records
+        const result = await Session.deleteMany({ userId: authUser._id });
+
+        res.json({
+            success: true,
+            message: `Logged out from all devices. ${result.deletedCount} session(s) removed.`,
+        });
+    } catch (error) {
+        console.error('Logout all error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @desc    Get active device sessions
+// @route   GET /api/auth/devices
+// @access  Private
+export const getDevices = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const authUser = (req as Request & { user?: { _id: string } }).user;
+        if (!authUser) {
+            res.status(401).json({ success: false, message: 'Not authorized' });
+            return;
+        }
+
+        // Get current device ID from JWT
+        const token = req.headers.authorization?.split(' ')[1];
+        const decoded = token ? (jwt.decode(token) as { deviceId?: string } | null) : null;
+        const currentDeviceId = decoded?.deviceId || '';
+
+        const sessions = await Session.find({ userId: authUser._id })
+            .sort({ lastActive: -1 })
+            .lean();
+
+        const devices = sessions.map((s) => ({
+            deviceId: s.deviceId,
+            deviceName: s.deviceName,
+            lastActive: s.lastActive,
+            isCurrent: s.deviceId === currentDeviceId,
+        }));
+
+        res.json({ success: true, data: devices });
+    } catch (error) {
+        console.error('Get devices error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @desc    Remove a specific device session
+// @route   DELETE /api/auth/devices/:deviceId
+// @access  Private
+export const removeDevice = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const authUser = (req as Request & { user?: { _id: string } }).user;
+        if (!authUser) {
+            res.status(401).json({ success: false, message: 'Not authorized' });
+            return;
+        }
+
+        const { deviceId } = req.params;
+
+        const result = await Session.findOneAndDelete({
+            userId: authUser._id,
+            deviceId,
+        });
+
+        if (!result) {
+            res.status(404).json({ success: false, message: 'Device session not found' });
+            return;
+        }
+
+        // Check if user removed their own current device
+        const token = req.headers.authorization?.split(' ')[1];
+        const decoded = token ? (jwt.decode(token) as { deviceId?: string } | null) : null;
+        const isSelf = decoded?.deviceId === deviceId;
+
+        res.json({
+            success: true,
+            message: 'Device removed successfully.',
+            isSelf,
+        });
+    } catch (error) {
+        console.error('Remove device error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};

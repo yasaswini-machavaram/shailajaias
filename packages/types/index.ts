@@ -7,6 +7,7 @@ export interface IUser {
   role: 'admin' | 'student';
   authProvider?: 'local' | 'whatsapp';
   status?: 'active' | 'suspended';
+  tokenVersion?: number;
   enrolledCourses?: string[];
   enrolledTestSeries?: string[];
   createdAt: string;

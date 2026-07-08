@@ -10,3 +10,4 @@ export { TestSeries, type ITestSeries, type ITestSeriesItem } from './TestSeries
 export { Doubt, type IDoubt, type IDoubtMessage } from './Doubt.js';
 export { TestReport, type ITestReport } from './TestReport.js';
 export { Counter, type ICounter, getNextSequence } from './Counter.js';
+export { Session, type ISession } from './Session.js';

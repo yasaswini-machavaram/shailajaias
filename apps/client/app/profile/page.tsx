@@ -7,7 +7,7 @@ import { API_URL, formatDisplayDate } from '@/lib/api';
 import type { IDoubt } from '@repo/types';
 
 export default function ProfilePage() {
-    const { user, isLoggedIn, isLoading, updateProfile, logout } = useStudentAuth();
+    const { user, isLoggedIn, isLoading, updateProfile, logout, logoutAllDevices, getActiveDevices, removeDevice } = useStudentAuth();
     
     const [isEditing, setIsEditing] = useState(false);
     const [name, setName] = useState('');
@@ -42,6 +42,65 @@ export default function ProfilePage() {
     const [newDoubtDescription, setNewDoubtDescription] = useState('');
     const [newDoubtError, setNewDoubtError] = useState('');
     const [newDoubtSubmitting, setNewDoubtSubmitting] = useState(false);
+
+    // Active devices states
+    interface DeviceInfo { deviceId: string; deviceName: string; lastActive: string; isCurrent: boolean; }
+    const [devices, setDevices] = useState<DeviceInfo[]>([]);
+    const [devicesLoading, setDevicesLoading] = useState(false);
+    const [showLogoutAllConfirm, setShowLogoutAllConfirm] = useState(false);
+    const [logoutAllLoading, setLogoutAllLoading] = useState(false);
+    const [removingDeviceId, setRemovingDeviceId] = useState<string | null>(null);
+
+    // Fetch active devices
+    const fetchDevices = async () => {
+        setDevicesLoading(true);
+        const result = await getActiveDevices();
+        if (result.success && result.data) {
+            setDevices(result.data);
+        }
+        setDevicesLoading(false);
+    };
+
+    // Load devices when on profile tab
+    useEffect(() => {
+        if (activeTab === 'profile' && isLoggedIn) {
+            fetchDevices();
+        }
+    }, [activeTab, isLoggedIn]);
+
+    const handleRemoveDevice = async (deviceId: string) => {
+        setRemovingDeviceId(deviceId);
+        const result = await removeDevice(deviceId);
+        if (result.success) {
+            if (result.isSelf) return; // Context will handle logout
+            setDevices(prev => prev.filter(d => d.deviceId !== deviceId));
+        }
+        setRemovingDeviceId(null);
+    };
+
+    const handleLogoutAll = async () => {
+        setLogoutAllLoading(true);
+        await logoutAllDevices();
+        // Context handles full logout + state clear
+    };
+
+    const formatRelativeTime = (dateStr: string) => {
+        const diff = Date.now() - new Date(dateStr).getTime();
+        const minutes = Math.floor(diff / 60000);
+        if (minutes < 1) return 'Just now';
+        if (minutes < 60) return `${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        return `${days}d ago`;
+    };
+
+    const getDeviceIcon = (name: string) => {
+        const lower = name.toLowerCase();
+        if (lower.includes('iphone') || lower.includes('android') || lower.includes('mobile')) return '📱';
+        if (lower.includes('ipad') || lower.includes('tablet')) return '📱';
+        return '🖥️';
+    };
 
     // Direct routing support for tab redirect from exam popups
     useEffect(() => {
@@ -1244,6 +1303,106 @@ export default function ProfilePage() {
                             Open
                         </span>
                     </button>
+                </div>
+
+                {/* Active Devices Card */}
+                <div className="bg-white rounded-2xl p-5 mb-4 shadow-md border border-gray-100">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-sm font-semibold text-[#1E3A5F] flex items-center gap-2">
+                            <span>📡</span> Active Devices
+                            <span className="text-xs font-bold text-white bg-[#1E3A5F] rounded-full w-5 h-5 flex items-center justify-center">
+                                {devices.length}
+                            </span>
+                        </h3>
+                        <span className="text-[10px] font-medium text-[#94A3B8]">Max 3 devices</span>
+                    </div>
+
+                    {devicesLoading ? (
+                        <div className="flex justify-center py-6">
+                            <div className="animate-spin rounded-full h-6 w-6 border-2 border-[#1E3A5F] border-t-transparent" />
+                        </div>
+                    ) : devices.length === 0 ? (
+                        <p className="text-sm text-[#94A3B8] text-center py-4">No active sessions found</p>
+                    ) : (
+                        <div className="space-y-2.5">
+                            {devices.map((device) => (
+                                <div
+                                    key={device.deviceId}
+                                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                                        device.isCurrent
+                                            ? 'border-emerald-200 bg-emerald-50/50'
+                                            : 'border-gray-100 bg-gray-50/50'
+                                    }`}
+                                >
+                                    <span className="text-xl">{getDeviceIcon(device.deviceName)}</span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-[#1E3A5F] truncate">
+                                            {device.deviceName}
+                                        </p>
+                                        <p className="text-xs text-[#94A3B8]">
+                                            {device.isCurrent ? (
+                                                <span className="text-emerald-600 font-semibold">● This device</span>
+                                            ) : (
+                                                <>Last active: {formatRelativeTime(device.lastActive)}</>
+                                            )}
+                                        </p>
+                                    </div>
+                                    {!device.isCurrent && (
+                                        <button
+                                            onClick={() => handleRemoveDevice(device.deviceId)}
+                                            disabled={removingDeviceId === device.deviceId}
+                                            className="text-xs font-semibold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
+                                        >
+                                            {removingDeviceId === device.deviceId ? (
+                                                <div className="animate-spin rounded-full h-3 w-3 border-2 border-red-500 border-t-transparent" />
+                                            ) : (
+                                                'Remove'
+                                            )}
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Logout All Devices */}
+                    {devices.length > 1 && (
+                        <div className="mt-4 pt-3 border-t border-gray-100">
+                            {!showLogoutAllConfirm ? (
+                                <button
+                                    onClick={() => setShowLogoutAllConfirm(true)}
+                                    className="w-full py-2.5 rounded-xl border border-amber-200 text-amber-700 font-semibold text-xs hover:bg-amber-50 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <span>⚠️</span> Logout from All Devices
+                                </button>
+                            ) : (
+                                <div className="bg-amber-50 rounded-xl p-3 border border-amber-200">
+                                    <p className="text-xs text-amber-800 text-center mb-3">
+                                        This will log you out from <strong>all devices</strong> including this one. You will need to log in again.
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => setShowLogoutAllConfirm(false)}
+                                            className="flex-1 py-2 rounded-lg border border-gray-200 text-[#64748B] font-medium text-xs hover:bg-white transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={handleLogoutAll}
+                                            disabled={logoutAllLoading}
+                                            className="flex-1 py-2 rounded-lg bg-amber-600 text-white font-medium text-xs hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+                                        >
+                                            {logoutAllLoading ? (
+                                                <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                                            ) : (
+                                                'Yes, Logout All'
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Logout Button */}

@@ -524,6 +524,28 @@ Admin creates content
 1. **[FIXED] Prelims Test Series Multi-Group Navigation** — Client page at `/tests/prelims-test-series` used to auto-select `list[0]` on load. Now shows card-based landing page when multiple groups exist, auto-drills only when 1 group. "← Back to All Series" button in detail view.
 
 ## 📅 CHANGELOG (Update after every session)
+### Session: 2026-07-08 (10) — Silent Token Refresh, Logout All Devices & 3-Device Limit
+- **Who:** AI (Antigravity)
+- **What:**
+  1. **Session Model**: Created `Session.ts` with `{ userId, deviceId, deviceName, lastActive }`, compound unique index on `userId+deviceId`, and 30-day TTL auto-cleanup index.
+  2. **Token Versioning**: Added `tokenVersion: number` field to User model. JWT payload now includes `tokenVersion` and `deviceId`. The `protect` middleware validates that the token's `tokenVersion` matches the user's current version — mismatch means "Logout All Devices" was triggered.
+  3. **Device Limit (Max 3)**: On login (`verifyOtp`, `whatsappLogin`), the server counts active sessions. If ≥ 3 and the device is new, login is rejected with HTTP 409 and a clear error message.
+  4. **Silent Token Refresh**: Replaced the 20-second `/me` polling with an event-driven approach — sync only on mount and tab focus (`visibilitychange`). Token expiry is checked client-side by decoding the JWT; if within 7 days of expiry, `POST /api/auth/refresh-token` is called silently.
+  5. **Session Management Endpoints**: Added 4 new routes — `POST /refresh-token`, `POST /logout-all`, `GET /devices`, `DELETE /devices/:deviceId`.
+  6. **Debounced Session Touch**: The `protect` middleware updates `session.lastActive` on every request, debounced to once per 60 seconds per device (in-memory cache) to avoid excessive DB writes.
+  7. **Profile Page Active Devices**: Added an "Active Devices" card showing up to 3 devices with icons, names, relative timestamps, "This device" badge, and "Remove" button. Added "Logout from All Devices" with confirmation modal.
+  8. **Clean Logout**: Single-device logout (`logout()`) now also deletes the server-side session record (fire-and-forget).
+- **Files created:**
+  - `apps/api/src/models/Session.ts`
+- **Files modified:**
+  - `apps/api/src/models/User.ts`, `apps/api/src/models/index.ts`
+  - `apps/api/src/controllers/auth.controller.ts` (full rewrite)
+  - `apps/api/src/middlewares/auth.middleware.ts` (full rewrite)
+  - `apps/api/src/routes/auth.routes.ts`
+  - `apps/client/contexts/StudentAuthContext.tsx` (full rewrite)
+  - `apps/client/app/profile/page.tsx`
+  - `packages/types/index.ts`
+- **Gotcha:** Existing logged-in students' JWTs won't have `tokenVersion` in their payload. The middleware handles this gracefully — `decoded.tokenVersion === undefined` skips the version check, so old tokens continue working until they naturally expire (30d).
 
 ### Session: 2026-07-08 (9) — User Portal Date Pickers, Forced Downloads, and Breadcrumbs Fixes
 - **Who:** AI (Antigravity)
