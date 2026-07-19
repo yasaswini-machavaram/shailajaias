@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import { Article, Quiz } from '../models/index.js';
 import type { ArticleType } from '../models/index.js';
-import { parseArticleExcel } from '../services/article-excel.service.js';
-import { parseMainsExcel } from '../services/mains-excel.service.js';
+import { parseArticleExcel, parseArticleExcelRows } from '../services/article-excel.service.js';
+import { parseMainsExcel, parseMainsExcelRows } from '../services/mains-excel.service.js';
+import { fetchGoogleSheetData, fetchDirectExcelData, extractSpreadsheetId } from '../services/sheetQueryService.js';
 import { invalidateSearchIndexCache } from './search-index.controller.js';
 
 // @desc    Get all articles with filters
@@ -338,25 +339,42 @@ export const getAdjacentDates = async (req: Request, res: Response): Promise<voi
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
-
-// @desc    Import articles from Excel file
+// @desc    Import articles from Excel file or Online Sheet URL
 // @route   POST /api/articles/import-excel
 // @access  Private/Admin
 export const importArticlesFromExcel = async (req: Request, res: Response): Promise<void> => {
     try {
         const file = req.file;
-        if (!file) {
-            res.status(400).json({ success: false, message: 'Please upload an Excel file' });
+        const { excelUrl, targetDate } = req.body;
+
+        if (!file && !excelUrl) {
+            res.status(400).json({ success: false, message: 'Please upload an Excel file or provide an Online Sheet URL' });
             return;
         }
 
-        // Parse Excel file
-        const parseResult = parseArticleExcel(file.buffer);
+        let parseResult: ReturnType<typeof parseArticleExcel>;
+
+        if (excelUrl) {
+            const cleanUrl = String(excelUrl).trim();
+            const isGoogleSheet = extractSpreadsheetId(cleanUrl) !== null;
+            const sheetData = isGoogleSheet
+                ? await fetchGoogleSheetData(cleanUrl)
+                : await fetchDirectExcelData(cleanUrl);
+
+            parseResult = parseArticleExcelRows(sheetData.rows, { targetDate });
+        } else if (file) {
+            parseResult = parseArticleExcel(file.buffer, { targetDate });
+        } else {
+            res.status(400).json({ success: false, message: 'No valid import source provided' });
+            return;
+        }
 
         if (parseResult.articles.length === 0) {
             res.status(400).json({
                 success: false,
-                message: 'No valid articles found in Excel file',
+                message: targetDate
+                    ? `No valid prelims articles found for date ${targetDate}`
+                    : 'No valid articles found in Excel source',
                 errors: parseResult.errors,
                 skipped: parseResult.skipped,
             });
@@ -365,14 +383,32 @@ export const importArticlesFromExcel = async (req: Request, res: Response): Prom
 
         const user = (req as Request & { user: { _id: string } }).user;
 
-        // Bulk insert articles as daily_prelims
-        const articlesToInsert = parseResult.articles.map((article) => ({
-            ...article,
-            type: 'daily_prelims' as const,
-            createdBy: user._id,
-        }));
+        let importedCount = 0;
+        let updatedCount = 0;
 
-        const inserted = await Article.insertMany(articlesToInsert);
+        for (const article of parseResult.articles) {
+            const filter = {
+                type: 'daily_prelims',
+                date: article.date,
+                title: article.title,
+            };
+            const update = {
+                ...article,
+                type: 'daily_prelims' as const,
+                createdBy: user._id,
+            };
+            const result = await Article.findOneAndUpdate(filter, update, {
+                upsert: true,
+                new: true,
+                includeResultMetadata: true,
+            });
+
+            if (result.lastErrorObject?.updatedExisting) {
+                updatedCount++;
+            } else {
+                importedCount++;
+            }
+        }
 
         // Invalidate search index cache so imported articles appear in search
         invalidateSearchIndexCache();
@@ -380,36 +416,58 @@ export const importArticlesFromExcel = async (req: Request, res: Response): Prom
         res.status(201).json({
             success: true,
             data: {
-                imported: inserted.length,
+                imported: importedCount,
+                updated: updatedCount,
                 skipped: parseResult.skipped,
             },
-            message: `Successfully imported ${inserted.length} articles`,
+            message: `Successfully processed ${importedCount + updatedCount} articles (${importedCount} new, ${updatedCount} updated)`,
             warnings: parseResult.errors.length > 0 ? parseResult.errors : undefined,
         });
     } catch (error) {
         console.error('Import articles error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({
+            success: false,
+            message: error instanceof Error ? error.message : 'Server error',
+        });
     }
 };
 
-// @desc    Import mains articles from Excel file
+// @desc    Import mains articles from Excel file or Online Sheet URL
 // @route   POST /api/articles/import-mains-excel
 // @access  Private/Admin
 export const importMainsFromExcel = async (req: Request, res: Response): Promise<void> => {
     try {
         const file = req.file;
-        if (!file) {
-            res.status(400).json({ success: false, message: 'Please upload an Excel file' });
+        const { excelUrl, targetDate } = req.body;
+
+        if (!file && !excelUrl) {
+            res.status(400).json({ success: false, message: 'Please upload an Excel file or provide an Online Sheet URL' });
             return;
         }
 
-        // Parse Excel file using Mains-specific parser
-        const parseResult = parseMainsExcel(file.buffer);
+        let parseResult: ReturnType<typeof parseMainsExcel>;
+
+        if (excelUrl) {
+            const cleanUrl = String(excelUrl).trim();
+            const isGoogleSheet = extractSpreadsheetId(cleanUrl) !== null;
+            const sheetData = isGoogleSheet
+                ? await fetchGoogleSheetData(cleanUrl)
+                : await fetchDirectExcelData(cleanUrl);
+
+            parseResult = parseMainsExcelRows(sheetData.rows, { targetDate });
+        } else if (file) {
+            parseResult = parseMainsExcel(file.buffer, { targetDate });
+        } else {
+            res.status(400).json({ success: false, message: 'No valid import source provided' });
+            return;
+        }
 
         if (parseResult.articles.length === 0) {
             res.status(400).json({
                 success: false,
-                message: 'No valid mains articles found in Excel file',
+                message: targetDate
+                    ? `No valid mains articles found for date ${targetDate}`
+                    : 'No valid mains articles found in Excel source',
                 errors: parseResult.errors,
                 skipped: parseResult.skipped,
             });
@@ -418,14 +476,32 @@ export const importMainsFromExcel = async (req: Request, res: Response): Promise
 
         const user = (req as Request & { user: { _id: string } }).user;
 
-        // Bulk insert articles as mains type with structured fields
-        const articlesToInsert = parseResult.articles.map((article) => ({
-            ...article,
-            type: 'mains' as const,
-            createdBy: user._id,
-        }));
+        let importedCount = 0;
+        let updatedCount = 0;
 
-        const inserted = await Article.insertMany(articlesToInsert);
+        for (const article of parseResult.articles) {
+            const filter = {
+                type: 'mains',
+                date: article.date,
+                title: article.title,
+            };
+            const update = {
+                ...article,
+                type: 'mains' as const,
+                createdBy: user._id,
+            };
+            const result = await Article.findOneAndUpdate(filter, update, {
+                upsert: true,
+                new: true,
+                includeResultMetadata: true,
+            });
+
+            if (result.lastErrorObject?.updatedExisting) {
+                updatedCount++;
+            } else {
+                importedCount++;
+            }
+        }
 
         // Invalidate search index cache so imported articles appear in search
         invalidateSearchIndexCache();
@@ -433,14 +509,18 @@ export const importMainsFromExcel = async (req: Request, res: Response): Promise
         res.status(201).json({
             success: true,
             data: {
-                imported: inserted.length,
+                imported: importedCount,
+                updated: updatedCount,
                 skipped: parseResult.skipped,
             },
-            message: `Successfully imported ${inserted.length} mains articles`,
+            message: `Successfully processed ${importedCount + updatedCount} mains articles (${importedCount} new, ${updatedCount} updated)`,
             warnings: parseResult.errors.length > 0 ? parseResult.errors : undefined,
         });
     } catch (error) {
         console.error('Import mains articles error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({
+            success: false,
+            message: error instanceof Error ? error.message : 'Server error',
+        });
     }
 };

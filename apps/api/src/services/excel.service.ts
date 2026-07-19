@@ -8,7 +8,7 @@ export interface ParsedQuizData {
 
 /**
  * Parse Excel file for quiz import
- * Expected columns: Question, Option A, Option B, Option C, Option D, Correct Answer (A/B/C/D), Explanation
+ * Expected columns: Question, Option A, Option B, Option C, Option D, Correct Answer (A/B/C/D), Explanation, Subject (Optional)
  */
 export const parseQuizExcel = (buffer: Buffer): ParsedQuizData => {
     const questions: IQuestion[] = [];

@@ -2,7 +2,7 @@
 
 import { useStudentAuth } from '@/contexts/StudentAuthContext';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { API_URL, formatDisplayDate } from '@/lib/api';
 import type { IDoubt } from '@repo/types';
 
@@ -20,8 +20,60 @@ export default function ProfilePage() {
     // Doubt resolution states
     const studentAuth = useStudentAuth();
     const token = studentAuth?.token || null;
-    const [activeTab, setActiveTab] = useState<'profile' | 'doubts' | 'reports'>('profile');
+    const [activeTab, setActiveTab] = useState<'profile' | 'doubts' | 'reports' | 'bookmarks'>('profile');
     const [doubts, setDoubts] = useState<IDoubt[]>([]);
+
+    // Bookmarks state
+    const [bookmarks, setBookmarks] = useState<any[]>([]);
+    const [bookmarksLoading, setBookmarksLoading] = useState(false);
+    const [expandedBookmarkId, setExpandedBookmarkId] = useState<string | null>(null);
+
+    const fetchBookmarks = useCallback(async () => {
+        if (!token) return;
+        setBookmarksLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/api/bookmarks`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            const data = await res.json();
+            if (data.success) {
+                setBookmarks(data.data);
+            }
+        } catch (error) {
+            console.error('Error fetching bookmarks:', error);
+        } finally {
+            setBookmarksLoading(false);
+        }
+    }, [token]);
+
+    useEffect(() => {
+        if (activeTab === 'bookmarks' && isLoggedIn) {
+            fetchBookmarks();
+        }
+    }, [activeTab, isLoggedIn, fetchBookmarks]);
+
+    const handleRemoveBookmark = async (id: string) => {
+        if (!token) return;
+        try {
+            const res = await fetch(`${API_URL}/api/bookmarks/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            const data = await res.json();
+            if (data.success) {
+                setBookmarks(prev => prev.filter(b => b._id !== id));
+                if (expandedBookmarkId === id) {
+                    setExpandedBookmarkId(null);
+                }
+            }
+        } catch (error) {
+            console.error('Error removing bookmark:', error);
+        }
+    };
 
     // Test reports states
     const [reports, setReports] = useState<any[]>([]);
@@ -787,6 +839,159 @@ export default function ProfilePage() {
         );
     }
 
+    if (activeTab === 'bookmarks') {
+        return (
+            <div className="min-h-screen bg-[#FAFAF8] pb-24 px-4 pt-8 animate-fade-in font-body">
+                <div className="max-w-xl mx-auto">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-6">
+                        <button
+                            onClick={() => {
+                                setExpandedBookmarkId(null);
+                                setActiveTab('profile');
+                            }}
+                            className="inline-flex items-center gap-1.5 text-sm font-bold text-[#1E3A5F] hover:underline"
+                        >
+                            ← Back to Profile
+                        </button>
+                        <h2 className="text-base font-bold text-[#1E3A5F] font-headline">Bookmarked Questions</h2>
+                    </div>
+
+                    {bookmarksLoading ? (
+                        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                            <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#1E3A5F] border-t-transparent" />
+                            <p className="text-xs text-[#94A3B8] font-semibold mt-3">Loading bookmarks...</p>
+                        </div>
+                    ) : bookmarks.length === 0 ? (
+                        <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center shadow-sm">
+                            <span className="text-4xl block mb-3">🔖</span>
+                            <h3 className="text-sm font-bold text-[#1E3A5F] mb-1">No Bookmarked Questions</h3>
+                            <p className="text-xs text-[#94A3B8] mb-5 leading-relaxed">
+                                You haven't bookmarked any questions from your tests yet.
+                            </p>
+                            <Link
+                                href="/tests"
+                                className="inline-flex py-2 px-4 bg-[#1E3A5F] hover:bg-[#152C4A] text-white text-xs font-semibold rounded-lg shadow-sm transition-all"
+                            >
+                                Practice Tests Now
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {bookmarks.map((bookmark) => {
+                                const isExpanded = expandedBookmarkId === bookmark._id;
+                                return (
+                                    <div 
+                                        key={bookmark._id} 
+                                        className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200"
+                                    >
+                                        {/* Header Accordion Bar */}
+                                        <div 
+                                            onClick={() => setExpandedBookmarkId(isExpanded ? null : bookmark._id)}
+                                            className="p-4 flex items-start justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                                        >
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                                                    {bookmark.testSeriesId && (
+                                                        <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-bold rounded border border-indigo-100 uppercase tracking-wide">
+                                                            {bookmark.testSeriesId}
+                                                        </span>
+                                                    )}
+                                                    <span className="text-[9px] font-bold text-[#94A3B8] bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded">
+                                                        {bookmark.source === 'prelims_test_series' ? 'Test Series' : bookmark.source === 'prelims_practice_test' ? 'Practice Test' : 'Daily Quiz'}
+                                                    </span>
+                                                    {bookmark.subject && (
+                                                        <span className="text-[9px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded">
+                                                            {bookmark.subject}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <h4 className="text-xs font-bold text-[#1E3A5F] truncate">
+                                                    {bookmark.testTitle || 'Test Question'}
+                                                </h4>
+                                                <p className="text-slate-600 text-xs mt-1 truncate">
+                                                    {bookmark.question}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleRemoveBookmark(bookmark._id);
+                                                    }}
+                                                    className="w-8 h-8 rounded-lg hover:bg-red-50 text-red-500 flex items-center justify-center transition-colors text-xs"
+                                                    title="Remove Bookmark"
+                                                >
+                                                    🗑️
+                                                </button>
+                                                <span className="text-slate-400 text-xs font-bold w-5 text-center">
+                                                    {isExpanded ? '▼' : '▶'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Expanded Details */}
+                                        {isExpanded && (
+                                            <div className="px-4 pb-5 border-t border-gray-50 pt-4 space-y-4 bg-slate-50/30">
+                                                {/* Question Text */}
+                                                <div>
+                                                    <h5 className="text-[10px] font-extrabold text-[#1E3A5F] uppercase tracking-wider mb-1.5">Question</h5>
+                                                    <p className="text-slate-800 text-xs font-semibold leading-relaxed whitespace-pre-line bg-white p-3.5 rounded-xl border border-gray-100">
+                                                        {bookmark.question}
+                                                    </p>
+                                                </div>
+
+                                                {/* Options List */}
+                                                <div>
+                                                    <h5 className="text-[10px] font-extrabold text-[#1E3A5F] uppercase tracking-wider mb-1.5">Options</h5>
+                                                    <div className="space-y-2">
+                                                        {bookmark.options.map((opt: string, optIdx: number) => {
+                                                            const isCorrect = bookmark.correctIndex === optIdx;
+                                                            let optStyle = 'border-gray-100 bg-white text-slate-700';
+                                                            let badge = null;
+
+                                                            if (isCorrect) {
+                                                                optStyle = 'border-teal-200 bg-teal-50/60 text-teal-800 font-semibold';
+                                                                badge = <span className="text-[9px] font-extrabold text-teal-700 bg-teal-100 px-1.5 py-0.5 rounded">Correct Answer</span>;
+                                                            }
+
+                                                            return (
+                                                                <div 
+                                                                    key={optIdx} 
+                                                                    className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 transition-all ${optStyle}`}
+                                                                >
+                                                                    <span className="w-5 h-5 rounded bg-slate-100 font-bold flex items-center justify-center flex-shrink-0 text-slate-500 text-[10px]">
+                                                                        {['A', 'B', 'C', 'D'][optIdx]}
+                                                                    </span>
+                                                                    <div className="flex-1">
+                                                                        <p className="leading-relaxed">{opt}</p>
+                                                                        {badge && <div className="mt-1">{badge}</div>}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                {/* Explanation Box */}
+                                                <div>
+                                                    <h5 className="text-[10px] font-extrabold text-[#D97706] uppercase tracking-wider mb-1.5">💡 Explanation</h5>
+                                                    <p className="text-slate-600 text-xs leading-relaxed bg-amber-50/30 p-3.5 rounded-xl border border-amber-100/50 whitespace-pre-line">
+                                                        {bookmark.explanation || 'No explanation available.'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     if (activeTab === 'reports') {
         const totalQuestions = selectedReport?.quiz?.questions?.length || 0;
         
@@ -848,6 +1053,48 @@ export default function ProfilePage() {
                                 <p className="text-sm font-bold text-[#1E3A5F]">
                                     Question {currentReportQuestionIndex + 1} of {totalQuestions}
                                 </p>
+                            </div>
+
+                            {/* Question Navigation Grid */}
+                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="text-xs font-bold text-[#1E3A5F] uppercase tracking-wider">Question Map</h4>
+                                    <div className="flex items-center gap-3 text-[10px] font-semibold text-gray-400">
+                                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block"></span> Correct</span>
+                                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block"></span> Wrong</span>
+                                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-gray-300 inline-block"></span> Skipped</span>
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {selectedReport.quiz.questions.map((q: any, idx: number) => {
+                                        const isActive = idx === currentReportQuestionIndex;
+                                        const selectedOpt = selectedReport.answers[idx.toString()];
+                                        const wasAttempted = selectedOpt !== undefined && selectedOpt !== -1;
+                                        const wasCorrect = wasAttempted && selectedOpt === q.correctIndex;
+
+                                        let bg = 'bg-gray-200 text-gray-500'; // unattempted
+                                        if (isActive) {
+                                            bg = 'ring-2 ring-[#1E3A5F]/40 ';
+                                            if (!wasAttempted) bg += 'bg-gray-300 text-gray-600';
+                                            else if (wasCorrect) bg += 'bg-green-600 text-white';
+                                            else bg += 'bg-red-600 text-white';
+                                        } else if (wasCorrect) {
+                                            bg = 'bg-green-500 text-white';
+                                        } else if (wasAttempted) {
+                                            bg = 'bg-red-500 text-white';
+                                        }
+
+                                        return (
+                                            <button
+                                                key={idx}
+                                                onClick={() => setCurrentReportQuestionIndex(idx)}
+                                                className={`w-9 h-9 rounded-lg text-xs font-bold flex items-center justify-center transition-all hover:scale-105 flex-shrink-0 ${bg}`}
+                                            >
+                                                {idx + 1}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
 
                             {(() => {
@@ -1300,6 +1547,25 @@ export default function ProfilePage() {
                             <p className="text-xs text-[#94A3B8]">Direct subject doubts chat history with mentors</p>
                         </div>
                         <span className="text-xs font-bold text-[#D97706] bg-amber-50 group-hover:bg-amber-100 px-3 py-1 rounded-xl transition-all">
+                            Open
+                        </span>
+                    </button>
+
+                    {/* Bookmarks Card */}
+                    <button
+                        onClick={() => setActiveTab('bookmarks')}
+                        className="w-full text-left bg-white rounded-xl p-4 flex items-center gap-3 border border-gray-100 hover:border-amber-200 shadow-sm transition-all active:scale-[0.99] group"
+                    >
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-orange-50 group-hover:scale-105 transition-transform">
+                            <span className="text-xl">🔖</span>
+                        </div>
+                        <div className="flex-1">
+                            <p className="text-sm font-medium text-[#1E3A5F] group-hover:text-amber-600 transition-colors flex items-center gap-1.5">
+                                <span>Bookmarked Questions</span>
+                            </p>
+                            <p className="text-xs text-[#94A3B8]">Review your saved questions & detailed explanations</p>
+                        </div>
+                        <span className="text-xs font-bold text-amber-600 bg-amber-50 group-hover:bg-amber-100 px-3 py-1 rounded-xl transition-all">
                             Open
                         </span>
                     </button>

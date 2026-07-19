@@ -18,6 +18,7 @@ import {
   adminUserRoutes,
   doubtRoutes,
   testReportRoutes,
+  bookmarkRoutes,
 } from "./routes/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -73,6 +74,7 @@ app.use('/api/tests/series', testSeriesRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/doubts', doubtRoutes);
 app.use('/api/reports', testReportRoutes);
+app.use('/api/bookmarks', bookmarkRoutes);
 
 // 404 handler
 app.use((_req, res) => {

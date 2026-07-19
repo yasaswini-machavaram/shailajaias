@@ -7,12 +7,21 @@ import { parseQuizExcel } from '../services/excel.service.js';
 // @access  Public
 export const getQuizzes = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { tags, page = 1, limit = 10, date, includeQuestions, search, year, month } = req.query;
+        const { tags, excludeTags, page = 1, limit = 10, date, includeQuestions, search, year, month } = req.query;
 
-        const query: Record<string, unknown> = {};
+        const query: Record<string, any> = {};
 
         if (tags) {
             query.tags = { $in: (tags as string).split(',') };
+        }
+
+        if (excludeTags) {
+            const excludeList = (excludeTags as string).split(',');
+            if (query.tags) {
+                query.tags = { ...query.tags, $nin: excludeList };
+            } else {
+                query.tags = { $nin: excludeList };
+            }
         }
 
         if (search) {
@@ -224,7 +233,7 @@ export const deleteQuiz = async (req: Request, res: Response): Promise<void> => 
 // @access  Public
 export const getAdjacentQuizDates = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { date } = req.query;
+        const { date, excludeTags } = req.query;
         if (!date) {
             res.status(400).json({ success: false, message: 'Date is required' });
             return;
@@ -234,14 +243,21 @@ export const getAdjacentQuizDates = async (req: Request, res: Response): Promise
         const nextDay = new Date(targetDate);
         nextDay.setDate(nextDay.getDate() + 1);
 
+        const queryExtra: Record<string, any> = {};
+        if (excludeTags) {
+            queryExtra.tags = { $nin: (excludeTags as string).split(',') };
+        }
+
         // Find previous date (less than targetDate)
         const prevQuiz = await Quiz.findOne({
-            date: { $lt: targetDate }
+            date: { $lt: targetDate },
+            ...queryExtra
         }).sort({ date: -1 });
 
         // Find next date (greater than or equal to nextDay)
         const nextQuiz = await Quiz.findOne({
-            date: { $gte: nextDay }
+            date: { $gte: nextDay },
+            ...queryExtra
         }).sort({ date: 1 });
 
         res.json({

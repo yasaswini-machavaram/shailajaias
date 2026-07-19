@@ -139,6 +139,76 @@ function PrelimsTestSeriesInner() {
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [saveError, setSaveError] = useState('');
 
+    // Bookmark states
+    const [bookmarkedKeys, setBookmarkedKeys] = useState<Record<string, boolean>>({});
+
+    const fetchBookmarks = useCallback(async () => {
+        if (!studentToken) return;
+        try {
+            const res = await fetch(`${API_URL}/api/bookmarks`, {
+                headers: {
+                    'Authorization': `Bearer ${studentToken}`
+                }
+            });
+            const data = await res.json();
+            if (data.success) {
+                const keys: Record<string, boolean> = {};
+                data.data.forEach((bookmark: any) => {
+                    keys[`${bookmark.quizId}_${bookmark.questionIndex}`] = true;
+                });
+                setBookmarkedKeys(keys);
+            }
+        } catch (error) {
+            console.error('Error fetching bookmarks:', error);
+        }
+    }, [studentToken]);
+
+    useEffect(() => {
+        fetchBookmarks();
+    }, [fetchBookmarks]);
+
+    const handleToggleBookmark = async (qIndex: number) => {
+        if (!studentToken) {
+            alert('Please login to bookmark questions.');
+            return;
+        }
+        if (!activeQuiz) return;
+        const q = activeQuiz.questions[qIndex];
+        const key = `${activeQuiz._id}_${qIndex}`;
+        const isBookmarked = bookmarkedKeys[key];
+
+        try {
+            const res = await fetch(`${API_URL}/api/bookmarks`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${studentToken}`
+                },
+                body: JSON.stringify({
+                    quizId: activeQuiz._id,
+                    questionIndex: qIndex,
+                    question: q.question,
+                    options: q.options,
+                    correctIndex: q.correctIndex,
+                    explanation: q.explanation,
+                    subject: q.subject || 'General',
+                    testTitle: activeTestItem?.title || activeQuiz.title,
+                    testSeriesId: selectedSeries?.uniqueId || undefined,
+                    source: 'prelims_test_series'
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setBookmarkedKeys(prev => ({
+                    ...prev,
+                    [key]: !isBookmarked
+                }));
+            }
+        } catch (error) {
+            console.error('Error toggling bookmark:', error);
+        }
+    };
+
     // Timer state
     const [timeRemaining, setTimeRemaining] = useState(0);
     const [testStartTime, setTestStartTime] = useState(0);
@@ -252,38 +322,20 @@ function PrelimsTestSeriesInner() {
     useEffect(() => {
         if (!selectedSeries) return;
 
-        // Categorize tests into subjects dynamically
-        const getTestSubject = (test: TestSeriesItem) => {
-            const title = test.title.toLowerCase();
-            if (title.includes('polity')) return 'Polity';
-            if (title.includes('economy')) return 'Economy';
-            if (title.includes('env') || title.includes('ecology')) return 'Environment';
-            if (title.includes('hist') || title.includes('culture')) return 'History';
-            if (title.includes('geo')) return 'Geography';
-            if (title.includes('sci') || title.includes('tech') || title.includes('s&t')) return 'S&T';
+        const formatSubject = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
-            // Check linked quiz questions
-            const quiz = test.quizId;
-            if (quiz && typeof quiz === 'object' && 'questions' in quiz) {
-                for (const q of (quiz as Quiz).questions) {
-                    if (q.subject) {
-                        const s = q.subject.toLowerCase();
-                        if (s.includes('polity')) return 'Polity';
-                        if (s.includes('economy')) return 'Economy';
-                        if (s.includes('env') || s.includes('ecology')) return 'Environment';
-                        if (s.includes('hist') || s.includes('culture')) return 'History';
-                        if (s.includes('geo')) return 'Geography';
-                        if (s.includes('sci') || s.includes('tech') || s.includes('s&t')) return 'S&T';
-                    }
-                }
+        // Categorize tests into subjects dynamically based ONLY on whole-test subjectTags
+        const getTestSubjects = (test: TestSeriesItem): string[] => {
+            if (test.subjectTags && test.subjectTags.length > 0) {
+                return test.subjectTags.map(formatSubject);
             }
-            return 'General';
+            return ['General'];
         };
 
         // Extract unique subjects
         const subjectTags = new Set<string>();
         selectedSeries.tests.forEach((t) => {
-            subjectTags.add(getTestSubject(t));
+            getTestSubjects(t).forEach((sub) => subjectTags.add(sub));
         });
 
         const defaultList = ['Polity', 'Economy', 'Environment', 'History', 'Geography', 'S&T'];
@@ -297,20 +349,18 @@ function PrelimsTestSeriesInner() {
         if (selectedSubject === 'All') {
             setFilteredTests(selectedSeries.tests);
         } else {
-            const filtered = selectedSeries.tests.filter((t) => getTestSubject(t) === selectedSubject);
+            const filtered = selectedSeries.tests.filter((t) =>
+                getTestSubjects(t).some((sub) => sub.toLowerCase() === selectedSubject.toLowerCase())
+            );
             setFilteredTests(filtered);
         }
     }, [selectedSeries, selectedSubject]);
 
     // Classification Helper
     const getTestSubjectLabel = (test: TestSeriesItem) => {
-        const title = test.title.toLowerCase();
-        if (title.includes('polity')) return 'Polity';
-        if (title.includes('economy')) return 'Economy';
-        if (title.includes('env') || title.includes('ecology')) return 'Environment';
-        if (title.includes('hist') || title.includes('culture')) return 'History';
-        if (title.includes('geo')) return 'Geography';
-        if (title.includes('sci') || title.includes('tech') || title.includes('s&t')) return 'S&T';
+        if (test.subjectTags && test.subjectTags.length > 0) {
+            return test.subjectTags.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ');
+        }
         return 'General';
     };
 
@@ -656,20 +706,7 @@ function PrelimsTestSeriesInner() {
                                         )}
                                     </div>
 
-                                    <div>
-                                        <label className="block text-xs font-bold text-[#1E3A5F] mb-1.5 uppercase tracking-wider">
-                                            Subject / Topic
-                                        </label>
-                                        <select
-                                            value={doubtSubject}
-                                            onChange={(e) => setDoubtSubject(e.target.value)}
-                                            className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/20"
-                                        >
-                                            {['Polity', 'Economy', 'Environment', 'Science & Technology', 'International Relations', 'History', 'Geography', 'Art & Culture', 'Social Issues', 'Security', 'Ethics', 'CSAT', 'General'].map((sub) => (
-                                                <option key={sub} value={sub}>{sub}</option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                    {/* Subject/Topic is auto-derived from the context and sent automatically */}
 
                                     <div>
                                         <label className="block text-xs font-bold text-[#1E3A5F] mb-1.5 uppercase tracking-wider">
@@ -831,11 +868,12 @@ function PrelimsTestSeriesInner() {
                             <div>
                                 <button
                                     onClick={() => {
-                                        if (showScorecard) {
+                                        if (showScorecard || showReview) {
                                             if (timerRef.current) clearInterval(timerRef.current);
                                             setActiveQuiz(null);
                                             setActiveTestItem(null);
                                             setShowOverview(false);
+                                            setShowReview(false);
                                         } else {
                                             setShowDiscardConfirmModal(true);
                                         }
@@ -862,7 +900,7 @@ function PrelimsTestSeriesInner() {
 
                             <div className="flex items-center gap-3">
                                 {/* Timer & Submit Badge */}
-                                {!showScorecard && (
+                                {!showScorecard && !showReview && (
                                     <div className="flex items-center gap-3">
                                         <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-mono text-lg font-extrabold border-2 transition-all ${isTimerLow
                                             ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
@@ -901,7 +939,7 @@ function PrelimsTestSeriesInner() {
                         </div>
 
                         {/* Metadata row */}
-                        {!showScorecard && !showOverview && (
+                        {!showScorecard && !showOverview && !showReview && (
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 flex flex-col justify-center items-center text-center">
                                     <span className="text-xl font-bold text-blue-700">{Object.keys(answers).length}</span>
@@ -1258,16 +1296,75 @@ function PrelimsTestSeriesInner() {
                         ) : showReview ? (
                             /* ─── REVIEW MODE (after test) ─── */
                             <div>
+                                {/* Question Navigation Grid */}
+                                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h4 className="text-xs font-bold text-[#1E3A5F] uppercase tracking-wider">Question Map</h4>
+                                        <div className="flex items-center gap-3 text-[10px] font-semibold text-gray-400">
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block"></span> Correct</span>
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block"></span> Wrong</span>
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-gray-300 inline-block"></span> Skipped</span>
+                                        </div>
+                                    </div>
+                                    <div 
+                                        ref={scrollContainerRef}
+                                        className="flex flex-nowrap gap-1.5 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-200 scroll-smooth"
+                                    >
+                                        {activeQuiz.questions.map((q, idx) => {
+                                            const isActive = idx === currentQuestionIndex;
+                                            const selectedAnswer = answers[idx];
+                                            const wasAttempted = selectedAnswer !== undefined;
+                                            const wasCorrect = wasAttempted && selectedAnswer === q.correctIndex;
+
+                                            let bg = 'bg-gray-200 text-gray-500'; // unattempted
+                                            if (isActive) {
+                                                bg = 'ring-2 ring-[#1E3A5F]/40 ';
+                                                if (!wasAttempted) bg += 'bg-gray-300 text-gray-600';
+                                                else if (wasCorrect) bg += 'bg-green-600 text-white';
+                                                else bg += 'bg-red-600 text-white';
+                                            } else if (wasCorrect) {
+                                                bg = 'bg-green-500 text-white';
+                                            } else if (wasAttempted) {
+                                                bg = 'bg-red-500 text-white';
+                                            }
+
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => setCurrentQuestionIndex(idx)}
+                                                    className={`w-9 h-9 rounded-lg text-xs font-bold flex items-center justify-center transition-all hover:scale-105 flex-shrink-0 ${bg}`}
+                                                >
+                                                    {idx + 1}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
                                 <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] p-6 md:p-10 mb-6">
                                     <div className="flex items-center justify-between gap-4 mb-6">
                                         <span className="px-3.5 py-1.5 bg-amber-100 text-amber-800 font-bold rounded-xl text-xs uppercase">
                                             Review • Question {currentQuestionIndex + 1} of {totalQuestions}
                                         </span>
-                                        {currentQuestion.subject && (
-                                            <span className="px-3 py-1 bg-amber-100 text-amber-900 font-bold rounded-full text-xs uppercase">
-                                                {currentQuestion.subject}
-                                            </span>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {currentQuestion.subject && (
+                                                <span className="px-3 py-1 bg-amber-100 text-amber-900 font-bold rounded-full text-[10px] md:text-xs uppercase">
+                                                    {currentQuestion.subject}
+                                                </span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleBookmark(currentQuestionIndex)}
+                                                className={`p-1.5 rounded-lg border transition-all flex items-center justify-center gap-1 text-[10px] md:text-xs font-bold ${
+                                                    bookmarkedKeys[`${activeQuiz._id}_${currentQuestionIndex}`]
+                                                        ? 'border-[#D97706] bg-amber-50 text-[#D97706]'
+                                                        : 'border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                <span>{bookmarkedKeys[`${activeQuiz._id}_${currentQuestionIndex}`] ? '🔖' : '🎗️'}</span>
+                                                <span>{bookmarkedKeys[`${activeQuiz._id}_${currentQuestionIndex}`] ? 'Bookmarked' : 'Bookmark'}</span>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <h3 className="text-gray-800 font-bold text-lg md:text-xl leading-relaxed whitespace-pre-line mb-8 font-headline">
@@ -1319,17 +1416,17 @@ function PrelimsTestSeriesInner() {
                                 </div>
 
                                 {/* Navigation */}
-                                <div className="flex items-center justify-between gap-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
                                     <button
                                         onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
                                         disabled={currentQuestionIndex === 0}
-                                        className="flex-1 max-w-[180px] flex items-center justify-center gap-2 px-5 py-3.5 bg-white border border-gray-200 rounded-xl text-[#1E3A5F] font-bold text-sm shadow-sm hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="flex-1 max-w-[140px] flex items-center justify-center gap-2 px-4 py-3.5 bg-white border border-gray-200 rounded-xl text-[#1E3A5F] font-bold text-sm shadow-sm hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         ← Previous
                                     </button>
                                     <button
                                         onClick={() => { setShowReview(false); setShowScorecard(true); }}
-                                        className="px-5 py-3.5 bg-amber-500 hover:bg-amber-600 rounded-xl text-white font-bold text-sm shadow-md transition-all"
+                                        className="px-4 py-3.5 bg-amber-500 hover:bg-amber-600 rounded-xl text-white font-bold text-sm shadow-md transition-all"
                                     >
                                         Back to Results
                                     </button>
@@ -1344,14 +1441,14 @@ function PrelimsTestSeriesInner() {
                                             setDoubtError('');
                                             setShowDoubtModal(activeTestItem || { title: 'Test Paper' } as any);
                                         }}
-                                        className="px-5 py-3.5 bg-[#D97706] hover:bg-[#B45309] text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                                        className="px-4 py-3.5 bg-[#D97706] hover:bg-[#B45309] text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
                                     >
                                         ❓ Ask Doubt
                                     </button>
                                     <button
                                         onClick={() => setCurrentQuestionIndex(prev => Math.min(totalQuestions - 1, prev + 1))}
                                         disabled={currentQuestionIndex === totalQuestions - 1}
-                                        className="flex-1 max-w-[180px] flex items-center justify-center gap-2 px-5 py-3.5 bg-[#1E3A5F] rounded-xl text-white font-bold text-sm shadow-md hover:bg-[#2A4E7D] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="flex-1 max-w-[140px] flex items-center justify-center gap-2 px-4 py-3.5 bg-[#1E3A5F] rounded-xl text-white font-bold text-sm shadow-md hover:bg-[#2A4E7D] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         Next →
                                     </button>
@@ -1365,11 +1462,25 @@ function PrelimsTestSeriesInner() {
                                         <span className="px-3.5 py-1.5 bg-[#1E3A5F]/10 text-[#1E3A5F] font-bold rounded-xl text-xs uppercase">
                                             Question {currentQuestionIndex + 1} of {totalQuestions}
                                         </span>
-                                        {currentQuestion.subject && (
-                                            <span className="px-3 py-1 bg-amber-100 text-amber-900 font-bold rounded-full text-xs uppercase">
-                                                {currentQuestion.subject}
-                                            </span>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {currentQuestion.subject && (
+                                                <span className="px-3 py-1 bg-amber-100 text-amber-900 font-bold rounded-full text-[10px] md:text-xs uppercase">
+                                                    {currentQuestion.subject}
+                                                </span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleBookmark(currentQuestionIndex)}
+                                                className={`p-1.5 rounded-lg border transition-all flex items-center justify-center gap-1 text-[10px] md:text-xs font-bold ${
+                                                    bookmarkedKeys[`${activeQuiz._id}_${currentQuestionIndex}`]
+                                                        ? 'border-[#D97706] bg-amber-50 text-[#D97706]'
+                                                        : 'border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                <span>{bookmarkedKeys[`${activeQuiz._id}_${currentQuestionIndex}`] ? '🔖' : '🎗️'}</span>
+                                                <span>{bookmarkedKeys[`${activeQuiz._id}_${currentQuestionIndex}`] ? 'Bookmarked' : 'Bookmark'}</span>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <h3 className="text-gray-800 font-bold text-lg md:text-xl leading-relaxed whitespace-pre-line mb-8 font-headline">

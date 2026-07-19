@@ -678,7 +678,7 @@ export default function PrelimsPracticeTestPage() {
                                         <td className="py-1 pr-4">Option A, B, C, D</td>
                                         <td className="py-1 pr-4">Answer (A/B/C/D)</td>
                                         <td className="py-1 pr-4">Explanation</td>
-                                        <td className="py-1 pr-4">Subject</td>
+                                        <td className="py-1 pr-4">Subject (Optional)</td>
                                     </tr>
                                 </tbody>
                             </table>

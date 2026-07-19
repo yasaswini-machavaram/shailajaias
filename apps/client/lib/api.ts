@@ -76,6 +76,7 @@ export interface TestSeriesItem {
     syllabus?: string;
     discussionVideoUrl?: string;
     isLocked: boolean;
+    subjectTags?: string[];
 }
 
 export interface TestSeries {
@@ -138,7 +139,7 @@ export async function getAdjacentQuizDates(
     date: string
 ): Promise<{ previous: string | null; next: string | null }> {
     const { data } = await fetchApi<{ previous: string | null; next: string | null }>(
-        `/api/quizzes/adjacent-dates?date=${date}`
+        `/api/quizzes/adjacent-dates?date=${date}&excludeTags=prelims-practice,prelims-test-series`
     );
     return data || { previous: null, next: null };
 }
@@ -157,7 +158,9 @@ export async function getBurningIssues(limit = 10): Promise<Article[]> {
 
 // Quiz APIs
 export async function getQuizzesByDate(date: string): Promise<Quiz[]> {
-    const { data } = await fetchApi<Quiz[]>(`/api/quizzes?date=${date}&includeQuestions=true`);
+    const { data } = await fetchApi<Quiz[]>(
+        `/api/quizzes?date=${date}&includeQuestions=true&excludeTags=prelims-practice,prelims-test-series`
+    );
     return data || [];
 }
 

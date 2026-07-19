@@ -11,6 +11,7 @@ interface TestItemForm {
     syllabus: string;
     discussionVideoUrl: string;
     isLocked: boolean;
+    subjectTags?: string;
     questionPaperUrl?: string;
     questionPaperKey?: string;
     solutionPaperUrl?: string;
@@ -235,7 +236,12 @@ export default function AdminPrelimsTestSeriesPage() {
                     brochureKey: form.brochureKey,
                     introVideoUrl: form.introVideoUrl,
                     isPublished: form.isPublished,
-                    tests: form.tests,
+                    tests: form.tests.map((t) => ({
+                        ...t,
+                        subjectTags: t.subjectTags
+                            ? t.subjectTags.split(',').map((s) => s.trim()).filter(Boolean)
+                            : [],
+                    })),
                 }),
             });
             const data = await res.json();
@@ -290,6 +296,7 @@ export default function AdminPrelimsTestSeriesPage() {
                 syllabus: t.syllabus || '',
                 discussionVideoUrl: t.discussionVideoUrl || '',
                 isLocked: !!t.isLocked,
+                subjectTags: Array.isArray(t.subjectTags) ? t.subjectTags.join(', ') : (t.subjectTags || ''),
                 questionPaperUrl: t.questionPaperUrl || '',
                 questionPaperKey: t.questionPaperKey || '',
                 solutionPaperUrl: t.solutionPaperUrl || t.solutionPaperUrl === undefined ? t.solutionPaperUrl : (t as any).detailedSolutionUrl || '',
@@ -313,6 +320,7 @@ export default function AdminPrelimsTestSeriesPage() {
                     syllabus: '',
                     discussionVideoUrl: '',
                     isLocked: false,
+                    subjectTags: '',
                     questionPaperUrl: '',
                     questionPaperKey: '',
                     solutionPaperUrl: '',
@@ -619,8 +627,8 @@ export default function AdminPrelimsTestSeriesPage() {
                                                 </div>
                                             </div>
 
-                                            {/* Row 1: Title, Date, Excel Upload */}
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {/* Row 1: Title, Date, Subject Tags, Excel Upload */}
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                                 <div className="space-y-1">
                                                     <label className="text-[10px] font-bold text-slate-500 uppercase">Test Title *</label>
                                                     <input
@@ -640,6 +648,16 @@ export default function AdminPrelimsTestSeriesPage() {
                                                         onChange={(e) => handleTestFieldChange(index, 'date', e.target.value)}
                                                         className="w-full h-10 px-3 border border-slate-200 focus:border-[#1E3A5F] rounded-lg text-sm font-semibold outline-none"
                                                         required
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Subject Tags (Comma separated)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={test.subjectTags || ''}
+                                                        onChange={(e) => handleTestFieldChange(index, 'subjectTags', e.target.value)}
+                                                        placeholder="e.g. Polity, Economy"
+                                                        className="w-full h-10 px-3 border border-slate-200 focus:border-[#1E3A5F] rounded-lg text-xs font-semibold outline-none"
                                                     />
                                                 </div>
                                                 <div className="space-y-1">

@@ -12,3 +12,4 @@ export { default as testSeriesRoutes } from './testSeries.routes.js';
 export { default as adminUserRoutes } from './adminUser.routes.js';
 export { default as doubtRoutes } from './doubt.routes.js';
 export { default as testReportRoutes } from './testReport.routes.js';
+export { default as bookmarkRoutes } from './bookmark.routes.js';

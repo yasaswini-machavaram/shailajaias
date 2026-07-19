@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, Suspense, useRef } from 'react';
+import { useState, useEffect, Suspense, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { getQuizzesByDate, getAdjacentQuizDates } from '@/lib/api';
+import { getQuizzesByDate, getAdjacentQuizDates, API_URL } from '@/lib/api';
+import { useStudentAuth } from '@/contexts/StudentAuthContext';
 
 
 interface Question {
@@ -29,10 +30,84 @@ export default function DailyQuizPage() {
 }
 
 function DailyQuizInner() {
+    const studentAuth = useStudentAuth();
+    const studentToken = studentAuth?.token || null;
+    const isLoggedIn = studentAuth?.isLoggedIn || false;
+
     const searchParams = useSearchParams();
     const initialDate = searchParams.get('date') || new Date().toISOString().split('T')[0];
     const [date, setDate] = useState(initialDate);
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+
+    // Bookmark states
+    const [bookmarkedKeys, setBookmarkedKeys] = useState<Record<string, boolean>>({});
+
+    const fetchBookmarks = useCallback(async () => {
+        if (!studentToken) return;
+        try {
+            const res = await fetch(`${API_URL}/api/bookmarks`, {
+                headers: {
+                    'Authorization': `Bearer ${studentToken}`
+                }
+            });
+            const data = await res.json();
+            if (data.success) {
+                const keys: Record<string, boolean> = {};
+                data.data.forEach((bookmark: any) => {
+                    keys[`${bookmark.quizId}_${bookmark.questionIndex}`] = true;
+                });
+                setBookmarkedKeys(keys);
+            }
+        } catch (error) {
+            console.error('Error fetching bookmarks:', error);
+        }
+    }, [studentToken]);
+
+    useEffect(() => {
+        fetchBookmarks();
+    }, [fetchBookmarks, studentToken]);
+
+    const handleToggleBookmark = async (qIndex: number) => {
+        if (!studentToken) {
+            alert('Please login to bookmark questions.');
+            return;
+        }
+        const activeQuiz = quizzes[currentIndex];
+        if (!activeQuiz) return;
+        const q = activeQuiz.questions[qIndex];
+        const key = `${activeQuiz._id}_${qIndex}`;
+        const isBookmarked = bookmarkedKeys[key];
+
+        try {
+            const res = await fetch(`${API_URL}/api/bookmarks`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${studentToken}`
+                },
+                body: JSON.stringify({
+                    quizId: activeQuiz._id,
+                    questionIndex: qIndex,
+                    question: q.question,
+                    options: q.options,
+                    correctIndex: q.correctIndex,
+                    explanation: q.explanation,
+                    subject: q.subject || 'General',
+                    testTitle: activeQuiz.title,
+                    source: 'daily_quiz'
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setBookmarkedKeys(prev => ({
+                    ...prev,
+                    [key]: !isBookmarked
+                }));
+            }
+        } catch (error) {
+            console.error('Error toggling bookmark:', error);
+        }
+    };
     const [currentIndex, setCurrentIndex] = useState(0); // Quiz index in current day
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0); // Question index in current quiz
     const [isLoading, setIsLoading] = useState(true);
@@ -266,10 +341,23 @@ function DailyQuizInner() {
                     <div className="flex flex-col gap-8">
                         {/* Question Card */}
                         <div className="bg-white rounded-[32px] border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] p-6 md:p-10">
-                            {/* Quiz Title as subheader if present */}
-                            <h3 className="text-[#1E3A5F] font-bold text-lg mb-4 leading-relaxed">
-                                {currentQuiz.title}
-                            </h3>
+                            <div className="flex items-center justify-between gap-4 mb-4">
+                                <h3 className="text-[#1E3A5F] font-bold text-lg leading-relaxed">
+                                    {currentQuiz.title}
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={() => handleToggleBookmark(currentQuestionIndex)}
+                                    className={`p-1.5 rounded-lg border transition-all flex items-center justify-center gap-1 text-[10px] md:text-xs font-bold flex-shrink-0 ${
+                                        bookmarkedKeys[`${currentQuiz._id}_${currentQuestionIndex}`]
+                                            ? 'border-[#D97706] bg-amber-50 text-[#D97706]'
+                                            : 'border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <span>{bookmarkedKeys[`${currentQuiz._id}_${currentQuestionIndex}`] ? '🔖' : '🎗️'}</span>
+                                    <span>{bookmarkedKeys[`${currentQuiz._id}_${currentQuestionIndex}`] ? 'Bookmarked' : 'Bookmark'}</span>
+                                </button>
+                            </div>
 
                             {/* Question text */}
                             <div className="mb-8">

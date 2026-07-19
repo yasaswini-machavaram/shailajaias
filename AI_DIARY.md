@@ -524,6 +524,34 @@ Admin creates content
 1. **[FIXED] Prelims Test Series Multi-Group Navigation** — Client page at `/tests/prelims-test-series` used to auto-select `list[0]` on load. Now shows card-based landing page when multiple groups exist, auto-drills only when 1 group. "← Back to All Series" button in detail view.
 
 ## 📅 CHANGELOG (Update after every session)
+### Session: 2026-07-19 (11) — Bookmark Questions & Review Mode Navigation
+- **Who:** AI (Antigravity)
+- **What:**
+  1. **Review Navigation Grid**: Added a color-coded question map grid (Correct = Green, Incorrect = Red, Skipped = Gray) in the `Review Mode` of `prelims-test-series` and the Profile Report Review page to easily click and jump between questions.
+  2. **Bookmark Model**: Created `Bookmark.ts` mongoose schema to store snapshot copies of bookmarked questions (UserId, QuizId, index, question text, options, correct answer index, explanation, subject, test title, test series sequence ID, and source).
+  3. **Bookmarks Controller & API**: Added `toggleBookmark` (`POST /api/bookmarks`), `getBookmarks` (`GET /api/bookmarks`), and `removeBookmark` (`DELETE /api/bookmarks/:id`) API routes.
+  4. **Frontend Toggle Buttons**: Integrated a 🔖 **Bookmark** toggle button in the question card headers in both **Test Mode** and **Review Mode** of `prelims-test-series` and `prelims-practice-test`.
+  5. **Profile Bookmarks accordion list**: Added a **Bookmarked Questions** feature card in `/profile` which opens a tab displaying a clean accordion list of all saved questions. Clicking any card expands to show options, correct indicator, detailed explanation, and a `🗑️ Remove` button.
+  6. **Daily Quiz Bookmarks**: Added a 🔖 **Bookmark** toggle button in the question card header of the Current Affairs - Daily Quiz module (`/daily-quiz`) and updated profile bookmarks tab to correctly display current affairs questions with a 'Daily Quiz' badge.
+  7. **Refined Concurrency Limits**: Shifted session limits from a flat 3 devices to device-type specific counts: max 1 small device (mobile: iPhone/Android) and max 2 other devices (desktop, laptop, tablets) active concurrently.
+  8. **Learning Mode Confetti**: Installed `canvas-confetti` and configured `handleSelectOption` in `prelims-practice-test/page.tsx` to instantly fire a celebration party-popper confetti animation when a correct answer is chosen in Learning Mode.
+  9. **Practice Test Overview & Review Grid**: Ported the interactive **Test Overview** screen (showing question map and stats summaries) and **Review Mode question navigation grid** (color-coded by answers correct/wrong status) from the Prelims Test Series module to the Prelims Practice Test module.
+  10. **Practice Test Bug Fixes**: Removed the duplicate `Overview` button from the bottom navigation row in Prelims Practice Test (Test Mode). Added tag exclusion filter (`excludeTags=prelims-practice,prelims-test-series`) in the backend quizzes and adjacent dates query controllers and the client fetch requests, ensuring practice tests and test series quizzes never leak into the Current Affairs daily quiz module.
+  11. **Practice Test Stats Visibility**: Hid the live stats KPI counters (Correct, Wrong, Left) when attending a quiz in Test Mode. These remain visible in Learning Mode.
+- **Files created:**
+  - `apps/api/src/models/Bookmark.ts`
+  - `apps/api/src/controllers/bookmark.controller.ts`
+  - `apps/api/src/routes/bookmark.routes.ts`
+- **Files modified:**
+  - `apps/api/src/models/index.ts`, `apps/api/src/routes/index.ts`, `apps/api/src/index.ts`
+  - `apps/client/app/tests/prelims-test-series/page.tsx`
+  - `apps/client/app/tests/prelims-practice-test/page.tsx`
+  - `apps/client/app/profile/page.tsx`
+  - `apps/client/app/daily-quiz/page.tsx`
+  - `apps/api/src/controllers/auth.controller.ts`
+  - `apps/api/src/controllers/quiz.controller.ts`
+  - `apps/client/lib/api.ts`
+
 ### Session: 2026-07-08 (10) — Silent Token Refresh, Logout All Devices & 3-Device Limit
 - **Who:** AI (Antigravity)
 - **What:**
@@ -1073,6 +1101,35 @@ Admin creates content
   - `apps/client/components/BottomNav.tsx` — Changed Prelims tab → Current Affairs (CA) tab pointing to `/current-affairs`
   - `apps/client/components/Breadcrumbs.tsx` — Added 'current-affairs' route label
 - **Seeded data:** 7 resource categories (Standard Text Books, Revision Notes for Prelims/Mains, Mains Value Addition Notes, Prelims/Mains PYQ Solved, Topper Notes) with predefined UPSC tags and accent colors
+
+### Session: 2026-07-19 (Strict Test-Level Subject Tag Filtering)
+- **Who:** AI (Antigravity)
+- **What:** Enforced strict whole-test level subject tag filtering on the student side for Prelims Practice Test and Prelims Test Series.
+- **Changes made:**
+  1. **Prelims Practice Test (`tests/prelims-practice-test/page.tsx`)**: Removed question-level `q.subject` scanning from subject filter pill extraction and test filtering. Subject pills now strictly derive from whole-test `quiz.tags` (excluding `prelims-practice`), defaulting untagged tests to `"General"`.
+  2. **Prelims Test Series (`tests/prelims-test-series/page.tsx`)**: Simplified `getTestSubjects` and `getTestSubjectLabel` to strictly use `test.subjectTags` (configured in admin). Removed title keyword guessing (`polity`, `economy`, etc.) and `q.subject` scanning. Untagged test papers default to `["General"]`.
+- **Verification:** `npx tsc --noEmit` passed with 0 errors.
+
+### Session: 2026-07-19 (Online Sheet Import & Remote Date Filtering)
+- **Who:** AI (Antigravity)
+- **What:** Implemented online Google Sheet / Excel URL import with server-side date filtering and smart upsert for Prelims & Mains articles.
+- **Changes made:**
+  1. **Sheet Query Service (`services/sheetQueryService.ts`)**: Added GViz Query API fetcher that executes remote queries against Google Sheets without downloading full binary spreadsheets. Parses cell values and formats rows. Added direct online Excel stream parsing fallback.
+  2. **Prelims Row Filtering**: Updated `article-excel.service.ts` (`parseArticleExcelRows`) to filter rows matching target date on **Column B**.
+  3. **Mains Row Filtering**: Updated `mains-excel.service.ts` (`parseMainsExcelRows`) to filter rows matching target date on **Column A**.
+  4. **Upsert Logic (`controllers/article.controller.ts`)**: Updated `importArticlesFromExcel` and `importMainsFromExcel` to support `excelUrl` and `targetDate`. Uses MongoDB `findOneAndUpdate` with `upsert: true` (matching by date + title + type) to update existing articles or create new ones.
+  5. **Admin UI Tabs (`admin/articles/import` & `admin/articles/import-mains`)**: Added tab switchers for "Online Google Sheet (Filtered by Date)" vs "Upload Excel File", with target date pickers and URL input.
+- **Verification:** `npx tsc --noEmit` passed cleanly with 0 errors on both API and Client projects.
+
+### Session: 2026-07-19 (Subject Tags Refactoring Across Modules)
+- **Who:** AI (Antigravity)
+- **What:** Refactored subject tags across Daily Quiz, Prelims Practice Test, and Prelims Test Series modules.
+- **Changes made:**
+  1. **Daily Quiz Admin**: Removed outer/quiz-level subject tag selector UI from `admin/quizzes/import/page.tsx`, `admin/quizzes/new/page.tsx`, and `admin/quizzes/[id]/page.tsx`. Only per-question subjects via Excel column H or manual entry remain.
+  2. **Excel Column H**: Marked column H ("Subject") as "Subject (Optional)" in format guides across quiz import and practice test import pages, as well as `excel.service.ts` documentation.
+  3. **Test Series**: Added `subjectTags` array field to `TestSeries.ts` model (`ITestSeriesItem` + schema) and `lib/api.ts` interface. Added "Subject Tags (Comma separated)" text input to admin test series item form and updated save/edit handlers. Updated user-side filtering in `tests/prelims-test-series/page.tsx` to prioritize `subjectTags` over title matching.
+  4. **Practice Test Filtering**: Refined user-side filtering in `tests/prelims-practice-test/page.tsx` to support the "General" filter pill when quizzes lack specific tags/question subjects.
+- **Verification:** `npx tsc --noEmit` passed cleanly with 0 errors on both API and Client apps.
 
 ### Session: 2026-05-27 (Content Rendering: Lists + Tables)
 - **Who:** AI (Antigravity)

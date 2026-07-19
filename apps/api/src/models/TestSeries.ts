@@ -12,6 +12,7 @@ export interface ITestSeriesItem {
     syllabus?: string;
     discussionVideoUrl?: string;
     isLocked: boolean;
+    subjectTags?: string[];
 }
 
 export interface ITestSeries extends Document {
@@ -67,6 +68,10 @@ const TestSeriesItemSchema = new Schema<ITestSeriesItem>(
             type: Boolean,
             default: false,
         },
+        subjectTags: [{
+            type: String,
+            trim: true,
+        }],
     },
     { _id: false }
 );

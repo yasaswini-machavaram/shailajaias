@@ -2,7 +2,9 @@
 
 import { useState, useEffect, Suspense, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { getQuizzesByTag } from '@/lib/api';
+import { getQuizzesByTag, API_URL } from '@/lib/api';
+import { useStudentAuth } from '@/contexts/StudentAuthContext';
+import confetti from 'canvas-confetti';
 
 interface Question {
     question: string;
@@ -83,12 +85,84 @@ export default function PrelimsPracticeTestPage() {
 }
 
 function PrelimsPracticeTestInner() {
+    const studentAuth = useStudentAuth();
+    const studentToken = studentAuth?.token || null;
+
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);
     const [filteredQuizzes, setFilteredQuizzes] = useState<Quiz[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    // Bookmark states
+    const [bookmarkedKeys, setBookmarkedKeys] = useState<Record<string, boolean>>({});
+
+    const fetchBookmarks = useCallback(async () => {
+        if (!studentToken) return;
+        try {
+            const res = await fetch(`${API_URL}/api/bookmarks`, {
+                headers: {
+                    'Authorization': `Bearer ${studentToken}`
+                }
+            });
+            const data = await res.json();
+            if (data.success) {
+                const keys: Record<string, boolean> = {};
+                data.data.forEach((bookmark: any) => {
+                    keys[`${bookmark.quizId}_${bookmark.questionIndex}`] = true;
+                });
+                setBookmarkedKeys(keys);
+            }
+        } catch (error) {
+            console.error('Error fetching bookmarks:', error);
+        }
+    }, [studentToken]);
+
+    useEffect(() => {
+        fetchBookmarks();
+    }, [fetchBookmarks]);
+
+    const handleToggleBookmark = async (qIndex: number) => {
+        if (!studentToken) {
+            alert('Please login to bookmark questions.');
+            return;
+        }
+        if (!activeQuiz) return;
+        const q = activeQuiz.questions[qIndex];
+        const key = `${activeQuiz._id}_${qIndex}`;
+        const isBookmarked = bookmarkedKeys[key];
+
+        try {
+            const res = await fetch(`${API_URL}/api/bookmarks`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${studentToken}`
+                },
+                body: JSON.stringify({
+                    quizId: activeQuiz._id,
+                    questionIndex: qIndex,
+                    question: q.question,
+                    options: q.options,
+                    correctIndex: q.correctIndex,
+                    explanation: q.explanation,
+                    subject: q.subject || 'General',
+                    testTitle: activeQuiz.title,
+                    source: 'prelims_practice_test'
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setBookmarkedKeys(prev => ({
+                    ...prev,
+                    [key]: !isBookmarked
+                }));
+            }
+        } catch (error) {
+            console.error('Error toggling bookmark:', error);
+        }
+    };
     const [selectedSubject, setSelectedSubject] = useState('All');
     const [subjects, setSubjects] = useState<string[]>(['All']);
-    
+
     // Guidelines & Video Modal State
     const [showGuidelines, setShowGuidelines] = useState(false);
     const [showVideo, setShowVideo] = useState(false);
@@ -101,6 +175,7 @@ function PrelimsPracticeTestInner() {
     const [markedForReview, setMarkedForReview] = useState<Record<number, boolean>>({});
     const [showScorecard, setShowScorecard] = useState(false);
     const [showReview, setShowReview] = useState(false);
+    const [showOverview, setShowOverview] = useState(false);
     const [hasStartedTest, setHasStartedTest] = useState(false);
 
     // Custom warning and submit modals
@@ -152,32 +227,29 @@ function PrelimsPracticeTestInner() {
                 // Fetch quizzes tagged with 'prelims-practice'
                 const data = await getQuizzesByTag('prelims-practice');
                 setQuizzes(data);
-                
-                // Extract unique subjects from quizzes (based on tags or questions)
+
+                // Extract unique subjects from quizzes based ONLY on quiz-level tags (excluding 'prelims-practice')
                 const subjectTags = new Set<string>();
                 data.forEach(quiz => {
-                    // Check other tags (excluding 'prelims-practice')
+                    let hasCustomTag = false;
                     quiz.tags.forEach(tag => {
                         if (tag !== 'prelims-practice') {
                             const formattedTag = tag.charAt(0).toUpperCase() + tag.slice(1).toLowerCase();
                             subjectTags.add(formattedTag);
+                            hasCustomTag = true;
                         }
                     });
-                    // Check subjects inside questions
-                    quiz.questions.forEach(q => {
-                        if (q.subject) {
-                            const formattedSubj = q.subject.charAt(0).toUpperCase() + q.subject.slice(1).toLowerCase();
-                            subjectTags.add(formattedSubj);
-                        }
-                    });
+                    if (!hasCustomTag) {
+                        subjectTags.add('General');
+                    }
                 });
 
                 // Fallback subjects if none found yet
                 const defaultList = ['Polity', 'Economy', 'Environment', 'History', 'Geography', 'S&T'];
-                const mergedSubjects = Array.from(subjectTags).length > 0 
-                    ? ['All', ...Array.from(subjectTags)] 
+                const mergedSubjects = Array.from(subjectTags).length > 0
+                    ? ['All', ...Array.from(subjectTags)]
                     : ['All', ...defaultList];
-                
+
                 setSubjects(mergedSubjects);
             } catch (error) {
                 console.error('Failed to load practice tests:', error);
@@ -189,16 +261,20 @@ function PrelimsPracticeTestInner() {
         fetchQuizzes();
     }, []);
 
-    // Filter quizzes by selected subject
+    // Filter quizzes strictly by quiz-level subject tags
     useEffect(() => {
         if (selectedSubject === 'All') {
             setFilteredQuizzes(quizzes);
+        } else if (selectedSubject === 'General') {
+            const filtered = quizzes.filter(quiz => {
+                const hasSpecificTag = quiz.tags.some(t => t !== 'prelims-practice' && t.trim() !== '');
+                const matchesGeneralTag = quiz.tags.some(t => t.toLowerCase() === 'general');
+                return matchesGeneralTag || !hasSpecificTag;
+            });
+            setFilteredQuizzes(filtered);
         } else {
             const filtered = quizzes.filter(quiz => {
-                // Match quiz tag or question subject
-                const hasTag = quiz.tags.some(t => t.toLowerCase() === selectedSubject.toLowerCase());
-                const hasQuestionSubject = quiz.questions.some(q => q.subject?.toLowerCase() === selectedSubject.toLowerCase());
-                return hasTag || hasQuestionSubject;
+                return quiz.tags.some(t => t.toLowerCase() === selectedSubject.toLowerCase());
             });
             setFilteredQuizzes(filtered);
         }
@@ -258,6 +334,17 @@ function PrelimsPracticeTestInner() {
         if (answers[qIdx] !== undefined) return;
         if (!learnMode) setHasStartedTest(true);
         setAnswers(prev => ({ ...prev, [qIdx]: optIdx }));
+
+        if (learnMode && activeQuiz) {
+            const isCorrect = activeQuiz.questions[qIdx].correctIndex === optIdx;
+            if (isCorrect) {
+                confetti({
+                    particleCount: 100,
+                    spread: 75,
+                    origin: { y: 0.7 }
+                });
+            }
+        }
     };
 
     // Scoring helpers
@@ -388,13 +475,13 @@ function PrelimsPracticeTestInner() {
     const getQuizTopics = (quiz: Quiz) => {
         // Extract subjects/chapters from quiz setName, title, or tags
         if (quiz.setName) return quiz.setName;
-        
+
         // Alternatively, gather unique subjects from questions
         const distinctSubjects = Array.from(
             new Set(quiz.questions.map(q => q.subject).filter(Boolean))
         );
         if (distinctSubjects.length > 0) return distinctSubjects.join(', ');
-        
+
         return 'General Practice & Revision';
     };
 
@@ -413,9 +500,11 @@ function PrelimsPracticeTestInner() {
                             <div>
                                 <button
                                     onClick={() => {
-                                        if (showScorecard) {
+                                        if (showScorecard || showReview || showOverview) {
                                             if (timerRef.current) clearInterval(timerRef.current);
                                             setActiveQuiz(null);
+                                            setShowOverview(false);
+                                            setShowReview(false);
                                         } else {
                                             setShowDiscardConfirmModal(true);
                                         }
@@ -437,18 +526,34 @@ function PrelimsPracticeTestInner() {
 
                             <div className="flex items-center gap-3">
                                 {/* Timer & Submit Badge (Test mode only) */}
-                                {!learnMode && !showScorecard && (
+                                {!learnMode && !showScorecard && !showReview && (
                                     <div className="flex items-center gap-3">
-                                        <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-mono text-lg font-extrabold border-2 transition-all ${
-                                            isTimerLow
-                                                ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
-                                                : 'bg-slate-50 border-gray-200 text-[#1E3A5F]'
-                                        }`}>
+                                        <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-mono text-lg font-extrabold border-2 transition-all ${isTimerLow
+                                            ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
+                                            : 'bg-slate-50 border-gray-200 text-[#1E3A5F]'
+                                            }`}>
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
                                             {formatTime(timeRemaining)}
                                         </div>
+                                        {!showOverview ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowOverview(true)}
+                                                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-2xl shadow-sm transition-all"
+                                            >
+                                                Overview
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowOverview(false)}
+                                                className="px-4 py-2.5 bg-slate-600 hover:bg-slate-700 text-white font-bold text-sm rounded-2xl shadow-sm transition-all"
+                                            >
+                                                Back to Test
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => setShowSubmitConfirmModal(true)}
                                             className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-2xl shadow-sm transition-all"
@@ -457,88 +562,84 @@ function PrelimsPracticeTestInner() {
                                         </button>
                                     </div>
                                 )}
-                                <div className="flex gap-2">
-                                    <span className="px-3 py-1 bg-[#1E3A5F] text-white text-xs font-bold rounded-full lowercase">
-                                        {learnMode ? 'learning' : 'test'}
-                                    </span>
-                                </div>
+
                             </div>
                         </div>
 
                         {/* Mode Toggle + Stats */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Mode Toggle */}
-                            <div className="bg-slate-50 border border-gray-100 rounded-2xl p-3 flex flex-col justify-center items-center">
-                                <span className="text-xs font-bold text-gray-400 mb-2.5 uppercase tracking-wider">Mode</span>
-                                <div className="flex bg-gray-200/80 rounded-xl p-1 w-full max-w-[240px]">
-                                    <button
-                                        onClick={() => {
-                                            if (!hasStartedTest) {
-                                                if (timerRef.current) clearInterval(timerRef.current);
-                                                setLearnMode(true);
-                                                setShowScorecard(false);
-                                                setShowReview(false);
-                                                setAnswers({});
-                                                setMarkedForReview({});
-                                                setCurrentQuestionIndex(0);
-                                            }
-                                        }}
-                                        disabled={hasStartedTest && !learnMode}
-                                        className={`flex-1 py-2 text-center text-xs font-bold rounded-lg transition-all ${
-                                            learnMode
+                        {!showScorecard && !showReview && !showOverview && (
+                            <div className={`grid grid-cols-1 ${learnMode ? 'md:grid-cols-2' : 'max-w-md mx-auto w-full'} gap-4`}>
+                                {/* Mode Toggle */}
+                                <div className="bg-slate-50 border border-gray-100 rounded-2xl p-3 flex flex-col justify-center items-center">
+                                    <span className="text-xs font-bold text-gray-400 mb-2.5 uppercase tracking-wider">Mode</span>
+                                    <div className="flex bg-gray-200/80 rounded-xl p-1 w-full max-w-[240px]">
+                                        <button
+                                            onClick={() => {
+                                                if (!hasStartedTest) {
+                                                    if (timerRef.current) clearInterval(timerRef.current);
+                                                    setLearnMode(true);
+                                                    setShowScorecard(false);
+                                                    setShowReview(false);
+                                                    setAnswers({});
+                                                    setMarkedForReview({});
+                                                    setCurrentQuestionIndex(0);
+                                                }
+                                            }}
+                                            disabled={hasStartedTest && !learnMode}
+                                            className={`flex-1 py-2 text-center text-xs font-bold rounded-lg transition-all ${learnMode
                                                 ? 'bg-[#1E3A5F] text-white shadow-sm'
                                                 : hasStartedTest ? 'text-gray-400 cursor-not-allowed' : 'text-gray-600 hover:text-gray-900'
-                                        }`}
-                                    >
-                                        Learning
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            if (!hasStartedTest || learnMode) {
-                                                setLearnMode(false);
-                                                setShowScorecard(false);
-                                                setShowReview(false);
-                                                setAnswers({});
-                                                setMarkedForReview({});
-                                                setCurrentQuestionIndex(0);
-                                                setHasStartedTest(false);
-                                                const totalSeconds = activeQuiz.questions.length * 60;
-                                                setTimeRemaining(totalSeconds);
-                                                setTestStartTime(Date.now());
-                                            }
-                                        }}
-                                        className={`flex-1 py-2 text-center text-xs font-bold rounded-lg transition-all ${
-                                            !learnMode
+                                                }`}
+                                        >
+                                            Learning
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                if (!hasStartedTest || learnMode) {
+                                                    setLearnMode(false);
+                                                    setShowScorecard(false);
+                                                    setShowReview(false);
+                                                    setAnswers({});
+                                                    setMarkedForReview({});
+                                                    setCurrentQuestionIndex(0);
+                                                    setHasStartedTest(false);
+                                                    const totalSeconds = activeQuiz.questions.length * 60;
+                                                    setTimeRemaining(totalSeconds);
+                                                    setTestStartTime(Date.now());
+                                                }
+                                            }}
+                                            className={`flex-1 py-2 text-center text-xs font-bold rounded-lg transition-all ${!learnMode
                                                 ? 'bg-[#1E3A5F] text-white shadow-sm'
                                                 : 'text-gray-600 hover:text-gray-900'
-                                        }`}
-                                    >
-                                        Test
-                                    </button>
+                                                }`}
+                                        >
+                                            Test
+                                        </button>
+                                    </div>
+                                    {hasStartedTest && !learnMode && (
+                                        <p className="text-[10px] text-amber-600 font-semibold mt-1.5">Mode locked during test</p>
+                                    )}
                                 </div>
-                                {hasStartedTest && !learnMode && (
-                                    <p className="text-[10px] text-amber-600 font-semibold mt-1.5">Mode locked during test</p>
+
+                                {/* Live Stats (shown during quiz, only in learning mode) */}
+                                {learnMode && (
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div className="bg-green-50 border border-green-100 rounded-2xl p-2.5 flex flex-col justify-center items-center text-center">
+                                            <span className="text-lg font-bold text-green-700">{stats.correct}</span>
+                                            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Correct</span>
+                                        </div>
+                                        <div className="bg-red-50 border border-red-100 rounded-2xl p-2.5 flex flex-col justify-center items-center text-center">
+                                            <span className="text-lg font-bold text-red-600">{stats.incorrect}</span>
+                                            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Wrong</span>
+                                        </div>
+                                        <div className="bg-gray-50 border border-gray-200 rounded-2xl p-2.5 flex flex-col justify-center items-center text-center">
+                                            <span className="text-lg font-bold text-gray-500">{stats.unattempted}</span>
+                                            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Left</span>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
-
-                            {/* Live Stats (shown during quiz, not on scorecard) */}
-                            {!showScorecard && !showReview && (
-                                <div className="grid grid-cols-3 gap-2">
-                                    <div className="bg-green-50 border border-green-100 rounded-2xl p-2.5 flex flex-col justify-center items-center text-center">
-                                        <span className="text-lg font-bold text-green-700">{stats.correct}</span>
-                                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Correct</span>
-                                    </div>
-                                    <div className="bg-red-50 border border-red-100 rounded-2xl p-2.5 flex flex-col justify-center items-center text-center">
-                                        <span className="text-lg font-bold text-red-600">{stats.incorrect}</span>
-                                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Wrong</span>
-                                    </div>
-                                    <div className="bg-gray-50 border border-gray-200 rounded-2xl p-2.5 flex flex-col justify-center items-center text-center">
-                                        <span className="text-lg font-bold text-gray-500">{stats.unattempted}</span>
-                                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Left</span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        )}
                     </div>
 
                     {/* Quiz Content */}
@@ -703,19 +804,189 @@ function PrelimsPracticeTestInner() {
                                     </button>
                                 </div>
                             </div>
+                        ) : showOverview ? (
+                            /* ─── TEST OVERVIEW SCREEN ─── */
+                            <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] p-6 md:p-10">
+                                {/* Header */}
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 border-b border-gray-100 pb-6">
+                                    <div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowOverview(false)}
+                                            className="inline-flex items-center gap-2 text-sm font-semibold text-[#1E3A5F] hover:text-[#D97706] mb-3 transition-colors group bg-none border-none p-0 cursor-pointer"
+                                        >
+                                            <svg className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                                            </svg>
+                                            Back to Test
+                                        </button>
+                                        <h2 className="text-2xl font-bold text-[#1E3A5F] font-headline">
+                                            Test Overview
+                                        </h2>
+                                        <p className="text-gray-500 text-sm mt-1">
+                                            Review your progress. Click on any question card to jump back to it.
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowOverview(false)}
+                                            className="px-5 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold text-sm rounded-xl transition-all bg-white"
+                                        >
+                                            Resume Test
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowSubmitConfirmModal(true)}
+                                            className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-sm rounded-xl transition-all shadow-sm"
+                                        >
+                                            Submit Test
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Stats summary cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                                    <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-center">
+                                        <span className="block text-2xl font-extrabold text-blue-700">{Object.keys(answers).length}</span>
+                                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Answered</span>
+                                    </div>
+                                    <div className="bg-purple-50 border border-purple-100 rounded-2xl p-4 text-center">
+                                        <span className="block text-2xl font-extrabold text-purple-700">
+                                            {Object.keys(markedForReview).filter(k => markedForReview[Number(k)]).length}
+                                        </span>
+                                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Marked for Review</span>
+                                    </div>
+                                    <div className="bg-slate-50 border border-gray-100 rounded-2xl p-4 text-center">
+                                        <span className="block text-2xl font-extrabold text-gray-600">
+                                            {totalQuestions - Object.keys(answers).length}
+                                        </span>
+                                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Unanswered / Skipped</span>
+                                    </div>
+                                </div>
+
+                                {/* Questions map grid in multiple rows */}
+                                <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 md:p-8">
+                                    <div className="flex flex-wrap gap-2.5 justify-center md:justify-start">
+                                        {activeQuiz.questions.map((_, idx) => {
+                                            const isAttempted = answers[idx] !== undefined;
+                                            const isMarked = markedForReview[idx] === true;
+                                            const isActive = idx === currentQuestionIndex;
+
+                                            let bg = 'bg-gray-100 text-gray-400 border-gray-200'; // Unattempted
+                                            if (isMarked) {
+                                                bg = 'bg-purple-600 text-white border-purple-700'; // Marked for Review
+                                            } else if (isAttempted) {
+                                                bg = 'bg-blue-100 text-blue-700 border-blue-200'; // Answered
+                                            }
+                                            if (isActive) {
+                                                bg += ' ring-2 ring-[#1E3A5F]/30';
+                                            }
+
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setCurrentQuestionIndex(idx);
+                                                        setShowOverview(false);
+                                                    }}
+                                                    className={`w-12 h-12 rounded-xl border-2 text-sm font-bold flex items-center justify-center transition-all hover:scale-110 active:scale-95 cursor-pointer ${bg}`}
+                                                >
+                                                    {idx + 1}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* KPI Legend */}
+                                    <div className="flex flex-wrap justify-center md:justify-start gap-5 mt-6 border-t border-gray-200/60 pt-4 text-xs font-bold text-gray-500">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-4 h-4 rounded bg-blue-100 border border-blue-300"></div>
+                                            <span>Answered ({Object.keys(answers).length})</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-4 h-4 rounded bg-purple-600 border border-purple-700"></div>
+                                            <span>Marked for Review ({Object.keys(markedForReview).filter(k => markedForReview[Number(k)]).length})</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-4 h-4 rounded bg-gray-100 border border-gray-300"></div>
+                                            <span>Unattempted ({totalQuestions - Object.keys(answers).length})</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         ) : showReview ? (
                             /* ─── REVIEW MODE (after test) ─── */
                             <div>
+                                {/* Question Navigation Grid */}
+                                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6 animate-fade-in-up">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h4 className="text-xs font-bold text-[#1E3A5F] uppercase tracking-wider">Question Map</h4>
+                                        <div className="flex items-center gap-3 text-[10px] font-semibold text-gray-400">
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block"></span> Correct</span>
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block"></span> Wrong</span>
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-gray-300 inline-block"></span> Skipped</span>
+                                        </div>
+                                    </div>
+                                    <div
+                                        ref={scrollContainerRef}
+                                        className="flex flex-nowrap gap-1.5 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-200 scroll-smooth"
+                                    >
+                                        {activeQuiz.questions.map((q, idx) => {
+                                            const isActive = idx === currentQuestionIndex;
+                                            const selectedAnswer = answers[idx];
+                                            const wasAttempted = selectedAnswer !== undefined;
+                                            const wasCorrect = wasAttempted && selectedAnswer === q.correctIndex;
+
+                                            let bg = 'bg-gray-200 text-gray-500'; // unattempted
+                                            if (isActive) {
+                                                bg = 'ring-2 ring-[#1E3A5F]/40 ';
+                                                if (!wasAttempted) bg += 'bg-gray-300 text-gray-600';
+                                                else if (wasCorrect) bg += 'bg-green-600 text-white';
+                                                else bg += 'bg-red-600 text-white';
+                                            } else if (wasCorrect) {
+                                                bg = 'bg-green-500 text-white';
+                                            } else if (wasAttempted) {
+                                                bg = 'bg-red-500 text-white';
+                                            }
+
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => setCurrentQuestionIndex(idx)}
+                                                    className={`w-9 h-9 rounded-lg text-xs font-bold flex items-center justify-center transition-all hover:scale-105 flex-shrink-0 ${bg}`}
+                                                >
+                                                    {idx + 1}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
                                 <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] p-6 md:p-10 mb-6">
                                     <div className="flex items-center justify-between gap-4 mb-6">
                                         <span className="px-3.5 py-1.5 bg-amber-100 text-amber-800 font-bold rounded-xl text-xs uppercase">
                                             Review • Question {currentQuestionIndex + 1} of {totalQuestions}
                                         </span>
-                                        {currentQuestion.subject && (
-                                            <span className="px-3 py-1 bg-amber-100 text-amber-900 font-bold rounded-full text-xs uppercase">
-                                                {currentQuestion.subject}
-                                            </span>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {currentQuestion.subject && (
+                                                <span className="px-3 py-1 bg-amber-100 text-amber-900 font-bold rounded-full text-[10px] md:text-xs uppercase">
+                                                    {currentQuestion.subject}
+                                                </span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleBookmark(currentQuestionIndex)}
+                                                className={`p-1.5 rounded-lg border transition-all flex items-center justify-center gap-1 text-[10px] md:text-xs font-bold ${bookmarkedKeys[`${activeQuiz._id}_${currentQuestionIndex}`]
+                                                    ? 'border-[#D97706] bg-amber-50 text-[#D97706]'
+                                                    : 'border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                                                    }`}
+                                            >
+                                                <span>{bookmarkedKeys[`${activeQuiz._id}_${currentQuestionIndex}`] ? '🔖' : '🎗️'}</span>
+                                                <span>{bookmarkedKeys[`${activeQuiz._id}_${currentQuestionIndex}`] ? 'Bookmarked' : 'Bookmark'}</span>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <h3 className="text-gray-800 font-bold text-lg md:text-xl leading-relaxed whitespace-pre-line mb-8 font-headline">
@@ -727,7 +998,7 @@ function PrelimsPracticeTestInner() {
                                             const selectedIdx = answers[currentQuestionIndex];
                                             const isThisSelected = selectedIdx === oIdx;
                                             const isCorrect = currentQuestion.correctIndex === oIdx;
-                                            
+
                                             let style = 'border-gray-100 bg-white opacity-50';
                                             if (isCorrect) style = 'border-green-500 bg-green-50/50 text-green-900';
                                             else if (isThisSelected) style = 'border-red-500 bg-red-50/50 text-red-900';
@@ -798,11 +1069,24 @@ function PrelimsPracticeTestInner() {
                                         <span className="px-3.5 py-1.5 bg-[#1E3A5F]/10 text-[#1E3A5F] font-bold rounded-xl text-xs uppercase">
                                             Question {currentQuestionIndex + 1} of {totalQuestions}
                                         </span>
-                                        {currentQuestion.subject && (
-                                            <span className="px-3 py-1 bg-amber-100 text-amber-900 font-bold rounded-full text-xs uppercase">
-                                                {currentQuestion.subject}
-                                            </span>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {currentQuestion.subject && (
+                                                <span className="px-3 py-1 bg-amber-100 text-amber-900 font-bold rounded-full text-[10px] md:text-xs uppercase">
+                                                    {currentQuestion.subject}
+                                                </span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleBookmark(currentQuestionIndex)}
+                                                className={`p-1.5 rounded-lg border transition-all flex items-center justify-center gap-1 text-[10px] md:text-xs font-bold ${bookmarkedKeys[`${activeQuiz._id}_${currentQuestionIndex}`]
+                                                    ? 'border-[#D97706] bg-amber-50 text-[#D97706]'
+                                                    : 'border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                                                    }`}
+                                            >
+                                                <span>{bookmarkedKeys[`${activeQuiz._id}_${currentQuestionIndex}`] ? '🔖' : '🎗️'}</span>
+                                                <span>{bookmarkedKeys[`${activeQuiz._id}_${currentQuestionIndex}`] ? 'Bookmarked' : 'Bookmark'}</span>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <h3 className="text-gray-800 font-bold text-lg md:text-xl leading-relaxed whitespace-pre-line mb-8 font-headline">
@@ -814,7 +1098,7 @@ function PrelimsPracticeTestInner() {
                                             const selectedIdx = answers[currentQuestionIndex];
                                             const isThisSelected = selectedIdx === oIdx;
                                             const isCorrect = currentQuestion.correctIndex === oIdx;
-                                            
+
                                             let style = 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50/50 cursor-pointer';
                                             if (selectedIdx !== undefined) {
                                                 if (learnMode) {
@@ -873,7 +1157,7 @@ function PrelimsPracticeTestInner() {
 
                                 {/* Question Navigation Grid */}
                                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6">
-                                    <div 
+                                    <div
                                         ref={scrollContainerRef}
                                         className="flex flex-nowrap gap-1.5 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-200 scroll-smooth"
                                     >
@@ -939,7 +1223,7 @@ function PrelimsPracticeTestInner() {
                                             }
                                         </button>
                                     </div>
-                                    
+
                                     {currentQuestionIndex < totalQuestions - 1 ? (
                                         <button
                                             onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
@@ -1037,11 +1321,10 @@ function PrelimsPracticeTestInner() {
                                 <button
                                     key={subject}
                                     onClick={() => setSelectedSubject(subject)}
-                                    className={`px-5 py-2 text-xs font-bold rounded-xl transition-all flex-shrink-0 ${
-                                        selectedSubject === subject
-                                            ? 'bg-[#1E3A5F] text-white shadow-sm'
-                                            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200/60'
-                                    }`}
+                                    className={`px-5 py-2 text-xs font-bold rounded-xl transition-all flex-shrink-0 ${selectedSubject === subject
+                                        ? 'bg-[#1E3A5F] text-white shadow-sm'
+                                        : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200/60'
+                                        }`}
                                 >
                                     {subject}
                                 </button>
@@ -1174,7 +1457,7 @@ function PrelimsPracticeTestInner() {
                         <div className="bg-slate-900 aspect-video rounded-2xl relative overflow-hidden flex items-center justify-center mb-6 shadow-inner border border-slate-800 group">
                             <div className="absolute inset-0 bg-cover bg-center opacity-60 filter blur-sm" style={{ backgroundImage: "url('/img/video_thumbnail_placeholder.jpg')" }} />
                             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-                            
+
                             {/* Inner Mock Player Content */}
                             <div className="text-center z-10 p-4">
                                 <div className="w-16 h-16 bg-[#D97706]/95 hover:bg-[#D97706] hover:scale-105 transition-all text-white rounded-full flex items-center justify-center mx-auto mb-4 cursor-pointer shadow-lg shadow-amber-500/20">

@@ -40,6 +40,18 @@ function extractHyperlink(cell: XLSX.CellObject | undefined): string | { name: s
     return val;
 }
 
+function parseSourceValue(val: unknown): string | { name: string; url: string } {
+    if (!val) return '';
+    if (typeof val === 'object' && val !== null && 'url' in val) {
+        return val as { name: string; url: string };
+    }
+    const str = String(val).trim();
+    if (str.startsWith('http://') || str.startsWith('https://')) {
+        return { name: 'Source', url: str };
+    }
+    return str;
+}
+
 /**
  * Convert a Google Drive file ID to a direct-view URL.
  * Requires the file to be shared publicly ("Anyone with the link").
@@ -321,64 +333,71 @@ function isReasonableDate(date: Date): boolean {
  *
  * Columns after 10 (PYQ Score, PYQ Reference, MCQ Type, etc.) are ignored.
  */
-export const parseArticleExcel = (buffer: Buffer): ParseArticleExcelResult => {
+export const parseArticleExcelRows = (
+    data: unknown[][],
+    options?: { targetDate?: string }
+): ParseArticleExcelResult => {
     const articles: ParsedArticle[] = [];
     const errors: string[] = [];
     let skipped = 0;
 
     try {
-        const workbook = XLSX.read(buffer, { type: 'buffer' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-
-        // Convert to raw array rows (header as first row)
-        const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
-
-        if (data.length < 2) {
+        if (!data || data.length < 2) {
             errors.push('Excel file has no data rows (only header or empty)');
             return { articles, errors, skipped };
         }
 
-        // Skip header row (index 0), process data rows
-        for (let i = 1; i < data.length; i++) {
-            const row = data[i];
-            if (!row || row.length === 0) {
+    const targetDateFormatted = options?.targetDate ? options.targetDate.trim() : null;
+
+    // Skip header row (index 0), process data rows
+    for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        if (!row || row.length === 0) {
+            skipped++;
+            continue;
+        }
+
+        const [
+            sNo,       // 0: S.No
+            dateVal,   // 1: Date
+            subject,   // 2: Subject
+            title,     // 3: Title
+            inNews,    // 4: In News
+            content,   // 5: Content
+            sourceLink,// 6: Source Link
+            extImgUrl, // 7: External Image URL
+            imageId,   // 8: Image ID
+            tagsCell,  // 9: Tags
+            addlInfo,  // 10: Additional Info
+        ] = row;
+
+        // Skip separator/template rows
+        if (isSeparatorRow(title, content)) {
+            skipped++;
+            continue;
+        }
+
+        // Parse date — strict validation
+        const date = parseExcelDate(dateVal);
+        if (!date) {
+            errors.push(`Row ${i + 1}: Invalid or missing date "${dateVal}" — article "${String(title || '').trim()}" skipped`);
+            continue;
+        }
+
+        // Validate date is reasonable
+        if (!isReasonableDate(date)) {
+            errors.push(`Row ${i + 1}: Date "${date.toISOString().split('T')[0]}" is outside valid range (2020-2030) — article "${String(title || '').trim()}" skipped`);
+            continue;
+        }
+
+        // Filter by targetDate if specified (Column B / index 1)
+        if (targetDateFormatted) {
+            const rowDateStr = date.toISOString().split('T')[0];
+            if (rowDateStr !== targetDateFormatted) {
                 skipped++;
                 continue;
             }
-
-            const [
-                sNo,       // 0: S.No
-                dateVal,   // 1: Date
-                subject,   // 2: Subject
-                title,     // 3: Title
-                inNews,    // 4: In News
-                content,   // 5: Content
-                sourceLink,// 6: Source Link
-                extImgUrl, // 7: External Image URL
-                imageId,   // 8: Image ID
-                tagsCell,  // 9: Tags
-                addlInfo,  // 10: Additional Info
-            ] = row;
-
-            // Skip separator/template rows
-            if (isSeparatorRow(title, content)) {
-                skipped++;
-                continue;
-            }
-
-            // Parse date — strict validation
-            const date = parseExcelDate(dateVal);
-            if (!date) {
-                errors.push(`Row ${i + 1}: Invalid or missing date "${dateVal}" — article "${String(title || '').trim()}" skipped`);
-                continue;
-            }
-
-            // Validate date is reasonable
-            if (!isReasonableDate(date)) {
-                errors.push(`Row ${i + 1}: Date "${date.toISOString().split('T')[0]}" is outside valid range (2020-2030) — article "${String(title || '').trim()}" skipped`);
-                continue;
-            }
+        }
 
             // Title is required
             const titleStr = String(title || '').trim();
@@ -403,10 +422,8 @@ export const parseArticleExcel = (buffer: Buffer): ParseArticleExcelResult => {
             // Parse order
             const order = typeof sNo === 'number' ? sNo : parseInt(String(sNo || '0'), 10) || 0;
 
-            // Source — extract hyperlink { name, url } from raw worksheet cell
-            const sourceColLetter = XLSX.utils.encode_col(6); // Column G ("Source Link")
-            const sourceCell = worksheet[`${sourceColLetter}${i + 1}`] as XLSX.CellObject | undefined;
-            const source = extractHyperlink(sourceCell);
+            // Source — parse link string or object
+            const source = parseSourceValue(sourceLink);
 
             articles.push({
                 title: titleStr,
@@ -423,10 +440,29 @@ export const parseArticleExcel = (buffer: Buffer): ParseArticleExcelResult => {
     } catch (error) {
         return {
             articles: [],
+            errors: [`Failed to parse Excel data: ${error instanceof Error ? error.message : 'Unknown error'}`],
+            skipped: 0,
+        };
+    }
+};
+
+export const parseArticleExcel = (
+    buffer: Buffer,
+    options?: { targetDate?: string }
+): ParseArticleExcelResult => {
+    try {
+        const workbook = XLSX.read(buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
+        return parseArticleExcelRows(data, options);
+    } catch (error) {
+        return {
+            articles: [],
             errors: [`Failed to parse Excel file: ${error instanceof Error ? error.message : 'Unknown error'}`],
             skipped: 0,
         };
     }
 };
 
-export default { parseArticleExcel };
+export default { parseArticleExcel, parseArticleExcelRows };

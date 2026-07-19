@@ -51,6 +51,18 @@ function extractHyperlink(cell: XLSX.CellObject | undefined): string | { name: s
     return val;
 }
 
+function parseSourceValue(val: unknown): string | { name: string; url: string } {
+    if (!val) return '';
+    if (typeof val === 'object' && val !== null && 'url' in val) {
+        return val as { name: string; url: string };
+    }
+    const str = String(val).trim();
+    if (str.startsWith('http://') || str.startsWith('https://')) {
+        return { name: 'Source', url: str };
+    }
+    return str;
+}
+
 // ─── Shared Helpers (aligned with article-excel.service.ts) ─────────────────
 
 /**
@@ -277,67 +289,74 @@ function isSeparatorRow(title: unknown): boolean {
  *   Q(16): Q5  |  R(17): A5  |  S(18): Q6  |  T(19): A6
  *   U(20): Image
  */
-export const parseMainsExcel = (buffer: Buffer): ParseMainsExcelResult => {
+export const parseMainsExcelRows = (
+    data: unknown[][],
+    options?: { targetDate?: string }
+): ParseMainsExcelResult => {
     const articles: ParsedMainsArticle[] = [];
     const errors: string[] = [];
     let skipped = 0;
 
     try {
-        const workbook = XLSX.read(buffer, { type: 'buffer' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-
-        // Convert to raw array rows (header as first row)
-        const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
-
-        if (data.length < 2) {
+        if (!data || data.length < 2) {
             errors.push('Excel file has no data rows (only header or empty)');
             return { articles, errors, skipped };
         }
 
-        // Skip header row (index 0), process data rows
-        for (let i = 1; i < data.length; i++) {
-            const row = data[i];
-            if (!row || row.length === 0) {
+    const targetDateFormatted = options?.targetDate ? options.targetDate.trim() : null;
+
+    // Skip header row (index 0), process data rows
+    for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        if (!row || row.length === 0) {
+            skipped++;
+            continue;
+        }
+
+        const [
+            dateVal,     // 0: Date (A)
+            title,       // 1: Title (B)
+            subject,     // 2: Subject (C)
+            tagsCell,    // 3: Tags (D)
+            sourceVal,   // 4: Source (E)
+            practiceVal, // 5: Practice (F)
+            valueVal,    // 6: Value Additions (G)
+            contextVal,  // 7: Context (H)
+            q1, a1,      // 8-9: Q1/A1 (I,J)
+            q2, a2,      // 10-11: Q2/A2 (K,L)
+            q3, a3,      // 12-13: Q3/A3 (M,N)
+            q4, a4,      // 14-15: Q4/A4 (O,P)
+            q5, a5,      // 16-17: Q5/A5 (Q,R)
+            q6, a6,      // 18-19: Q6/A6 (S,T)
+            imageVal,    // 20: Image (U)
+        ] = row;
+
+        // Skip separator/template rows
+        if (isSeparatorRow(title)) {
+            skipped++;
+            continue;
+        }
+
+        // Parse date — strict validation
+        const date = parseExcelDate(dateVal);
+        if (!date) {
+            errors.push(`Row ${i + 1}: Invalid or missing date "${dateVal}" — article "${cellToString(title)}" skipped`);
+            continue;
+        }
+
+        if (!isReasonableDate(date)) {
+            errors.push(`Row ${i + 1}: Date "${date.toISOString().split('T')[0]}" is outside valid range (2020-2030) — article "${cellToString(title)}" skipped`);
+            continue;
+        }
+
+        // Filter by targetDate if specified (Column A / index 0)
+        if (targetDateFormatted) {
+            const rowDateStr = date.toISOString().split('T')[0];
+            if (rowDateStr !== targetDateFormatted) {
                 skipped++;
                 continue;
             }
-
-            const [
-                dateVal,     // 0: Date (A)
-                title,       // 1: Title (B)
-                subject,     // 2: Subject (C)
-                tagsCell,    // 3: Tags (D)
-                sourceVal,   // 4: Source (E)
-                practiceVal, // 5: Practice (F)
-                valueVal,    // 6: Value Additions (G)
-                contextVal,  // 7: Context (H)
-                q1, a1,      // 8-9: Q1/A1 (I,J)
-                q2, a2,      // 10-11: Q2/A2 (K,L)
-                q3, a3,      // 12-13: Q3/A3 (M,N)
-                q4, a4,      // 14-15: Q4/A4 (O,P)
-                q5, a5,      // 16-17: Q5/A5 (Q,R)
-                q6, a6,      // 18-19: Q6/A6 (S,T)
-                imageVal,    // 20: Image (U)
-            ] = row;
-
-            // Skip separator/template rows
-            if (isSeparatorRow(title)) {
-                skipped++;
-                continue;
-            }
-
-            // Parse date — strict validation
-            const date = parseExcelDate(dateVal);
-            if (!date) {
-                errors.push(`Row ${i + 1}: Invalid or missing date "${dateVal}" — article "${cellToString(title)}" skipped`);
-                continue;
-            }
-
-            if (!isReasonableDate(date)) {
-                errors.push(`Row ${i + 1}: Date "${date.toISOString().split('T')[0]}" is outside valid range (2020-2030) — article "${cellToString(title)}" skipped`);
-                continue;
-            }
+        }
 
             // Title is required
             const titleStr = cellToString(title);
@@ -366,10 +385,8 @@ export const parseMainsExcel = (buffer: Buffer): ParseMainsExcelResult => {
             // Context, source, practice, value additions — normalize list items
             const context = normalizeListItems(cellToString(contextVal));
 
-            // Source — extract hyperlink { name, url } from raw worksheet cell
-            const sourceColLetter = XLSX.utils.encode_col(4); // Column E
-            const sourceCell = worksheet[`${sourceColLetter}${i + 1}`] as XLSX.CellObject | undefined;
-            const source = extractHyperlink(sourceCell);
+            // Source — parse link string or object
+            const source = parseSourceValue(sourceVal);
 
             const practice = normalizeListItems(cellToString(practiceVal));
             const valueAdditions = normalizeListItems(cellToString(valueVal));
@@ -406,10 +423,29 @@ export const parseMainsExcel = (buffer: Buffer): ParseMainsExcelResult => {
     } catch (error) {
         return {
             articles: [],
+            errors: [`Failed to parse Excel data: ${error instanceof Error ? error.message : 'Unknown error'}`],
+            skipped: 0,
+        };
+    }
+};
+
+export const parseMainsExcel = (
+    buffer: Buffer,
+    options?: { targetDate?: string }
+): ParseMainsExcelResult => {
+    try {
+        const workbook = XLSX.read(buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
+        return parseMainsExcelRows(data, options);
+    } catch (error) {
+        return {
+            articles: [],
             errors: [`Failed to parse Excel file: ${error instanceof Error ? error.message : 'Unknown error'}`],
             skipped: 0,
         };
     }
 };
 
-export default { parseMainsExcel };
+export default { parseMainsExcel, parseMainsExcelRows };

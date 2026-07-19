@@ -4,7 +4,6 @@ import { User, Session } from '../models/index.js';
 
 // Use same secret as middleware
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
-const MAX_DEVICES = 3;
 
 // OTPless credentials
 const OTPLESS_CLIENT_ID = process.env.OTPLESS_CLIENT_ID || '';
@@ -47,6 +46,12 @@ const parseDeviceName = (ua: string): string => {
     return `${browser} on ${os}`;
 };
 
+const checkIsSmallDevice = (str: string): boolean => {
+    if (!str) return false;
+    const lower = str.toLowerCase();
+    return lower.includes('iphone') || (lower.includes('android') && (lower.includes('mobile') || !lower.includes('tablet')));
+};
+
 /** Create or update a session and enforce the device limit */
 const upsertSession = async (
     userId: string,
@@ -64,14 +69,28 @@ const upsertSession = async (
         return { allowed: true };
     }
 
-    // New device — check device count
-    const sessionCount = await Session.countDocuments({ userId });
+    // New device login check
+    const sessions = await Session.find({ userId });
+    const isNewDeviceSmall = checkIsSmallDevice(userAgent);
 
-    if (sessionCount >= MAX_DEVICES) {
-        return {
-            allowed: false,
-            error: `You are already logged in on ${MAX_DEVICES} devices. Please log out from one device first, or use "Logout All Devices" from your profile.`,
-        };
+    if (isNewDeviceSmall) {
+        // Count existing small device sessions
+        const smallDeviceCount = sessions.filter(s => checkIsSmallDevice(s.deviceName)).length;
+        if (smallDeviceCount >= 1) {
+            return {
+                allowed: false,
+                error: 'Limit reached: You can only have 1 active mobile session at a time. Please log out from your other mobile device first, or use "Logout All Devices" in your profile.',
+            };
+        }
+    } else {
+        // Count existing other device sessions
+        const otherDeviceCount = sessions.filter(s => !checkIsSmallDevice(s.deviceName)).length;
+        if (otherDeviceCount >= 2) {
+            return {
+                allowed: false,
+                error: 'Limit reached: You can only have 2 active desktop/tablet sessions at a time. Please log out from one of your other devices first, or use "Logout All Devices" in your profile.',
+            };
+        }
     }
 
     // Create new session
