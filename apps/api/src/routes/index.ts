@@ -13,3 +13,7 @@ export { default as adminUserRoutes } from './adminUser.routes.js';
 export { default as doubtRoutes } from './doubt.routes.js';
 export { default as testReportRoutes } from './testReport.routes.js';
 export { default as bookmarkRoutes } from './bookmark.routes.js';
+export { default as mainsTestSeriesRoutes } from './mainsTestSeries.routes.js';
+export { default as mainsSubmissionRoutes } from './mainsSubmission.routes.js';
+export { default as mentorRoutes } from './mentor.routes.js';
+export { default as mainsPracticeTestRoutes } from './mainsPracticeTest.routes.js';

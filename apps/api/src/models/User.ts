@@ -7,12 +7,15 @@ export interface IUser extends Document {
     password?: string;
     phone?: string;
     name: string;
-    role: 'admin' | 'student';
+    role: 'admin' | 'student' | 'mentor';
     authProvider: 'local' | 'whatsapp';
     status: 'active' | 'suspended';
     tokenVersion: number;
     enrolledCourses: mongoose.Types.ObjectId[];
     enrolledTestSeries: mongoose.Types.ObjectId[];
+    // Mentor-specific fields
+    assignedMtsGroups: mongoose.Types.ObjectId[];
+    assignedStudents: mongoose.Types.ObjectId[];
     createdAt: Date;
     updatedAt: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -45,7 +48,7 @@ const UserSchema = new Schema<IUser>(
         },
         role: {
             type: String,
-            enum: ['admin', 'student'],
+            enum: ['admin', 'student', 'mentor'],
             default: 'student',
         },
         authProvider: {
@@ -72,6 +75,20 @@ const UserSchema = new Schema<IUser>(
             {
                 type: Schema.Types.ObjectId,
                 ref: 'TestSeries',
+            },
+        ],
+        // Mentor-specific: which MTS groups this mentor can access
+        assignedMtsGroups: [
+            {
+                type: Schema.Types.ObjectId,
+                ref: 'MainsTestSeries',
+            },
+        ],
+        // Mentor-specific: which students this mentor can evaluate
+        assignedStudents: [
+            {
+                type: Schema.Types.ObjectId,
+                ref: 'User',
             },
         ],
     },

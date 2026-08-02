@@ -16,7 +16,7 @@ export interface AuthRequest extends Request {
 export interface JwtPayload {
     id: string;
     email?: string;
-    role: 'admin' | 'student';
+    role: 'admin' | 'student' | 'mentor';
     tokenVersion?: number;
     deviceId?: string;
 }
@@ -112,4 +112,34 @@ export const adminOnly = (
     next();
 };
 
-export default { protect, adminOnly, generateToken };
+/**
+ * Mentor or Admin middleware — allows both roles
+ */
+export const mentorOrAdmin = (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+): void => {
+    if (req.user?.role !== 'admin' && req.user?.role !== 'mentor') {
+        res.status(403).json({ error: 'Mentor or Admin access required' });
+        return;
+    }
+    next();
+};
+
+/**
+ * Mentor only middleware
+ */
+export const mentorOnly = (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+): void => {
+    if (req.user?.role !== 'mentor') {
+        res.status(403).json({ error: 'Mentor access required' });
+        return;
+    }
+    next();
+};
+
+export default { protect, adminOnly, mentorOrAdmin, mentorOnly, generateToken };

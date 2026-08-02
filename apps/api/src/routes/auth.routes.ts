@@ -11,8 +11,9 @@ import {
     logoutAll,
     getDevices,
     removeDevice,
+    adminClearUserSessions,
 } from '../controllers/auth.controller.js';
-import { protect } from '../middlewares/auth.middleware.js';
+import { protect, adminOnly } from '../middlewares/auth.middleware.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -70,6 +71,11 @@ router.get('/devices', protect, getDevices);
 // @desc    Remove a specific device session
 // @access  Private
 router.delete('/devices/:deviceId', protect, removeDevice);
+
+// @route   DELETE /api/auth/users/:userId/sessions
+// @desc    Admin clears all active device sessions for a student
+// @access  Private/Admin
+router.delete('/users/:userId/sessions', protect, adminOnly, adminClearUserSessions);
 
 export default router;
 

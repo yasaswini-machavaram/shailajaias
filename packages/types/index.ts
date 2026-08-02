@@ -4,7 +4,7 @@ export interface IUser {
   email?: string;
   phone?: string;
   name: string;
-  role: 'admin' | 'student';
+  role: 'admin' | 'student' | 'mentor';
   authProvider?: 'local' | 'whatsapp';
   status?: 'active' | 'suspended';
   tokenVersion?: number;
@@ -202,4 +202,88 @@ export interface PaginatedResponse<T> {
     total: number;
     totalPages: number;
   };
+}
+
+// Mains Test Series types
+export interface IMainsTestSeriesItem {
+  title: string;
+  date: string;
+  subjectCategory: string;
+  questionPaperUrl?: string;
+  questionPaperKey?: string;
+  solutionPaperUrl?: string;
+  solutionPaperKey?: string;
+  discussionVideoUrl?: string;
+  isLocked: boolean;
+}
+
+export interface IMainsTestSeries {
+  id: string;
+  uniqueId: string;
+  title: string;
+  description?: string;
+  brochureUrl?: string;
+  brochureKey?: string;
+  introVideoUrl?: string;
+  tests: IMainsTestSeriesItem[];
+  sectionalCount: number;
+  fullLengthCount: number;
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IMainsSubmission {
+  id: string;
+  student: string | { _id: string; name: string; phone?: string; email?: string };
+  mainsTestSeries: string | { _id: string; title: string; uniqueId: string };
+  testIndex: number;
+  testTitle: string;
+  seriesUniqueId: string;
+  answerSheetUrls: string[];
+  answerSheetKeys: string[];
+  submittedAt: string;
+  mentor?: string | { _id: string; name: string; email?: string };
+  status: 'submitted' | 'assigned' | 'under_review' | 'evaluated';
+  evaluatedCopyUrl?: string;
+  evaluatedCopyKey?: string;
+  score?: number;
+  maxScore?: number;
+  feedback?: string;
+  evaluatedAt?: string;
+  evaluatedBy?: string | { _id: string; name: string };
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Mains Practice Test types
+export interface IMainsQuestionItem {
+  id?: string;
+  questionText: string;
+  marks?: number;
+  wordLimit?: number;
+  difficultyLevel: 'Easy' | 'Moderate' | 'Difficult';
+  modelAnswer: string;
+  approach?: string;
+  topicTags?: string[];
+}
+
+export interface IMainsPracticeTest {
+  id: string;
+  title: string;
+  subjectCategory: string;
+  topicsSummary?: string;
+  guidelinesUrl?: string;
+  guidelinesKey?: string;
+  introVideoUrl?: string;
+  questions: IMainsQuestionItem[];
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IMainsPracticeTestConfig {
+  guidelinesUrl?: string;
+  guidelinesKey?: string;
+  introVideoUrl?: string;
 }

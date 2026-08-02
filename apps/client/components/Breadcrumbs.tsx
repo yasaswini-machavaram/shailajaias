@@ -43,8 +43,8 @@ interface Crumb {
 export default function Breadcrumbs() {
     const pathname = usePathname();
 
-    // Don't show on landing page or admin pages
-    if (!pathname || pathname === '/' || pathname.startsWith('/admin')) return null;
+    // Don't show on landing page, admin pages, or mentor pages
+    if (!pathname || pathname === '/' || pathname.startsWith('/admin') || pathname.startsWith('/mentor')) return null;
 
     const segments = pathname.split('/').filter(Boolean);
 

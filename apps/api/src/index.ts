@@ -19,6 +19,10 @@ import {
   doubtRoutes,
   testReportRoutes,
   bookmarkRoutes,
+  mainsTestSeriesRoutes,
+  mainsSubmissionRoutes,
+  mentorRoutes,
+  mainsPracticeTestRoutes,
 } from "./routes/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -75,6 +79,10 @@ app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/doubts', doubtRoutes);
 app.use('/api/reports', testReportRoutes);
 app.use('/api/bookmarks', bookmarkRoutes);
+app.use('/api/mts/series', mainsTestSeriesRoutes);
+app.use('/api/mts/submissions', mainsSubmissionRoutes);
+app.use('/api/mentors', mentorRoutes);
+app.use('/api/mpt', mainsPracticeTestRoutes);
 
 // 404 handler
 app.use((_req, res) => {

@@ -82,6 +82,8 @@ const navItems = [
     { href: '/admin/courses', icon: CourseIcon, label: 'Courses' },
     { href: '/admin/resources', icon: ResourceIcon, label: 'Resources' },
     { href: '/admin/test-series', icon: TestSeriesIcon, label: 'Test Series' },
+    { href: '/admin/mts-submissions', icon: TestSeriesIcon, label: 'MTS Submissions' },
+    { href: '/admin/mentors', icon: UserIcon, label: 'Mentors' },
     { href: '/admin/users', icon: UserIcon, label: 'Users' },
     { href: '/admin/doubts', icon: DoubtIcon, label: 'Doubt Desk' },
 ];

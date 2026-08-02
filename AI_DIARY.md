@@ -1102,6 +1102,47 @@ Admin creates content
   - `apps/client/components/Breadcrumbs.tsx` — Added 'current-affairs' route label
 - **Seeded data:** 7 resource categories (Standard Text Books, Revision Notes for Prelims/Mains, Mains Value Addition Notes, Prelims/Mains PYQ Solved, Topper Notes) with predefined UPSC tags and accent colors
 
+### Session: 2026-08-02 (Mains Test Series & Mentor Portal Implementation)
+- **Who:** AI (Antigravity)
+- **What:** Implemented end-to-end Mains Test Series (MTS) module with bidirectional answer sheet upload, evaluation tracking, and dedicated Mentor role/portal.
+- **New Backend Models:**
+  - `MainsTestSeries.ts` — Group title, description, brochure PDF, intro video URL, tests array (title, date, GS subject category, question paper PDF, solution PDF, discussion video URL, lock state), sectionalCount, fullLengthCount, auto-generated `uniqueId` (e.g. `MTS-101`).
+  - `MainsSubmission.ts` — Tracks student answer sheet uploads (up to 10 PDF/images), status (`submitted` → `assigned` → `under_review` → `evaluated`), mentor assignment, evaluated copy URL, score, maxScore, feedback text.
+- **Role & Auth System:**
+  - Extended `User.ts` model with `'mentor'` role, `assignedMtsGroups`, and `assignedStudents`.
+  - Added `mentorOrAdmin` and `mentorOnly` middleware functions in `auth.middleware.ts`.
+  - Added `mentor.controller.ts` and `mentor.routes.ts` (`/api/mentors`) for admin to manage mentor accounts and assignments.
+  - Added `mainsSubmission.controller.ts` and `mainsSubmission.routes.ts` (`/api/mts/submissions`) for student uploads, mentor evaluation, and admin tracking/bulk assignment.
+  - Added `mainsTestSeries.controller.ts` and `mainsTestSeries.routes.ts` (`/api/mts/series`) for MTS group CRUD & PDF paper uploads.
+- **New Frontend Portals & Pages:**
+  - **Student MTS Page (`tests/mains-test-series/page.tsx`)**: Complete rewrite matching wireframe — header with brochure & intro video, subject category filters (`GS-1`, `GS-2`, `GS-3`, `GS-4`, `Essay`, `Optional`), accordion test cards with question booklet/solution PDF downloads, answer sheet upload modal, and evaluated copy access.
+  - **Admin MTS CMS (`admin/test-series/mains-test-series/page.tsx`)**: Full group management, test item builder, PDF paper uploaders, lock toggles, publish state.
+  - **Admin Mentors Management (`admin/mentors/page.tsx`)**: Mentor credential creation, batch assignment modal, active/suspended status toggle.
+  - **Admin Submissions Tracker (`admin/mts-submissions/page.tsx`)**: Global submission dashboard with KPI stats cards, multi-filter table, bulk mentor assignment, and full evaluation overlay.
+  - **Dedicated Mentor Portal (`/mentor/*`)**:
+    - `MentorAuthContext.tsx` — Separate JWT auth context (`mentor_token`).
+    - `layout.tsx` — Teal-themed sidebar layout (Dashboard, Submissions).
+    - `login/page.tsx` — Dedicated mentor sign-in page.
+    - `page.tsx` — Dashboard with pending/under review/evaluated stats and recent assignments.
+  - **Student Mentor Priority & Automated Assignment**:
+    - Enforced strict precedence: Student assignment (`assignedStudents`) > Batch assignment (`assignedMtsGroups`). When a student submits an answer sheet, if a mentor is assigned to that student, the submission is automatically routed to that student's mentor regardless of batch assignment.
+    - Updated `getMentorSubmissions` and `canMentorAccessSubmission` to ensure batch mentors cannot view or evaluate submissions belonging to students assigned to a different mentor.
+    - Added "Assign Students" button and search/multi-select modal in `admin/mentors/page.tsx`.
+  - **Admin Override & Under-Review Warning**:
+    - Admin can reassign any test submission to any mentor as long as evaluation is not completed (`status !== 'evaluated'`). Blocked backend reassignment of already evaluated submissions in `assignMentor` and `bulkAssignMentor`.
+  - **Mains Practice Test (MPT) Module Implementation**:
+    - Created `MainsPracticeTest.ts` model (standalone test documents with array of questions, `difficultyLevel` `Easy`|`Moderate`|`Difficult`, model answers, approach guidelines).
+    - Created `mpt-excel.service.ts` for Excel bulk question parsing (Columns A-G: Question, Marks, Word Limit, Difficulty, Model Answer, Approach, Tags).
+    - Created `mainsPracticeTest.controller.ts` & `mainsPracticeTest.routes.ts` (`/api/mpt`).
+    - **Student MPT List Page (`tests/mains-practice-test/page.tsx`)**: Wireframe 1 compliance — Download Guidelines PDF, INTRO Video YouTube modal, GS-1..GS-4 subject filter bar, subject-tinted test cards with topics summary, `START >>` action button.
+    - **Student MPT Detail Page (`tests/mains-practice-test/[id]/page.tsx`)**: Wireframe 2 compliance — Total questions count badge, difficulty legend box, `Expand All / Collapse All` toggle button, default first-question-expanded accordions, difficulty level badges, model answers, and approach guidelines.
+    - **Global MPT Module Settings**: Created `MainsPracticeTestConfig.ts` model and `/api/mpt/config` endpoints for module-level "Download Guidelines" PDF and "INTRO Video" URL configuration (one-time setup for the entire MPT parent module). Removed per-test duplicate fields and added global settings panel in admin CMS.
+  - **Device Session Auto-Eviction & Admin Reset**:
+    - Cleared 2 stale session records in MongoDB for phone `9360016589`.
+    - Enhanced `upsertSession` in `auth.controller.ts` with auto-eviction (FIFO) and 7-day auto-pruning so new logins automatically replace the oldest inactive session when the device limit is reached instead of locking out students.
+    - Added `DELETE /api/auth/users/:userId/sessions` endpoint and "📱 Reset Devices" button in Admin User Management (`admin/users`).
+- **Verification:** Both API and Client apps build cleanly without errors.
+
 ### Session: 2026-07-19 (Strict Test-Level Subject Tag Filtering)
 - **Who:** AI (Antigravity)
 - **What:** Enforced strict whole-test level subject tag filtering on the student side for Prelims Practice Test and Prelims Test Series.

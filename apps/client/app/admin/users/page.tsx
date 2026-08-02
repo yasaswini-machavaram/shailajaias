@@ -305,6 +305,24 @@ export default function AdminUsersPage() {
                                         </td>
                                         <td className="py-3.5 px-6 text-right flex justify-end gap-2">
                                             <button
+                                                onClick={async () => {
+                                                    if (confirm(`Reset device sessions for ${student.name}? This will clear all active logins.`)) {
+                                                        try {
+                                                            const res = await fetch(`${API_URL}/api/auth/users/${student._id}/sessions`, {
+                                                                method: 'DELETE',
+                                                                headers: { Authorization: `Bearer ${token}` },
+                                                            });
+                                                            const data = await res.json();
+                                                            alert(data.message || 'Sessions cleared');
+                                                        } catch { alert('Failed to clear sessions'); }
+                                                    }
+                                                }}
+                                                className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition-colors"
+                                                title="Clear active device logins for this user"
+                                            >
+                                                📱 Reset Devices
+                                            </button>
+                                            <button
                                                 onClick={() => handleEditClick(student)}
                                                 className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-800 text-xs font-semibold transition-colors"
                                             >

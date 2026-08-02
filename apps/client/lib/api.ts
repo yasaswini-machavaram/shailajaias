@@ -244,6 +244,120 @@ export async function getTestSeriesById(id: string): Promise<TestSeries | null> 
     return data || null;
 }
 
+// ── Mains Test Series ──────────────────────────────────────────────────────────
+
+export interface MainsTestSeriesItem {
+    title: string;
+    date: string;
+    subjectCategory: string;
+    questionPaperUrl?: string;
+    questionPaperKey?: string;
+    solutionPaperUrl?: string;
+    solutionPaperKey?: string;
+    discussionVideoUrl?: string;
+    isLocked: boolean;
+}
+
+export interface MainsTestSeries {
+    _id: string;
+    uniqueId?: string;
+    title: string;
+    description?: string;
+    brochureUrl?: string;
+    brochureKey?: string;
+    introVideoUrl?: string;
+    tests: MainsTestSeriesItem[];
+    sectionalCount: number;
+    fullLengthCount: number;
+    isPublished: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface MainsSubmission {
+    _id: string;
+    student: any;
+    mainsTestSeries: any;
+    testIndex: number;
+    testTitle: string;
+    seriesUniqueId: string;
+    answerSheetUrls: string[];
+    submittedAt: string;
+    mentor?: any;
+    status: 'submitted' | 'assigned' | 'under_review' | 'evaluated';
+    evaluatedCopyUrl?: string;
+    score?: number;
+    maxScore?: number;
+    feedback?: string;
+    evaluatedAt?: string;
+    evaluatedBy?: any;
+}
+
+export async function getMainsTestSeriesList(includeUnpublished?: boolean): Promise<MainsTestSeries[]> {
+    const url = includeUnpublished ? '/api/mts/series?includeUnpublished=true' : '/api/mts/series';
+    const { data } = await fetchApi<MainsTestSeries[]>(url);
+    return data || [];
+}
+
+export async function getMainsTestSeriesById(id: string): Promise<MainsTestSeries | null> {
+    const { data } = await fetchApi<MainsTestSeries>(`/api/mts/series/${id}`);
+    return data || null;
+}
+
+// ── Mains Practice Test ──────────────────────────────────────────────────────────
+
+export interface MainsQuestionItem {
+    _id?: string;
+    questionText: string;
+    marks?: number;
+    wordLimit?: number;
+    difficultyLevel: 'Easy' | 'Moderate' | 'Difficult';
+    modelAnswer: string;
+    approach?: string;
+    topicTags?: string[];
+}
+
+export interface MainsPracticeTest {
+    _id: string;
+    title: string;
+    subjectCategory: string;
+    topicsSummary?: string;
+    guidelinesUrl?: string;
+    guidelinesKey?: string;
+    introVideoUrl?: string;
+    questions: MainsQuestionItem[];
+    isPublished: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export async function getMainsPracticeTestList(params?: { includeUnpublished?: boolean; subjectCategory?: string; search?: string }): Promise<MainsPracticeTest[]> {
+    const query = new URLSearchParams();
+    if (params?.includeUnpublished) query.set('includeUnpublished', 'true');
+    if (params?.subjectCategory && params.subjectCategory !== 'All') query.set('subjectCategory', params.subjectCategory);
+    if (params?.search) query.set('search', params.search);
+
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const { data } = await fetchApi<MainsPracticeTest[]>(`/api/mpt${queryString}`);
+    return data || [];
+}
+
+export async function getMainsPracticeTestById(id: string): Promise<MainsPracticeTest | null> {
+    const { data } = await fetchApi<MainsPracticeTest>(`/api/mpt/${id}`);
+    return data || null;
+}
+
+export interface MainsPracticeTestConfig {
+    guidelinesUrl?: string;
+    guidelinesKey?: string;
+    introVideoUrl?: string;
+}
+
+export async function getMainsPracticeTestConfig(): Promise<MainsPracticeTestConfig | null> {
+    const { data } = await fetchApi<MainsPracticeTestConfig>('/api/mpt/config');
+    return data || null;
+}
+
 // Date helper — use UTC to avoid timezone drift
 export function formatDate(date: Date): string {
     return date.toISOString().split('T')[0];

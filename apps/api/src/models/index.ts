@@ -12,3 +12,7 @@ export { TestReport, type ITestReport } from './TestReport.js';
 export { Counter, type ICounter, getNextSequence } from './Counter.js';
 export { Session, type ISession } from './Session.js';
 export { Bookmark, type IBookmark } from './Bookmark.js';
+export { MainsTestSeries, type IMainsTestSeries, type IMainsTestSeriesItem } from './MainsTestSeries.js';
+export { MainsSubmission, type IMainsSubmission } from './MainsSubmission.js';
+export { MainsPracticeTest, type IMainsPracticeTest, type IMainsQuestionItem } from './MainsPracticeTest.js';
+export { MainsPracticeTestConfig, type IMainsPracticeTestConfig } from './MainsPracticeTestConfig.js';

@@ -35,29 +35,31 @@ const TEST_SUBMODULES = [
     {
         title: 'Mains Test Series',
         description: 'Manage Mains mock exam groups, schedules, question papers, and detailed model answers.',
-        href: '#',
+        href: '/admin/test-series/mains-test-series',
         bgColor: '#FFF3E0',       // light peach
         accentColor: '#E65100',
         icon: '📝',
         features: [
-            'Configure Mains schedules',
-            'Structured questions & answers',
-            'Detailed model answers PDF',
+            'Configure Mains schedules & tests',
+            'Upload question papers & solutions',
+            'Track submissions & assign mentors',
+            'Evaluate student answer sheets',
         ],
-        isAvailable: false,
+        isAvailable: true,
     },
     {
         title: 'Mains Practice Test',
         description: 'Manage topic-wise practice questions and model answers for Mains revision.',
-        href: '#',
+        href: '/admin/test-series/mains-practice-test',
         bgColor: '#E8F5E9',       // light green
         accentColor: '#2E7D32',
         icon: '🎓',
         features: [
             'Topic-wise Mains questions',
-            'Self-evaluation guidelines',
+            'Manual & Excel bulk import',
+            'Model answers & approach guides',
         ],
-        isAvailable: false,
+        isAvailable: true,
     },
     {
         title: 'CA Prelims',

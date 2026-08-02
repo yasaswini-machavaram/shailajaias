@@ -52,13 +52,17 @@ const checkIsSmallDevice = (str: string): boolean => {
     return lower.includes('iphone') || (lower.includes('android') && (lower.includes('mobile') || !lower.includes('tablet')));
 };
 
-/** Create or update a session and enforce the device limit */
+/** Create or update a session and enforce the device limit (auto-evicts oldest session on limit excess) */
 const upsertSession = async (
     userId: string,
     deviceId: string,
     userAgent: string
 ): Promise<{ allowed: boolean; error?: string }> => {
-    // Check if this device already has a session
+    // 1. Auto-clean sessions inactive for more than 7 days
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    await Session.deleteMany({ userId, lastActive: { $lt: sevenDaysAgo } });
+
+    // 2. Check if this device already has a session
     const existingSession = await Session.findOne({ userId, deviceId });
 
     if (existingSession) {
@@ -69,31 +73,25 @@ const upsertSession = async (
         return { allowed: true };
     }
 
-    // New device login check
-    const sessions = await Session.find({ userId });
+    // 3. New device login check — sorted by lastActive ascending (oldest first)
+    const sessions = await Session.find({ userId }).sort({ lastActive: 1 });
     const isNewDeviceSmall = checkIsSmallDevice(userAgent);
 
     if (isNewDeviceSmall) {
-        // Count existing small device sessions
-        const smallDeviceCount = sessions.filter(s => checkIsSmallDevice(s.deviceName)).length;
-        if (smallDeviceCount >= 1) {
-            return {
-                allowed: false,
-                error: 'Limit reached: You can only have 1 active mobile session at a time. Please log out from your other mobile device first, or use "Logout All Devices" in your profile.',
-            };
+        // Mobile limit: 1 session. If already 1, evict the oldest mobile session
+        const smallSessions = sessions.filter(s => checkIsSmallDevice(s.deviceName));
+        if (smallSessions.length >= 1) {
+            await Session.deleteOne({ _id: smallSessions[0]._id });
         }
     } else {
-        // Count existing other device sessions
-        const otherDeviceCount = sessions.filter(s => !checkIsSmallDevice(s.deviceName)).length;
-        if (otherDeviceCount >= 2) {
-            return {
-                allowed: false,
-                error: 'Limit reached: You can only have 2 active desktop/tablet sessions at a time. Please log out from one of your other devices first, or use "Logout All Devices" in your profile.',
-            };
+        // Desktop/tablet limit: 2 sessions. If already 2, evict the oldest desktop/tablet session
+        const otherSessions = sessions.filter(s => !checkIsSmallDevice(s.deviceName));
+        if (otherSessions.length >= 2) {
+            await Session.deleteOne({ _id: otherSessions[0]._id });
         }
     }
 
-    // Create new session
+    // 4. Create new session
     await Session.create({
         userId,
         deviceId,
@@ -196,7 +194,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         }
 
         // Check for user
-        const user = await User.findOne({ email }).select('+password');
+        const cleanEmail = email.toLowerCase().trim();
+        const user = await User.findOne({ email: cleanEmail }).select('+password');
         if (!user) {
             res.status(401).json({ success: false, message: 'Invalid credentials' });
             return;
@@ -679,6 +678,33 @@ export const removeDevice = async (req: Request, res: Response): Promise<void> =
         });
     } catch (error) {
         console.error('Remove device error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @desc    Admin clears all sessions for a specific user
+// @route   DELETE /api/auth/users/:userId/sessions
+// @access  Private/Admin
+export const adminClearUserSessions = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { userId } = req.params;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            res.status(404).json({ success: false, message: 'User not found' });
+            return;
+        }
+
+        // Increment tokenVersion & delete sessions
+        await User.findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } });
+        const result = await Session.deleteMany({ userId });
+
+        res.json({
+            success: true,
+            message: `Cleared ${result.deletedCount} session(s) for user ${user.name}.`,
+        });
+    } catch (error) {
+        console.error('Admin clear sessions error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
