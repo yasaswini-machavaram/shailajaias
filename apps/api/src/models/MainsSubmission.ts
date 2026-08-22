@@ -11,6 +11,7 @@ export interface IMainsSubmission extends Document {
     answerSheetUrls: string[];
     answerSheetKeys: string[];
     submittedAt: Date;
+    reuploadCount: number;
 
     // Evaluation
     mentor?: Types.ObjectId;
@@ -70,6 +71,10 @@ const MainsSubmissionSchema = new Schema<IMainsSubmission>(
         submittedAt: {
             type: Date,
             default: Date.now,
+        },
+        reuploadCount: {
+            type: Number,
+            default: 0,
         },
 
         // Evaluation

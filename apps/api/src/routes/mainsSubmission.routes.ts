@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import {
     submitAnswerSheet,
+    reuploadAnswerSheet,
     getMySubmissions,
     getSubmissionById,
     getAllSubmissions,
@@ -80,6 +81,9 @@ const router: ReturnType<typeof Router> = Router();
 // Student routes
 // @route   POST /api/mts/submissions — Student uploads answer sheets
 router.post('/', protect, uploadFiles.array('answerSheets', 10), submitAnswerSheet);
+
+// @route   PUT /api/mts/submissions/:id/reupload — Student re-uploads answer sheets once before review
+router.put('/:id/reupload', protect, uploadFiles.array('answerSheets', 10), reuploadAnswerSheet);
 
 // @route   GET /api/mts/submissions/my — Student views their submissions
 router.get('/my', protect, getMySubmissions);

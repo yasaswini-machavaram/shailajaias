@@ -1140,7 +1140,16 @@ Admin creates content
   - **Device Session Auto-Eviction & Admin Reset**:
     - Cleared 2 stale session records in MongoDB for phone `9360016589`.
     - Enhanced `upsertSession` in `auth.controller.ts` with auto-eviction (FIFO) and 7-day auto-pruning so new logins automatically replace the oldest inactive session when the device limit is reached instead of locking out students.
-    - Added `DELETE /api/auth/users/:userId/sessions` endpoint and "📱 Reset Devices" button in Admin User Management (`admin/users`).
+  - **Mentor Management Excel-Style Redesign**:
+    - Replaced card grid with a clean Excel-style tabular row view in `admin/mentors/page.tsx`.
+    - Added dedicated inline CTA buttons for each row: `✏️ Edit`, `📚 Assign Batch`, `🎓 Assign Student`, and `🗑️ Delete`.
+  - **Mains Test Series Answer Sheet Reupload & Document Status Tracking**:
+    - Added `reuploadCount` to `MainsSubmission.ts` model.
+    - Implemented `reuploadAnswerSheet` endpoint (`PUT /api/mts/submissions/:id/reupload`) which validates student ownership, ensures evaluation status is not `under_review` or `evaluated`, limits reuploads to once, unlinks previous answer files from server storage, and updates submission with new answer files.
+  - **Mains Test Series Custom Subject Category Input & Syllabus Field**:
+    - Converted `subjectCategory` in Admin CMS (`admin/test-series/mains-test-series/page.tsx`) from a dropdown select to a text input field for flexible category naming.
+    - Added a multi-line `syllabus` textarea field in Admin test form and updated `MainsTestSeries.ts` model.
+    - Updated Student Portal (`tests/mains-test-series/page.tsx`) to render `📖 Syllabus Covered` text block in expanded test cards with `whitespace-pre-line` formatting above action buttons, matching wireframe layout.
 - **Verification:** Both API and Client apps build cleanly without errors.
 
 ### Session: 2026-07-19 (Strict Test-Level Subject Tag Filtering)

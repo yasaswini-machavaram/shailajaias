@@ -4,7 +4,8 @@ import { getNextSequence } from './Counter.js';
 export interface IMainsTestSeriesItem {
     title: string;
     date: Date;
-    subjectCategory: string; // "GS-1" | "GS-2" | "GS-3" | "GS-4" | "Essay" | "Optional"
+    subjectCategory: string; // "GS-1" | "GS-2" | "GS-3" | "GS-4" | "Essay" | "Optional" or custom string
+    syllabus?: string;
     questionPaperUrl?: string;
     questionPaperKey?: string;
     solutionPaperUrl?: string;
@@ -43,6 +44,10 @@ const MainsTestSeriesItemSchema = new Schema<IMainsTestSeriesItem>(
         subjectCategory: {
             type: String,
             required: [true, 'Subject category is required'],
+            trim: true,
+        },
+        syllabus: {
+            type: String,
             trim: true,
         },
         questionPaperUrl: {

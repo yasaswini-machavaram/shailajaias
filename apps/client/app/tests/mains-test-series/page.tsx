@@ -44,9 +44,11 @@ export default function MainsTestSeriesPage() {
     const [selectedSubject, setSelectedSubject] = useState('All');
     const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
-    // Upload modal state
+    // Upload / Reupload modal state
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [uploadTestIndex, setUploadTestIndex] = useState<number | null>(null);
+    const [isReuploading, setIsReuploading] = useState(false);
+    const [reuploadSubmissionId, setReuploadSubmissionId] = useState<string | null>(null);
     const [uploadFiles, setUploadFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadError, setUploadError] = useState('');
@@ -125,8 +127,8 @@ export default function MainsTestSeriesPage() {
         selectedSubject === 'All' || t.subjectCategory === selectedSubject
     ) || [];
 
-    // Open upload modal
-    const openUploadModal = (testIndex: number) => {
+    // Open upload modal (initial submission or reupload)
+    const openUploadModal = (testIndex: number, submissionToReupload?: MainsSubmission) => {
         if (!isLoggedIn) {
             window.location.href = '/login';
             return;
@@ -135,6 +137,15 @@ export default function MainsTestSeriesPage() {
         setUploadFiles([]);
         setUploadError('');
         setUploadSuccess('');
+
+        if (submissionToReupload) {
+            setIsReuploading(true);
+            setReuploadSubmissionId(submissionToReupload._id);
+        } else {
+            setIsReuploading(false);
+            setReuploadSubmissionId(null);
+        }
+
         setShowUploadModal(true);
     };
 
@@ -153,7 +164,7 @@ export default function MainsTestSeriesPage() {
         setUploadFiles(prev => [...prev, ...valid].slice(0, 10));
     };
 
-    // Submit answer sheets
+    // Submit or Reupload answer sheets
     const handleSubmitAnswerSheet = async () => {
         if (uploadFiles.length === 0 || uploadTestIndex === null || !selectedSeries) return;
 
@@ -164,23 +175,31 @@ export default function MainsTestSeriesPage() {
         const test = selectedSeries.tests[uploadTestIndex];
         const formData = new FormData();
         uploadFiles.forEach(f => formData.append('answerSheets', f));
-        formData.append('mainsTestSeriesId', selectedSeries._id);
-        formData.append('testIndex', String(uploadTestIndex));
-        formData.append('testTitle', test.title);
-        formData.append('seriesUniqueId', selectedSeries.uniqueId || '');
+
+        const endpoint = isReuploading && reuploadSubmissionId
+            ? `${API_URL}/api/mts/submissions/${reuploadSubmissionId}/reupload`
+            : `${API_URL}/api/mts/submissions`;
+
+        const method = isReuploading ? 'PUT' : 'POST';
+
+        if (!isReuploading) {
+            formData.append('mainsTestSeriesId', selectedSeries._id);
+            formData.append('testIndex', String(uploadTestIndex));
+            formData.append('testTitle', test.title);
+            formData.append('seriesUniqueId', selectedSeries.uniqueId || '');
+        }
 
         try {
-            const res = await fetch(`${API_URL}/api/mts/submissions`, {
-                method: 'POST',
+            const res = await fetch(endpoint, {
+                method,
                 headers: { Authorization: `Bearer ${token}` },
                 body: formData,
             });
             const data = await res.json();
 
             if (data.success) {
-                setUploadSuccess('Answer sheet uploaded successfully! Your submission is now being tracked.');
+                setUploadSuccess(isReuploading ? 'Answer sheet reuploaded successfully! Previous copy replaced.' : 'Answer sheet uploaded successfully! Your submission is now being tracked.');
                 setUploadFiles([]);
-                // Refresh submissions
                 fetchMySubmissions(selectedSeries._id);
             } else {
                 setUploadError(data.message || 'Failed to upload answer sheet');
@@ -193,14 +212,14 @@ export default function MainsTestSeriesPage() {
         }
     };
 
-    // Status badge
+    // Status badge formatting
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'submitted': return { label: 'Submitted', color: 'bg-blue-100 text-blue-800' };
-            case 'assigned': return { label: 'Under Assignment', color: 'bg-yellow-100 text-yellow-800' };
-            case 'under_review': return { label: 'Under Review', color: 'bg-orange-100 text-orange-800' };
-            case 'evaluated': return { label: 'Evaluated', color: 'bg-green-100 text-green-800' };
-            default: return { label: status, color: 'bg-gray-100 text-gray-800' };
+            case 'submitted': return { label: 'Submitted', color: 'bg-blue-100 text-blue-800 border-blue-200' };
+            case 'assigned': return { label: 'Assigned to Mentor', color: 'bg-indigo-100 text-indigo-800 border-indigo-200' };
+            case 'under_review': return { label: 'Under Review by Mentor', color: 'bg-orange-100 text-orange-800 border-orange-200' };
+            case 'evaluated': return { label: 'Evaluated', color: 'bg-green-100 text-green-800 border-green-200' };
+            default: return { label: status, color: 'bg-gray-100 text-gray-800 border-gray-200' };
         }
     };
 
@@ -362,7 +381,7 @@ export default function MainsTestSeriesPage() {
                         <svg className="w-5 h-5 text-[#64748B] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                         </svg>
-                        {SUBJECT_CATEGORIES.map(cat => (
+                        {Array.from(new Set(['All', ...SUBJECT_CATEGORIES.filter(c => c !== 'All'), ...(selectedSeries?.tests?.map(t => t.subjectCategory).filter(Boolean) || [])])).map(cat => (
                             <button
                                 key={cat}
                                 onClick={() => setSelectedSubject(cat)}
@@ -381,12 +400,22 @@ export default function MainsTestSeriesPage() {
                 {/* Test Cards */}
                 <div className="space-y-3">
                     {filteredTests.map((test, idx) => {
-                        // Find original index in unfiltered array
                         const originalIndex = selectedSeries!.tests.indexOf(test);
                         const isExpanded = expandedIndex === originalIndex;
                         const styles = getCategoryStyles(test.subjectCategory);
                         const submission = getSubmission(originalIndex);
                         const statusBadge = submission ? getStatusBadge(submission.status) : null;
+
+                        // Reupload eligibility check
+                        const canReupload = submission &&
+                            (submission.status === 'submitted' || submission.status === 'assigned') &&
+                            (!submission.reuploadCount || submission.reuploadCount === 0);
+
+                        const isUnderReviewOrEvaluated = submission &&
+                            (submission.status === 'under_review' || submission.status === 'evaluated');
+
+                        const isAlreadyReuploaded = submission &&
+                            Boolean(submission.reuploadCount && submission.reuploadCount >= 1);
 
                         return (
                             <div
@@ -402,9 +431,13 @@ export default function MainsTestSeriesPage() {
                                     <div>
                                         <p className="text-[10px] font-bold text-[#D97706] mb-1">{formatDate(test.date)}</p>
                                         <h3 className={`text-base font-bold ${styles.text} font-headline`}>{test.title}</h3>
-                                        <div className="flex items-center gap-2 mt-1">
+                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
                                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${styles.badge}`}>{test.subjectCategory}</span>
-                                            {statusBadge && <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${statusBadge.color}`}>{statusBadge.label}</span>}
+                                            {statusBadge && (
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${statusBadge.color}`}>
+                                                    {statusBadge.label}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                     <svg className={`w-5 h-5 ${styles.text} transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -415,6 +448,18 @@ export default function MainsTestSeriesPage() {
                                 {/* Expanded Content */}
                                 {isExpanded && (
                                     <div className="px-4 pb-4 border-t border-gray-200/50">
+                                        {/* Syllabus Section */}
+                                        {test.syllabus && (
+                                            <div className="mt-3 mb-3 p-4 bg-white/90 rounded-xl border border-gray-200/80 text-xs leading-relaxed text-slate-800 shadow-xs whitespace-pre-line font-body">
+                                                <h4 className="font-bold text-[11px] uppercase tracking-wider text-[#1E3A5F] mb-1 flex items-center gap-1.5">
+                                                    <span>📖</span> Syllabus Covered
+                                                </h4>
+                                                <div className="text-slate-700 font-medium leading-relaxed">
+                                                    {test.syllabus}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Action Buttons Grid */}
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 mb-3">
                                             {/* Download Question Booklet */}
@@ -467,33 +512,66 @@ export default function MainsTestSeriesPage() {
                                             </button>
                                         </div>
 
-                                        {/* Upload & Evaluated Copy Buttons */}
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {/* Upload Your Answers */}
-                                            <button
-                                                onClick={() => {
-                                                    if (test.isLocked || submission) return;
-                                                    openUploadModal(originalIndex);
-                                                }}
-                                                disabled={test.isLocked || !!submission}
-                                                className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold border-2 transition-all ${
-                                                    test.isLocked || submission
-                                                        ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                                                        : 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100'
-                                                }`}
-                                            >
-                                                Upload Your Answers
-                                                {(test.isLocked || submission) && <span>🔒</span>}
-                                            </button>
+                                        {/* Upload / Reupload & Evaluated Copy Action Bar */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {/* Case 1: Initial Upload (No submission yet) */}
+                                            {!submission && (
+                                                <button
+                                                    onClick={() => {
+                                                        if (test.isLocked) return;
+                                                        openUploadModal(originalIndex);
+                                                    }}
+                                                    disabled={test.isLocked}
+                                                    className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold border-2 transition-all ${
+                                                        test.isLocked
+                                                            ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                                                            : 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100 shadow-xs'
+                                                    }`}
+                                                >
+                                                    📤 Upload Your Answers
+                                                    {test.isLocked && <span>🔒</span>}
+                                                </button>
+                                            )}
 
-                                            {/* Evaluated Copy */}
+                                            {/* Case 2: Reupload Eligible (Not under review yet, reuploadCount === 0) */}
+                                            {canReupload && (
+                                                <button
+                                                    onClick={() => openUploadModal(originalIndex, submission)}
+                                                    className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold border-2 bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100 transition-all shadow-xs"
+                                                >
+                                                    🔄 Re-upload Answer Sheet
+                                                    <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-extrabold">1 Allowed</span>
+                                                </button>
+                                            )}
+
+                                            {/* Case 3: Reupload Locked (Under Review or Evaluated) */}
+                                            {isUnderReviewOrEvaluated && (
+                                                <button
+                                                    disabled
+                                                    className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold border-2 bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed"
+                                                >
+                                                    🔒 Reupload Locked (Under Evaluation)
+                                                </button>
+                                            )}
+
+                                            {/* Case 4: Already Reuploaded Once */}
+                                            {isAlreadyReuploaded && !isUnderReviewOrEvaluated && (
+                                                <button
+                                                    disabled
+                                                    className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold border-2 bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed"
+                                                >
+                                                    ✓ Reuploaded Once (Limit Reached)
+                                                </button>
+                                            )}
+
+                                            {/* Evaluated Copy Button */}
                                             <a
                                                 href={submission?.evaluatedCopyUrl ? `${API_URL}${submission.evaluatedCopyUrl}` : '#'}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold border-2 transition-all ${
                                                     submission?.status === 'evaluated' && submission.evaluatedCopyUrl
-                                                        ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                                                        ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100 shadow-xs'
                                                         : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                                                 }`}
                                                 onClick={e => { if (submission?.status !== 'evaluated' || !submission?.evaluatedCopyUrl) e.preventDefault(); }}
@@ -503,23 +581,64 @@ export default function MainsTestSeriesPage() {
                                             </a>
                                         </div>
 
-                                        {/* Submission status details */}
+                                        {/* Detailed Submission Status Card */}
                                         {submission && (
-                                            <div className="mt-3 bg-white rounded-xl p-3 border border-gray-200 text-xs">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <span className="text-gray-500">Submitted on:</span>
-                                                    <span className="font-semibold">{formatDate(submission.submittedAt)}</span>
+                                            <div className="mt-3 bg-white rounded-xl p-4 border border-gray-200 text-xs shadow-xs space-y-3">
+                                                {/* Top Status Banner */}
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100">
+                                                    <div>
+                                                        <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Evaluation Status</span>
+                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                            <span className={`px-2.5 py-0.5 rounded-full font-bold text-xs ${statusBadge?.color}`}>
+                                                                {statusBadge?.label}
+                                                            </span>
+                                                            {submission.reuploadCount && submission.reuploadCount >= 1 ? (
+                                                                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                                                    Reuploaded Once
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right sm:text-left">
+                                                        <span className="text-[10px] text-gray-400 font-bold block">Submitted On</span>
+                                                        <span className="font-semibold text-slate-700">{formatDate(submission.submittedAt)}</span>
+                                                    </div>
                                                 </div>
-                                                {submission.score !== undefined && submission.maxScore !== undefined && (
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <span className="text-gray-500">Score:</span>
-                                                        <span className="font-bold text-green-700">{submission.score} / {submission.maxScore}</span>
+
+                                                {/* View & Download Student's Uploaded Answer Sheet Files */}
+                                                {submission.answerSheetUrls && submission.answerSheetUrls.length > 0 && (
+                                                    <div>
+                                                        <p className="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
+                                                            <span>📄</span> Your Uploaded Answer Copy ({submission.answerSheetUrls.length} file{submission.answerSheetUrls.length > 1 ? 's' : ''}):
+                                                        </p>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {submission.answerSheetUrls.map((url, i) => (
+                                                                <a
+                                                                    key={i}
+                                                                    href={`${API_URL}${url}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-all border border-slate-200"
+                                                                >
+                                                                    <span>📥</span> View Answer Sheet #{i + 1}
+                                                                </a>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 )}
+
+                                                {/* Score & Evaluation Feedback */}
+                                                {submission.score !== undefined && submission.maxScore !== undefined && (
+                                                    <div className="flex items-center justify-between p-3 bg-green-50 rounded-xl border border-green-200">
+                                                        <span className="font-bold text-green-900 text-sm">Evaluation Score:</span>
+                                                        <span className="font-extrabold text-base text-green-700">{submission.score} / {submission.maxScore}</span>
+                                                    </div>
+                                                )}
+
                                                 {submission.feedback && (
-                                                    <div className="mt-2 p-2 bg-amber-50 rounded-lg border border-amber-100">
-                                                        <p className="text-[10px] font-bold text-amber-700 mb-1">Mentor Feedback:</p>
-                                                        <p className="text-gray-700">{submission.feedback}</p>
+                                                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
+                                                        <p className="text-[11px] font-bold text-amber-900 mb-1">Mentor Feedback:</p>
+                                                        <p className="text-slate-700 leading-relaxed text-xs">{submission.feedback}</p>
                                                     </div>
                                                 )}
                                             </div>
@@ -538,84 +657,94 @@ export default function MainsTestSeriesPage() {
                 )}
             </main>
 
-            {/* Upload Modal */}
+            {/* Upload & Reupload Modal */}
             {showUploadModal && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowUploadModal(false)}>
                     <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-lg font-bold text-[#1E3A5F] font-headline mb-1">Upload Answer Sheets</h3>
+                        <h3 className="text-lg font-bold text-[#1E3A5F] font-headline mb-1">
+                            {isReuploading ? '🔄 Re-upload Answer Sheet' : '📤 Upload Answer Sheets'}
+                        </h3>
                         <p className="text-xs text-[#64748B] mb-4">
-                            Upload scanned copies of your written answers (PDF, JPG, PNG). Max 10 files, 20MB each.
+                            {isReuploading
+                                ? 'Upload replacement answer files. Your previous uploaded answer files will be deleted and replaced.'
+                                : 'Upload scanned copies of your written answers (PDF, JPG, PNG). Max 10 files, 20MB each.'}
                         </p>
 
                         {uploadError && (
-                            <div className="bg-red-50 text-red-700 text-xs p-3 rounded-xl mb-3 border border-red-200">{uploadError}</div>
+                            <div className="bg-red-50 text-red-700 text-xs p-3 rounded-xl mb-3 border border-red-200 font-medium">
+                                {uploadError}
+                            </div>
                         )}
+
                         {uploadSuccess && (
-                            <div className="bg-green-50 text-green-700 text-xs p-3 rounded-xl mb-3 border border-green-200">{uploadSuccess}</div>
+                            <div className="bg-green-50 text-green-700 text-xs p-3 rounded-xl mb-3 border border-green-200 font-medium">
+                                {uploadSuccess}
+                            </div>
                         )}
 
-                        {!uploadSuccess && (
-                            <>
-                                {/* File picker */}
-                                <div
-                                    className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-[#D97706] transition-colors mb-3"
-                                    onClick={() => fileInputRef.current?.click()}
-                                >
-                                    <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                    </svg>
-                                    <p className="text-sm text-gray-500">Tap to select files</p>
-                                    <p className="text-[10px] text-gray-400 mt-1">PDF, JPG, PNG, WebP</p>
-                                </div>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    multiple
-                                    accept=".pdf,.jpg,.jpeg,.png,.webp"
-                                    onChange={handleFileSelect}
-                                    className="hidden"
-                                />
+                        {/* File Dropzone */}
+                        <div
+                            onClick={() => fileInputRef.current?.click()}
+                            className="border-2 border-dashed border-gray-300 hover:border-[#D97706] rounded-xl p-6 text-center cursor-pointer transition-colors bg-gray-50 hover:bg-amber-50/30 mb-3"
+                        >
+                            <span className="text-3xl mb-2 block">📁</span>
+                            <p className="text-xs font-bold text-[#1E3A5F]">Click to select answer files</p>
+                            <p className="text-[10px] text-[#64748B] mt-1">PDF, JPG, PNG, WebP up to 20MB per file (max 10 files)</p>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                multiple
+                                onChange={handleFileSelect}
+                                className="hidden"
+                            />
+                        </div>
 
-                                {/* Selected files list */}
-                                {uploadFiles.length > 0 && (
-                                    <div className="mb-3 space-y-1">
-                                        {uploadFiles.map((f, i) => (
-                                            <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-xs">
-                                                <span className="truncate flex-1">{f.name}</span>
-                                                <button onClick={() => setUploadFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-red-500 ml-2 font-bold">✕</button>
-                                            </div>
-                                        ))}
-                                        <p className="text-[10px] text-gray-400">{uploadFiles.length}/10 files selected</p>
+                        {/* Selected Files List */}
+                        {uploadFiles.length > 0 && (
+                            <div className="mb-4 space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                                <p className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Selected Files ({uploadFiles.length}):</p>
+                                {uploadFiles.map((file, idx) => (
+                                    <div key={idx} className="flex items-center justify-between bg-gray-100 rounded-lg p-2 text-xs">
+                                        <span className="truncate max-w-[200px] text-gray-700 font-medium">{file.name}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-gray-400 font-mono">{(file.size / (1024 * 1024)).toFixed(1)}MB</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setUploadFiles(prev => prev.filter((_, i) => i !== idx))}
+                                                className="text-red-500 hover:text-red-700 font-bold"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
                                     </div>
-                                )}
-
-                                {/* Actions */}
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => setShowUploadModal(false)}
-                                        className="flex-1 py-3 rounded-xl border border-gray-300 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleSubmitAnswerSheet}
-                                        disabled={uploadFiles.length === 0 || isUploading}
-                                        className="flex-1 py-3 rounded-xl bg-[#1E3A5F] text-white text-sm font-bold hover:bg-[#152C4A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        {isUploading ? 'Uploading...' : 'Submit'}
-                                    </button>
-                                </div>
-                            </>
+                                ))}
+                            </div>
                         )}
 
-                        {uploadSuccess && (
+                        {/* Action buttons */}
+                        <div className="flex gap-3">
                             <button
                                 onClick={() => setShowUploadModal(false)}
-                                className="w-full py-3 rounded-xl bg-[#1E3A5F] text-white text-sm font-bold hover:bg-[#152C4A] transition-colors"
+                                className="flex-1 py-3 rounded-xl border border-gray-300 text-xs font-bold text-gray-600 hover:bg-gray-50"
                             >
-                                Done
+                                Cancel
                             </button>
-                        )}
+                            <button
+                                onClick={handleSubmitAnswerSheet}
+                                disabled={uploadFiles.length === 0 || isUploading}
+                                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#E65100] to-[#FF9800] text-white text-xs font-bold hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {isUploading ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        <span>{isReuploading ? 'Re-uploading...' : 'Uploading...'}</span>
+                                    </>
+                                ) : (
+                                    <span>{isReuploading ? 'Re-upload & Replace Files' : 'Submit Answer Sheet'}</span>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -627,7 +756,7 @@ export default function MainsTestSeriesPage() {
                         <div className="flex justify-end mb-2">
                             <button onClick={() => { setShowVideoModal(false); setVideoUrl(''); }} className="text-white text-2xl font-bold">✕</button>
                         </div>
-                        <div className="relative pb-[56.25%] h-0 rounded-xl overflow-hidden">
+                        <div className="relative pb-[56.25%] h-0 rounded-xl overflow-hidden shadow-2xl">
                             <iframe
                                 src={getYoutubeEmbedUrl(videoUrl)}
                                 className="absolute top-0 left-0 w-full h-full"

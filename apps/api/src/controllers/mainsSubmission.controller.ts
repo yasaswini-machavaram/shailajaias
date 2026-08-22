@@ -87,6 +87,83 @@ export const submitAnswerSheet = async (req: Request, res: Response): Promise<vo
     }
 };
 
+// @desc    Student re-uploads answer sheet (once only, before mentor starts review)
+// @route   PUT /api/mts/submissions/:id/reupload
+// @access  Private (Student)
+export const reuploadAnswerSheet = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const user = (req as any).user;
+        const { id } = req.params;
+        const files = req.files as Express.Multer.File[];
+
+        if (!files || files.length === 0) {
+            res.status(400).json({ success: false, message: 'Please upload at least one new answer sheet file' });
+            return;
+        }
+
+        const submission = await MainsSubmission.findById(id);
+        if (!submission) {
+            res.status(404).json({ success: false, message: 'Submission not found' });
+            return;
+        }
+
+        // Verify ownership
+        if (submission.student.toString() !== user._id.toString()) {
+            res.status(403).json({ success: false, message: 'Not authorized to modify this submission' });
+            return;
+        }
+
+        // Check evaluation status
+        if (submission.status === 'under_review' || submission.status === 'evaluated') {
+            res.status(400).json({
+                success: false,
+                message: 'Reupload unavailable: Your answer sheet is currently under review or evaluated by mentor.',
+            });
+            return;
+        }
+
+        // Check reupload count (only 1 reupload allowed)
+        if (submission.reuploadCount && submission.reuploadCount >= 1) {
+            res.status(400).json({
+                success: false,
+                message: 'You have already reuploaded your answer sheet once. Multiple reuploads are not permitted.',
+            });
+            return;
+        }
+
+        // Delete previous answer files from disk
+        if (submission.answerSheetKeys && submission.answerSheetKeys.length > 0) {
+            for (const key of submission.answerSheetKeys) {
+                try {
+                    const filePath = path.join(UPLOADS_DIR, key);
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                    }
+                } catch (e) {
+                    console.error('Failed to unlink old file key:', key, e);
+                }
+            }
+        }
+
+        // Update submission with new files
+        submission.answerSheetUrls = files.map(f => `/uploads/${f.filename}`);
+        submission.answerSheetKeys = files.map(f => f.filename);
+        submission.submittedAt = new Date();
+        submission.reuploadCount = (submission.reuploadCount || 0) + 1;
+
+        await submission.save();
+
+        res.json({
+            success: true,
+            data: submission,
+            message: 'Answer sheet reuploaded successfully! Previous files have been replaced.',
+        });
+    } catch (error) {
+        console.error('Reupload answer sheet error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 // @desc    Student views their own submissions
 // @route   GET /api/mts/submissions/my
 // @access  Private (Student)
@@ -236,7 +313,7 @@ export const getAllSubmissions = async (req: Request, res: Response): Promise<vo
 export const getMentorSubmissions = async (req: Request, res: Response): Promise<void> => {
     try {
         const user = (req as any).user;
-        const { status, mainsTestSeriesId } = req.query;
+        const { status, mainsTestSeriesId, startDate, endDate } = req.query;
 
         // Fetch mentor's assigned batches and students
         const mentorUser = await User.findById(user._id).select('assignedMtsGroups assignedStudents');
@@ -254,6 +331,16 @@ export const getMentorSubmissions = async (req: Request, res: Response): Promise
 
         if (status) filter.status = status;
         if (mainsTestSeriesId) filter.mainsTestSeries = mainsTestSeriesId;
+
+        if (startDate || endDate) {
+            filter.submittedAt = {};
+            if (startDate) {
+                filter.submittedAt.$gte = new Date(`${startDate}T00:00:00.000Z`);
+            }
+            if (endDate) {
+                filter.submittedAt.$lte = new Date(`${endDate}T23:59:59.999Z`);
+            }
+        }
 
         const submissions = await MainsSubmission.find(filter)
             .sort({ submittedAt: -1 })

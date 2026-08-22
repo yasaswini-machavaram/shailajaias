@@ -19,6 +19,10 @@ export default function AdminMentorsPage() {
     const [mentors, setMentors] = useState<Mentor[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Search and filter
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
+
     // Create modal
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [createForm, setCreateForm] = useState({ name: '', email: '', password: '' });
@@ -66,7 +70,7 @@ export default function AdminMentorsPage() {
 
     const fetchStudents = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/admin/users?limit=200`, { headers: { Authorization: `Bearer ${token}` } });
+            const res = await fetch(`${API_URL}/api/admin/users?limit=300`, { headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
             if (data.success) setStudentsList(data.data || []);
         } catch (e) { console.error('Fetch students error:', e); }
@@ -149,72 +153,186 @@ export default function AdminMentorsPage() {
         s.email?.toLowerCase().includes(studentSearchTerm.toLowerCase())
     );
 
+    const filteredMentors = mentors.filter(m => {
+        const matchesSearch = !searchTerm ||
+            m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            m.email.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = statusFilter === 'all' || m.status === statusFilter;
+        return matchesSearch && matchesStatus;
+    });
+
     return (
         <div className="p-8 min-h-screen bg-slate-50 font-body">
-            <div className="flex items-center justify-between mb-6">
+            {/* Header & Title */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 font-headline">Mentor Management</h1>
-                    <p className="text-sm text-slate-500 mt-1">Create and manage mentor accounts for Mains Test Series evaluation.</p>
+                    <p className="text-sm text-slate-500 mt-1">Manage mentor accounts, assigned test series batches, and student allocations.</p>
                 </div>
-                <button onClick={() => { setShowCreateModal(true); setCreateError(''); setCreateForm({ name: '', email: '', password: '' }); }}
-                    className="bg-teal-600 text-white px-6 py-3 rounded-xl text-sm font-bold hover:bg-teal-700 transition-colors shadow-sm">
-                    + Create Mentor
+                <button
+                    onClick={() => { setShowCreateModal(true); setCreateError(''); setCreateForm({ name: '', email: '', password: '' }); }}
+                    className="bg-teal-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-teal-700 transition-colors shadow-sm flex items-center gap-2 self-start md:self-auto"
+                >
+                    <span>+ Create Mentor</span>
                 </button>
             </div>
 
+            {/* Filter and Search Bar */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm mb-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="relative w-full sm:w-80">
+                    <input
+                        type="text"
+                        placeholder="Search mentor by name or email..."
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 focus:bg-white transition-all"
+                    />
+                    <svg className="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <span className="text-xs text-slate-500 font-semibold">Status:</span>
+                    <select
+                        value={statusFilter}
+                        onChange={e => setStatusFilter(e.target.value as any)}
+                        className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:border-teal-500"
+                    >
+                        <option value="all">All Statuses</option>
+                        <option value="active">Active Only</option>
+                        <option value="suspended">Suspended Only</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* Excel-style Mentors Table View */}
             {isLoading ? (
-                <div className="flex items-center justify-center py-20">
+                <div className="flex items-center justify-center py-20 bg-white rounded-2xl border border-slate-200 shadow-sm">
                     <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-teal-600" />
                 </div>
-            ) : mentors.length === 0 ? (
+            ) : filteredMentors.length === 0 ? (
                 <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm">
-                    <p className="text-slate-500 text-sm mb-4">No mentors created yet. Create a mentor to start assigning evaluations.</p>
-                    <button onClick={() => setShowCreateModal(true)} className="bg-teal-600 text-white px-6 py-3 rounded-xl text-sm font-bold">Create First Mentor</button>
+                    <p className="text-slate-500 text-sm mb-4">No mentors found.</p>
+                    <button onClick={() => setShowCreateModal(true)} className="bg-teal-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold">
+                        Create First Mentor
+                    </button>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {mentors.map(m => (
-                        <div key={m._id} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
-                            <div>
-                                <div className="flex items-start justify-between mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm">
-                                            {m.name.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <h3 className="font-bold text-slate-800 text-sm">{m.name}</h3>
-                                            <p className="text-xs text-slate-500">{m.email}</p>
-                                        </div>
-                                    </div>
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${m.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                        {m.status}
-                                    </span>
-                                </div>
-                                <div className="flex flex-wrap gap-1 mb-4">
-                                    <span className="text-[10px] bg-teal-50 text-teal-700 px-2 py-0.5 rounded font-semibold">
-                                        {m.assignedMtsGroups?.length || 0} batches assigned
-                                    </span>
-                                    <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-semibold">
-                                        {m.assignedStudents?.length || 0} students assigned
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="flex flex-wrap gap-2 text-xs pt-3 border-t border-slate-100">
-                                <button onClick={() => { setEditForm({ _id: m._id, name: m.name, email: m.email, password: '', status: m.status }); setShowEditModal(true); setEditError(''); }}
-                                    className="font-bold text-[#1E3A5F] hover:underline">Edit</button>
-                                <button onClick={() => {
-                                    setShowAssignModal(m);
-                                    setSelectedBatches(m.assignedMtsGroups?.map((g: any) => g._id || g) || []);
-                                }} className="font-bold text-teal-600 hover:underline">Assign Batches</button>
-                                <button onClick={() => {
-                                    setShowAssignStudentsModal(m);
-                                    setSelectedStudents(m.assignedStudents?.map((s: any) => s._id || s) || []);
-                                    setStudentSearchTerm('');
-                                }} className="font-bold text-blue-600 hover:underline">Assign Students</button>
-                                <button onClick={() => setShowDeleteModal(m._id)} className="font-bold text-red-500 hover:underline ml-auto">Delete</button>
-                            </div>
-                        </div>
-                    ))}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-slate-100/80 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                    <th className="py-3.5 px-4 w-12 text-center">#</th>
+                                    <th className="py-3.5 px-6">Mentor Name & Email</th>
+                                    <th className="py-3.5 px-4">Status</th>
+                                    <th className="py-3.5 px-6">Assigned Batches</th>
+                                    <th className="py-3.5 px-6">Assigned Students</th>
+                                    <th className="py-3.5 px-6 text-center">Actions (CTA)</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
+                                {filteredMentors.map((m, idx) => (
+                                    <tr key={m._id} className="hover:bg-slate-50/80 transition-colors">
+                                        {/* Sl No */}
+                                        <td className="py-4 px-4 text-center text-xs font-bold text-slate-400">
+                                            {idx + 1}
+                                        </td>
+
+                                        {/* Mentor Info */}
+                                        <td className="py-4 px-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-9 h-9 rounded-full bg-teal-100 text-teal-800 font-bold text-xs flex items-center justify-center flex-shrink-0">
+                                                    {m.name.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold text-slate-800 text-sm leading-snug">{m.name}</h3>
+                                                    <p className="text-xs text-slate-500">{m.email}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        {/* Status */}
+                                        <td className="py-4 px-4">
+                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                                                m.status === 'active' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+                                            }`}>
+                                                <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${m.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`} />
+                                                {m.status === 'active' ? 'Active' : 'Suspended'}
+                                            </span>
+                                        </td>
+
+                                        {/* Assigned Batches */}
+                                        <td className="py-4 px-6">
+                                            <span className="inline-flex items-center gap-1.5 bg-teal-50 text-teal-800 px-3 py-1 rounded-lg text-xs font-bold border border-teal-100">
+                                                <span>📚</span> {m.assignedMtsGroups?.length || 0} Batches
+                                            </span>
+                                        </td>
+
+                                        {/* Assigned Students */}
+                                        <td className="py-4 px-6">
+                                            <span className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-800 px-3 py-1 rounded-lg text-xs font-bold border border-indigo-100">
+                                                <span>🎓</span> {m.assignedStudents?.length || 0} Students
+                                            </span>
+                                        </td>
+
+                                        {/* Actions Column (4 CTA Buttons) */}
+                                        <td className="py-4 px-6">
+                                            <div className="flex items-center justify-center gap-2 flex-wrap">
+                                                {/* Edit CTA */}
+                                                <button
+                                                    onClick={() => {
+                                                        setEditForm({ _id: m._id, name: m.name, email: m.email, password: '', status: m.status });
+                                                        setShowEditModal(true);
+                                                        setEditError('');
+                                                    }}
+                                                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-lg transition-all shadow-2xs border border-slate-200"
+                                                    title="Edit mentor details"
+                                                >
+                                                    ✏️ Edit
+                                                </button>
+
+                                                {/* Assign Batch CTA */}
+                                                <button
+                                                    onClick={() => {
+                                                        setShowAssignModal(m);
+                                                        setSelectedBatches(m.assignedMtsGroups?.map((g: any) => g._id || g) || []);
+                                                    }}
+                                                    className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 text-xs font-bold rounded-lg transition-all shadow-2xs border border-teal-200"
+                                                    title="Assign Mains Test Series Batches"
+                                                >
+                                                    📚 Assign Batch
+                                                </button>
+
+                                                {/* Assign Student CTA */}
+                                                <button
+                                                    onClick={() => {
+                                                        setShowAssignStudentsModal(m);
+                                                        setSelectedStudents(m.assignedStudents?.map((s: any) => s._id || s) || []);
+                                                        setStudentSearchTerm('');
+                                                    }}
+                                                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition-all shadow-2xs border border-indigo-200"
+                                                    title="Assign specific students to mentor"
+                                                >
+                                                    🎓 Assign Student
+                                                </button>
+
+                                                {/* Delete CTA */}
+                                                <button
+                                                    onClick={() => setShowDeleteModal(m._id)}
+                                                    className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-lg transition-all shadow-2xs border border-red-200"
+                                                    title="Delete mentor account"
+                                                >
+                                                    🗑️ Delete
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 
@@ -226,14 +344,14 @@ export default function AdminMentorsPage() {
                         {createError && <div className="bg-red-50 text-red-700 text-xs p-3 rounded-xl mb-3 border border-red-200">{createError}</div>}
                         <div className="space-y-3">
                             <input type="text" placeholder="Full Name" value={createForm.name} onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))}
-                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm" />
+                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-teal-500" />
                             <input type="email" placeholder="Email Address" value={createForm.email} onChange={e => setCreateForm(p => ({ ...p, email: e.target.value }))}
-                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm" />
+                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-teal-500" />
                             <input type="text" placeholder="Password (min 6 chars)" value={createForm.password} onChange={e => setCreateForm(p => ({ ...p, password: e.target.value }))}
-                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm" />
+                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-teal-500" />
                         </div>
                         <div className="flex gap-3 mt-4">
-                            <button onClick={() => setShowCreateModal(false)} className="flex-1 py-3 rounded-xl border border-slate-300 text-sm font-bold">Cancel</button>
+                            <button onClick={() => setShowCreateModal(false)} className="flex-1 py-3 rounded-xl border border-slate-300 text-sm font-bold text-slate-600 hover:bg-slate-50">Cancel</button>
                             <button onClick={handleCreate} disabled={isCreating} className="flex-1 py-3 rounded-xl bg-teal-600 text-white text-sm font-bold hover:bg-teal-700 disabled:opacity-50">
                                 {isCreating ? 'Creating...' : 'Create'}
                             </button>
@@ -250,20 +368,20 @@ export default function AdminMentorsPage() {
                         {editError && <div className="bg-red-50 text-red-700 text-xs p-3 rounded-xl mb-3 border border-red-200">{editError}</div>}
                         <div className="space-y-3">
                             <input type="text" placeholder="Name" value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
-                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm" />
+                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-teal-500" />
                             <input type="email" placeholder="Email" value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))}
-                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm" />
+                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-teal-500" />
                             <input type="text" placeholder="New Password (leave blank to keep)" value={editForm.password} onChange={e => setEditForm(p => ({ ...p, password: e.target.value }))}
-                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm" />
+                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-teal-500" />
                             <select value={editForm.status} onChange={e => setEditForm(p => ({ ...p, status: e.target.value }))}
-                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm">
+                                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-teal-500">
                                 <option value="active">Active</option>
                                 <option value="suspended">Suspended</option>
                             </select>
                         </div>
                         <div className="flex gap-3 mt-4">
-                            <button onClick={() => setShowEditModal(false)} className="flex-1 py-3 rounded-xl border border-slate-300 text-sm font-bold">Cancel</button>
-                            <button onClick={handleUpdate} className="flex-1 py-3 rounded-xl bg-[#1E3A5F] text-white text-sm font-bold">Update</button>
+                            <button onClick={() => setShowEditModal(false)} className="flex-1 py-3 rounded-xl border border-slate-300 text-sm font-bold text-slate-600 hover:bg-slate-50">Cancel</button>
+                            <button onClick={handleUpdate} className="flex-1 py-3 rounded-xl bg-[#1E3A5F] text-white text-sm font-bold hover:bg-[#152C4A]">Update</button>
                         </div>
                     </div>
                 </div>
@@ -275,14 +393,14 @@ export default function AdminMentorsPage() {
                     <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h3 className="text-lg font-bold text-slate-800 mb-2">Assign MTS Batches</h3>
                         <p className="text-xs text-slate-500 mb-4">Select MTS groups to assign to <strong>{showAssignModal.name}</strong></p>
-                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                             {mtsList.map(mts => (
                                 <label key={mts._id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
                                     <input type="checkbox" checked={selectedBatches.includes(mts._id)}
                                         onChange={e => {
                                             if (e.target.checked) setSelectedBatches(p => [...p, mts._id]);
                                             else setSelectedBatches(p => p.filter(id => id !== mts._id));
-                                        }} className="w-4 h-4 rounded" />
+                                        }} className="w-4 h-4 rounded text-teal-600" />
                                     <div>
                                         <p className="text-sm font-semibold text-slate-700">{mts.title}</p>
                                         {mts.uniqueId && <span className="text-[10px] text-amber-600 font-bold">{mts.uniqueId}</span>}
@@ -292,8 +410,8 @@ export default function AdminMentorsPage() {
                             {mtsList.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No MTS groups available</p>}
                         </div>
                         <div className="flex gap-3 mt-4">
-                            <button onClick={() => setShowAssignModal(null)} className="flex-1 py-3 rounded-xl border border-slate-300 text-sm font-bold">Cancel</button>
-                            <button onClick={handleAssignBatch} className="flex-1 py-3 rounded-xl bg-teal-600 text-white text-sm font-bold">Save Assignments</button>
+                            <button onClick={() => setShowAssignModal(null)} className="flex-1 py-3 rounded-xl border border-slate-300 text-sm font-bold text-slate-600 hover:bg-slate-50">Cancel</button>
+                            <button onClick={handleAssignBatch} className="flex-1 py-3 rounded-xl bg-teal-600 text-white text-sm font-bold hover:bg-teal-700">Save Assignments</button>
                         </div>
                     </div>
                 </div>
@@ -313,10 +431,10 @@ export default function AdminMentorsPage() {
                             placeholder="Search by name, phone, email..."
                             value={studentSearchTerm}
                             onChange={e => setStudentSearchTerm(e.target.value)}
-                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm mb-3"
+                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm mb-3 focus:outline-none focus:border-indigo-500"
                         />
 
-                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                             {filteredStudents.map(student => (
                                 <label key={student._id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
                                     <input
@@ -326,7 +444,7 @@ export default function AdminMentorsPage() {
                                             if (e.target.checked) setSelectedStudents(p => [...p, student._id]);
                                             else setSelectedStudents(p => p.filter(id => id !== student._id));
                                         }}
-                                        className="w-4 h-4 rounded"
+                                        className="w-4 h-4 rounded text-indigo-600"
                                     />
                                     <div>
                                         <p className="text-sm font-semibold text-slate-800">{student.name}</p>
@@ -338,8 +456,8 @@ export default function AdminMentorsPage() {
                         </div>
 
                         <div className="flex gap-3 mt-4">
-                            <button onClick={() => setShowAssignStudentsModal(null)} className="flex-1 py-3 rounded-xl border border-slate-300 text-sm font-bold">Cancel</button>
-                            <button onClick={handleAssignStudents} className="flex-1 py-3 rounded-xl bg-blue-600 text-white text-sm font-bold">Save Student Assignments</button>
+                            <button onClick={() => setShowAssignStudentsModal(null)} className="flex-1 py-3 rounded-xl border border-slate-300 text-sm font-bold text-slate-600 hover:bg-slate-50">Cancel</button>
+                            <button onClick={handleAssignStudents} className="flex-1 py-3 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700">Save Student Assignments</button>
                         </div>
                     </div>
                 </div>
@@ -352,8 +470,8 @@ export default function AdminMentorsPage() {
                         <h3 className="text-lg font-bold text-slate-800 mb-2">Delete Mentor?</h3>
                         <p className="text-sm text-slate-500 mb-4">This will permanently delete this mentor account.</p>
                         <div className="flex gap-3">
-                            <button onClick={() => setShowDeleteModal(null)} className="flex-1 py-2 rounded-xl border border-slate-300 text-sm font-bold">Cancel</button>
-                            <button onClick={() => handleDelete(showDeleteModal)} className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-bold">Delete</button>
+                            <button onClick={() => setShowDeleteModal(null)} className="flex-1 py-2.5 rounded-xl border border-slate-300 text-sm font-bold text-slate-600 hover:bg-slate-50">Cancel</button>
+                            <button onClick={() => handleDelete(showDeleteModal)} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600">Delete</button>
                         </div>
                     </div>
                 </div>

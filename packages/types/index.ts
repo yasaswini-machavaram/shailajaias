@@ -209,6 +209,7 @@ export interface IMainsTestSeriesItem {
   title: string;
   date: string;
   subjectCategory: string;
+  syllabus?: string;
   questionPaperUrl?: string;
   questionPaperKey?: string;
   solutionPaperUrl?: string;
@@ -243,6 +244,7 @@ export interface IMainsSubmission {
   answerSheetUrls: string[];
   answerSheetKeys: string[];
   submittedAt: string;
+  reuploadCount?: number;
   mentor?: string | { _id: string; name: string; email?: string };
   status: 'submitted' | 'assigned' | 'under_review' | 'evaluated';
   evaluatedCopyUrl?: string;

@@ -250,6 +250,7 @@ export interface MainsTestSeriesItem {
     title: string;
     date: string;
     subjectCategory: string;
+    syllabus?: string;
     questionPaperUrl?: string;
     questionPaperKey?: string;
     solutionPaperUrl?: string;
@@ -283,6 +284,7 @@ export interface MainsSubmission {
     seriesUniqueId: string;
     answerSheetUrls: string[];
     submittedAt: string;
+    reuploadCount?: number;
     mentor?: any;
     status: 'submitted' | 'assigned' | 'under_review' | 'evaluated';
     evaluatedCopyUrl?: string;

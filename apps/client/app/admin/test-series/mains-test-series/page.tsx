@@ -10,6 +10,7 @@ interface TestItemForm {
     title: string;
     date: string;
     subjectCategory: string;
+    syllabus: string;
     questionPaperUrl: string;
     questionPaperKey: string;
     solutionPaperUrl: string;
@@ -34,7 +35,7 @@ interface MtsForm {
 
 const emptyTest: TestItemForm = {
     title: '', date: new Date().toISOString().split('T')[0],
-    subjectCategory: 'GS-1', questionPaperUrl: '', questionPaperKey: '',
+    subjectCategory: 'GS-1', syllabus: '', questionPaperUrl: '', questionPaperKey: '',
     solutionPaperUrl: '', solutionPaperKey: '', discussionVideoUrl: '', isLocked: false,
 };
 
@@ -162,6 +163,7 @@ export default function AdminMainsTestSeriesPage() {
             tests: (series.tests || []).map((t: any) => ({
                 title: t.title || '', date: t.date ? t.date.split('T')[0] : new Date().toISOString().split('T')[0],
                 subjectCategory: t.subjectCategory || 'GS-1',
+                syllabus: t.syllabus || '',
                 questionPaperUrl: t.questionPaperUrl || '', questionPaperKey: t.questionPaperKey || '',
                 solutionPaperUrl: t.solutionPaperUrl || '', solutionPaperKey: t.solutionPaperKey || '',
                 discussionVideoUrl: t.discussionVideoUrl || '', isLocked: !!t.isLocked,
@@ -261,18 +263,22 @@ export default function AdminMainsTestSeriesPage() {
                                             }} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" required />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-semibold text-slate-600 mb-1">Subject Category</label>
-                                            <select value={test.subjectCategory} onChange={e => {
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1">Subject Category *</label>
+                                            <input type="text" value={test.subjectCategory} onChange={e => {
                                                 const t = [...form.tests]; t[i].subjectCategory = e.target.value; setForm(p => ({ ...p, tests: t }));
-                                            }} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                                                {SUBJECT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                            </select>
+                                            }} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. GS-1, Polity, Essay" required />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-semibold text-slate-600 mb-1">Discussion Video URL</label>
                                             <input type="url" value={test.discussionVideoUrl} onChange={e => {
                                                 const t = [...form.tests]; t[i].discussionVideoUrl = e.target.value; setForm(p => ({ ...p, tests: t }));
                                             }} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="YouTube URL" />
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1">Syllabus / Topics Covered (Large Text)</label>
+                                            <textarea value={test.syllabus || ''} onChange={e => {
+                                                const t = [...form.tests]; t[i].syllabus = e.target.value; setForm(p => ({ ...p, tests: t }));
+                                            }} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none" rows={4} placeholder="Enter multi-line syllabus topics, subtopics, and guidelines..." />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-semibold text-slate-600 mb-1">Question Paper PDF * <span className="text-red-500 font-bold">(Mandatory)</span></label>
