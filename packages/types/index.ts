@@ -94,14 +94,58 @@ export interface ITestSeries {
 }
 
 // Course types
-export type ContentTabType = 'video' | 'notes' | 'test';
+export type ContentTabType = 'video' | 'notes' | 'test' | 'mains' | 'help';
+export type VideoProvider = 'youtube' | 'bunny' | 'custom';
+
+export interface IPdfFile {
+  title: string;
+  pdfUrl: string;
+  pdfKey?: string;
+}
+
+export interface IFaqItem {
+  question: string;
+  answer: string;
+}
+
+export interface IVideoItem {
+  id?: string;
+  _id?: string;
+  title: string;
+  description?: string;
+  videoProvider: VideoProvider;
+  videoUrl: string;
+  // Notes section
+  notesText?: string;
+  pdfFiles: IPdfFile[];
+  // Prelims Practice section
+  prelimsQuizId?: string;
+  prelimsDiscussionVideoUrl?: string;
+  prelimsDiscussionVideoProvider?: VideoProvider;
+  // Mains Practice section
+  mainsPracticeTestId?: string;
+  mainsQuestionText?: string;
+  mainsModelAnswer?: string;
+  mainsDiscussionVideoUrl?: string;
+  mainsDiscussionVideoProvider?: VideoProvider;
+  // Help & FAQ section
+  helpContactInfo?: string;
+  faqs: IFaqItem[];
+}
 
 export interface IContentTab {
   type: ContentTabType;
   title: string;
+  videoProvider?: VideoProvider;
   videoUrl?: string;
   pdfUrl?: string;
+  pdfKey?: string;
+  notesText?: string;
   testId?: string;
+  mainsTestId?: string;
+  mainsQuestionText?: string;
+  mainsModelAnswer?: string;
+  helpContactInfo?: string;
 }
 
 export type CourseLevel = 'course' | 'subject' | 'topic' | 'subtopic';
@@ -113,8 +157,12 @@ export interface ICourseNode {
   parentId?: string;
   order: number;
   level: CourseLevel;
+  videos?: IVideoItem[];
   contentTabs: IContentTab[];
   isPublished: boolean;
+  isPracticeLocked?: boolean;
+  isHelpLocked?: boolean;
+  isLocked?: boolean;
   createdAt: string;
 }
 

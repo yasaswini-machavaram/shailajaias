@@ -1181,6 +1181,46 @@ Admin creates content
   4. **Practice Test Filtering**: Refined user-side filtering in `tests/prelims-practice-test/page.tsx` to support the "General" filter pill when quizzes lack specific tags/question subjects.
 - **Verification:** `npx tsc --noEmit` passed cleanly with 0 errors on both API and Client apps.
 
+### Session: 2026-09-06 (Multi-Video Playlist, Multi-PDF Notes, Discussion Videos & FAQ Enhancements)
+- **Who:** AI (Antigravity)
+- **What:** Enhanced Course Module with 5 key features requested by user.
+- **Features Implemented:**
+  1. **Multiple Videos per Node**: Lecture nodes now support a video playlist array (`videos: IVideoItem[]`) with separate titles, providers, and URLs.
+  2. **Per-Video Dedicated Sections**: Every video item in the playlist has its OWN Notes, Prelims Practice, Mains Practice, and Help/FAQ sections.
+  3. **Multiple PDF Handouts**: Notes section supports multiple PDF downloads (`pdfFiles: IPdfFile[]`) per video.
+  4. **Discussion Video URLs & Mains Test Tagging**:
+     - Prelims & Mains practice sections support separate Discussion Video URLs (`prelimsDiscussionVideoUrl`, `mainsDiscussionVideoUrl`).
+     - Mains practice section supports linking/tagging from existing `MainsPracticeTest` models (`mainsPracticeTestId`).
+  5. **Multiple FAQs per Video**: Help section supports an array of FAQ items (`faqs: IFaqItem[]`).
+- **Files Modified:**
+  - `apps/api/src/models/Course.ts` (Updated Mongoose schemas)
+  - `packages/types/index.ts` (Updated shared TypeScript types)
+  - `apps/api/src/controllers/course.controller.ts` (Updated `createCourse` & `updateCourse`)
+  - `apps/client/app/admin/courses/[id]/page.tsx` (Admin CMS with playlist builder, multi-PDF inputs, discussion video URLs, MPT picker, multi-FAQ builder)
+  - `apps/client/app/courses/[id]/page.tsx` (Student Player with playlist bar, per-video dynamic tabs, multi-PDF downloader, discussion video embed, MPT link, FAQ accordion)
+- **Verified:** `pnpm run build:all` compiled 100% cleanly across all 52 client and api routes.
+
+### Session: 2026-09-06 (Course & Video Lecture Module Setup)
+- **Who:** AI (Antigravity)
+- **What:** Implemented the complete Course & Video Lecture Module (Backend + Admin Setup CMS + Student Video Player Portal).
+- **Backend (`apps/api`):**
+  - Updated `Course.ts` model with `videoProvider` (`youtube` | `bunny` | `custom`), `notesText`, `prelimsQuizId`, `mainsTestId`, `mainsQuestionText`, `mainsModelAnswer`, `helpContactInfo`, and lock switches (`isPracticeLocked`, `isHelpLocked`, `isLocked`).
+  - Added `getCourseTree` and `updateLockStatus` controller methods in `course.controller.ts`.
+  - Registered `/api/courses/tree/:id?` and `/api/courses/:id/lock-status` endpoints in `course.routes.ts`.
+- **Admin Portal (`apps/client/app/admin/courses`):**
+  - Created full Course Builder CMS at `apps/client/app/admin/courses/[id]/page.tsx`.
+  - Hierarchy tree builder for Courses → Subjects → Chapters → Lectures.
+  - Video provider selector (YouTube vs Bunny.net / iframe URLs).
+  - Content tab configuration for Notes, Prelims Practice Quiz link, Mains Practice question, and Help info.
+  - Admin Lock switches for Practice, Help, and Node locking.
+- **Student Portal (`apps/client/app/courses`):**
+  - Created Student Course Catalog at `apps/client/app/courses/page.tsx`.
+  - Created Student Video Player & Interactive Dashboard at `apps/client/app/courses/[id]/page.tsx`.
+  - Responsive Video Player supporting both YouTube and Bunny.net stream embeds.
+  - Dynamic tab rendering (Notes, Prelims Practice, Mains Practice, Help tabs automatically hidden if unconfigured).
+  - Frozen/Locked state UI for configured tabs when locked by Admin.
+- **Verified:** `pnpm run build:all` compiled 100% cleanly across all 52 client and api routes.
+
 ### Session: 2026-05-27 (Content Rendering: Lists + Tables)
 - **Who:** AI (Antigravity)
 - **What:** Fixed content rendering for Excel-imported Prelims articles and added full table support.

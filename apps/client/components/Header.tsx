@@ -38,7 +38,50 @@ export default function Header() {
                     />
                 </Link>
 
-                {/* Future tabs slot — empty for now */}
+                {/* Top Navigation Links for Desktop */}
+                <nav className="hidden md:flex items-center gap-6 mx-6">
+                    <Link
+                        href="/courses"
+                        className={`text-xs font-bold transition-colors ${
+                            pathname?.startsWith('/courses') ? 'text-[#D97706]' : 'text-slate-700 hover:text-[#1E3A5F]'
+                        }`}
+                    >
+                        🎓 Courses
+                    </Link>
+                    <Link
+                        href="/mentorship"
+                        className={`text-xs font-bold transition-colors ${
+                            pathname?.startsWith('/mentorship') ? 'text-[#D97706]' : 'text-slate-700 hover:text-[#1E3A5F]'
+                        }`}
+                    >
+                        🤝 Mentorship
+                    </Link>
+                    <Link
+                        href="/current-affairs"
+                        className={`text-xs font-bold transition-colors ${
+                            pathname?.startsWith('/current-affairs') ? 'text-[#D97706]' : 'text-slate-700 hover:text-[#1E3A5F]'
+                        }`}
+                    >
+                        📰 Current Affairs
+                    </Link>
+                    <Link
+                        href="/tests"
+                        className={`text-xs font-bold transition-colors ${
+                            pathname?.startsWith('/tests') ? 'text-[#D97706]' : 'text-slate-700 hover:text-[#1E3A5F]'
+                        }`}
+                    >
+                        ✍️ Tests
+                    </Link>
+                    <Link
+                        href="/resources"
+                        className={`text-xs font-bold transition-colors ${
+                            pathname?.startsWith('/resources') ? 'text-[#D97706]' : 'text-slate-700 hover:text-[#1E3A5F]'
+                        }`}
+                    >
+                        📚 Resources
+                    </Link>
+                </nav>
+
                 <div className="flex-1" />
 
                 {/* Actions */}
