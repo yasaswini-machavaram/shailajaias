@@ -23,7 +23,9 @@ import {
   mainsSubmissionRoutes,
   mentorRoutes,
   mainsPracticeTestRoutes,
+  mentorshipRoutes,
 } from "./routes/index.js";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -82,7 +84,9 @@ app.use('/api/bookmarks', bookmarkRoutes);
 app.use('/api/mts/series', mainsTestSeriesRoutes);
 app.use('/api/mts/submissions', mainsSubmissionRoutes);
 app.use('/api/mentors', mentorRoutes);
+app.use('/api/mentorship-courses', mentorshipRoutes);
 app.use('/api/mpt', mainsPracticeTestRoutes);
+
 
 // 404 handler
 app.use((_req, res) => {

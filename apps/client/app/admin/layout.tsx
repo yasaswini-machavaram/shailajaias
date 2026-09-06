@@ -80,7 +80,9 @@ const navItems = [
     { href: '/admin/magazines', icon: MagazineIcon, label: 'Magazines' },
     { href: '/admin/quizzes', icon: QuizIcon, label: 'Quizzes' },
     { href: '/admin/courses', icon: CourseIcon, label: 'Courses' },
+    { href: '/admin/mentorship', icon: CourseIcon, label: 'Mentorship Cards' },
     { href: '/admin/resources', icon: ResourceIcon, label: 'Resources' },
+
     { href: '/admin/test-series', icon: TestSeriesIcon, label: 'Test Series' },
     { href: '/admin/mts-submissions', icon: TestSeriesIcon, label: 'MTS Submissions' },
     { href: '/admin/mentors', icon: UserIcon, label: 'Mentors' },

@@ -4,6 +4,7 @@ export interface IDoubtMessage {
     senderId: Types.ObjectId;
     senderName: string;
     message: string;
+    imageUrl?: string;
     createdAt: Date;
 }
 
@@ -18,6 +19,7 @@ export interface IDoubt extends Document {
     subject: string;
     title: string;
     description: string;
+    imageUrl?: string;
     status: 'pending' | 'answered' | 'resolved';
     messages: IDoubtMessage[];
     createdAt: Date;
@@ -38,6 +40,11 @@ const DoubtMessageSchema = new Schema<IDoubtMessage>(
         message: {
             type: String,
             required: true,
+            trim: true,
+        },
+        imageUrl: {
+            type: String,
+            required: false,
             trim: true,
         },
         createdAt: {
@@ -99,6 +106,11 @@ const DoubtSchema = new Schema<IDoubt>(
         description: {
             type: String,
             required: [true, 'Doubt description is required'],
+            trim: true,
+        },
+        imageUrl: {
+            type: String,
+            required: false,
             trim: true,
         },
         status: {

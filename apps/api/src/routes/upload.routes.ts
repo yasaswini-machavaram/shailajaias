@@ -16,9 +16,9 @@ const upload = multer({
 const router: ReturnType<typeof Router> = Router();
 
 // @route   POST /api/upload/image
-// @desc    Upload image to S3
-// @access  Private/Admin
-router.post('/image', protect, adminOnly, upload.single('file'), uploadImage);
+// @desc    Upload image (S3 or local disk fallback)
+// @access  Private (Student/Admin)
+router.post('/image', protect, upload.single('file'), uploadImage);
 
 // @route   POST /api/upload/pdf
 // @desc    Upload PDF to S3

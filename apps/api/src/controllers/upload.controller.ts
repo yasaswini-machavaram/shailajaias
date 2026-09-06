@@ -3,9 +3,11 @@ import { uploadToS3, getPresignedUrl } from '../services/s3.service.js';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 
-// @desc    Upload image to S3
+import fs from 'fs';
+
+// @desc    Upload image to S3 (or local disk fallback)
 // @route   POST /api/upload/image
-// @access  Private/Admin
+// @access  Private (Student/Admin)
 export const uploadImage = async (req: Request, res: Response): Promise<void> => {
     try {
         const file = req.file;
@@ -22,18 +24,44 @@ export const uploadImage = async (req: Request, res: Response): Promise<void> =>
             return;
         }
 
-        // Generate unique filename
-        const ext = path.extname(file.originalname);
-        const filename = `images/${uuidv4()}${ext}`;
+        const ext = path.extname(file.originalname) || '.jpg';
+        const bucketName = process.env.AWS_BUCKET_NAME;
 
-        // Upload to S3
-        const result = await uploadToS3(file.buffer, filename, file.mimetype);
+        if (bucketName && bucketName.trim().length > 0) {
+            try {
+                const filename = `images/${uuidv4()}${ext}`;
+                const result = await uploadToS3(file.buffer, filename, file.mimetype);
+                res.json({
+                    success: true,
+                    data: {
+                        url: result.url,
+                        key: result.key,
+                    },
+                });
+                return;
+            } catch (s3Err) {
+                console.warn('S3 upload failed, falling back to local disk storage:', s3Err);
+            }
+        }
+
+        // Fallback: Save to local uploads directory
+        const uploadsDir = path.resolve(process.cwd(), 'uploads');
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        const localFileName = `img-${uuidv4()}${ext}`;
+        const filePath = path.join(uploadsDir, localFileName);
+        await fs.promises.writeFile(filePath, file.buffer);
+
+        const protocol = req.protocol || 'http';
+        const host = req.get('host') || 'localhost:4000';
+        const fileUrl = `${protocol}://${host}/uploads/${localFileName}`;
 
         res.json({
             success: true,
             data: {
-                url: result.url,
-                key: result.key,
+                url: fileUrl,
+                key: localFileName,
             },
         });
     } catch (error) {

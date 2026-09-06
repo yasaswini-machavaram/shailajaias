@@ -16,3 +16,5 @@ export { MainsTestSeries, type IMainsTestSeries, type IMainsTestSeriesItem } fro
 export { MainsSubmission, type IMainsSubmission } from './MainsSubmission.js';
 export { MainsPracticeTest, type IMainsPracticeTest, type IMainsQuestionItem } from './MainsPracticeTest.js';
 export { MainsPracticeTestConfig, type IMainsPracticeTestConfig } from './MainsPracticeTestConfig.js';
+export { MentorshipCourse, type IMentorshipCourse } from './MentorshipCourse.js';
+

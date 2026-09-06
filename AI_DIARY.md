@@ -122,12 +122,20 @@ date (indexed), title, setName?, questions[{question, options[4], correctIndex (
 
 #### 6. CourseNode (`models/Course.ts`)
 ```
-title, description?, parent (self-ref ObjectId), order, level ('course'|'subject'|'topic'|'subtopic')
-contentTabs[{type: 'video'|'notes'|'test', title, videoUrl?, pdfUrl?, pdfKey?, testId?}]
-isPublished (default false), createdBy
+title, description?, parent (self-ref ObjectId), order, level ('course'|'subject'|'topic'|'subtopic'),
+isPublished (default false), isLocked, isPracticeLocked, isHelpLocked, createdBy,
+videos[{
+  title, description?, videoProvider ('youtube'|'bunny'|'custom'), videoUrl,
+  notesText?, pdfFiles[{title, pdfUrl, pdfKey}],
+  prelimsQuizId?, prelimsDiscussionVideoUrl?, prelimsDiscussionVideoProvider?,
+  mainsPracticeTestId?, mainsQuestionText?, mainsModelAnswer?, mainsDiscussionVideoUrl?, mainsDiscussionVideoProvider?,
+  helpContactInfo?, faqs[{question, answer}]
+}]
 ```
-- Tree structure via self-referencing `parent` field
-- `testId` references Quiz model
+- Tree hierarchy via self-referencing `parent` field
+- Multi-video playlist support per lecture node
+- Dedicated Notes (text & multiple PDFs), Prelims Practice (Quiz ID & discussion video), Mains Practice (MPT ID, Question, Model Answer & discussion video), and Help/FAQs per video
+- Admin lock switches for node freezing, practice section freezing, and help section freezing
 
 #### 7. ResourceCategory (`models/Resource.ts`)
 ```
@@ -1181,6 +1189,30 @@ Admin creates content
   4. **Practice Test Filtering**: Refined user-side filtering in `tests/prelims-practice-test/page.tsx` to support the "General" filter pill when quizzes lack specific tags/question subjects.
 - **Verification:** `npx tsc --noEmit` passed cleanly with 0 errors on both API and Client apps.
 
+### Session: 2026-09-06 (Unified Practice Tab & Prelims Confetti Animation & Root Course Integration)
+- **Who:** AI (Antigravity)
+- **What:** Refined student course player practice UI, unified practice sub-tabs, added correct-answer confetti animation, linked root homepage module, and updated project diary.
+- **Key Enhancements Implemented:**
+  1. **Unified Practice Tab**:
+     - Consolidated separate top-level "Prelims Practice" and "Mains Practice" tabs into a single **"📝 Practice"** tab under the video player in `apps/client/app/courses/[id]/page.tsx`.
+     - Added an inner sub-tab toggle bar (`📝 Prelims Test` | `✍️ Mains Test`) when both test formats exist for a lecture video.
+  2. **Non-Interactive Mains Question & Model Answer Accordion**:
+     - Removed answer draft writing textareas, word counters, timers, and submission buttons.
+     - Displayed questions directly with metadata chips (Marks, Word Limit, Topic Tags), Approach & Structuring guidelines, and official Model Answer / Explanation in an accordion format matching Mains Practice Tests.
+  3. **Prelims Celebration Animation**:
+     - Integrated `canvas-confetti` inside course player Prelims practice.
+     - Selecting the correct option choice triggers a festive confetti particle animation on screen.
+  4. **Root Homepage Linking**:
+     - Verified and ensured `http://localhost:3000/` homepage navigation card (`Video Courses`) and top navigation bar (`🎓 Courses`) link directly to `/courses` and `/courses/[id]`.
+  5. **Course Doubt Integration with Profile & Admin Doubt Desk**:
+     - Connected "Submit Doubt to Mentor" in the course player Help tab directly to `POST /api/doubts`.
+     - Automatically passes student JWT token, video/lecture title, and doubt description.
+     - Doubts immediately sync to **My Doubts** in Student Profile (`/profile`) and **Doubt Desk** in Admin Portal (`/admin/doubts`).
+- **Files Modified:**
+  - `apps/client/app/courses/[id]/page.tsx` (Unified Practice tab, sub-tab toggle, confetti trigger, non-interactive Mains Q&A accordion, POST /api/doubts integration)
+  - `AI_DIARY.md` (Updated project documentation & changelog)
+- **Verified:** `pnpm run build:all` compiled 100% cleanly across all 52 client and api routes.
+
 ### Session: 2026-09-06 (Multi-Video Playlist, Multi-PDF Notes, Discussion Videos & FAQ Enhancements)
 - **Who:** AI (Antigravity)
 - **What:** Enhanced Course Module with 5 key features requested by user.
@@ -1220,6 +1252,50 @@ Admin creates content
   - Dynamic tab rendering (Notes, Prelims Practice, Mains Practice, Help tabs automatically hidden if unconfigured).
   - Frozen/Locked state UI for configured tabs when locked by Admin.
 - **Verified:** `pnpm run build:all` compiled 100% cleanly across all 52 client and api routes.
+
+### Session: 2026-09-06 (Course Player Help Tab: Screenshot Upload & Inline Doubt Tracking)
+- **Who:** AI (Antigravity)
+- **What:** Added screenshot attachment capability and inline doubt tracking in Course Player Help tab (`apps/client/app/courses/[id]/page.tsx`).
+- **Changes:**
+  - **Backend (`apps/api`):**
+    - Updated `Doubt` model (`Doubt.ts`) with optional `imageUrl` for `IDoubt` and `IDoubtMessage`.
+    - Updated `doubt.controller.ts` (`createDoubt` and `addDoubtMessage`) to persist `imageUrl`.
+    - Updated `upload.routes.ts` (`POST /api/upload/image`) to allow authenticated students (`protect`) to upload screenshots.
+    - Added local disk fallback in `upload.controller.ts` for image uploads when S3 is unconfigured.
+  - **Frontend (`apps/client`):**
+    - Added optional **`📷 Attach Screenshot (Optional)`** button, file reader preview, and remove button in Course Help tab.
+    - Added inline **`💬 Your Asked Doubts & Responses`** tracking section right inside the Help tab.
+    - Displays live doubt status badges (`Pending Review`, `Responded by Mentor`, `Resolved`), attached screenshots (with lightbox click to expand), full conversation threads with mentor replies, follow-up reply input, and `Mark Resolved` button.
+- **Verified:** Both `api` and `client` type-checked clean with `tsc --noEmit` and full build verified via `pnpm run build:all`.
+
+### Session: 2026-09-06 (Course Player Practice Module Enhancements)
+- **Who:** AI (Antigravity)
+- **What:** Refactored Course Practice module & Prelims Test view at `apps/client/app/courses/[id]/page.tsx`.
+- **Changes:**
+  - Integrated Course Practice tab with unified sub-tabs for Prelims & Mains.
+  - Added horizontal single-question-per-view mode for Prelims practice tests.
+  - Added top horizontal Question Palette chips (`1`, `2`, `3`...) with real-time attempted/correct/incorrect status highlighting.
+  - Added bottom navigation controls (`← Previous` and `Next →`) and interactive scorecard action bar.
+  - Integrated direct Course Doubt submission linking to `/api/doubts`, Student Profile (`/profile`), and Admin Doubt Desk (`/admin/doubts`).
+  - Linked video course module on homepage to `/courses`.
+- **Verified:** Type safety verified with `pnpm --filter client exec tsc --noEmit` and full build with `pnpm run build:all`.
+
+### Session: 2026-09-06 (Mentorship Landing Page & Admin Management Portal)
+- **Who:** AI (Antigravity)
+- **What:** Standardized header and breadcrumbs for the Mentorship portal to match all existing modules, created backend MongoDB model + REST API, and built Admin Portal for Mentorship Course Cards at `/admin/mentorship`.
+- **Changes & Bugfixes:**
+  - **Root Cause & Header Fix (`apps/client`):**
+    - Fixed route exclusion check in `Header.tsx`, `Breadcrumbs.tsx`, `BottomNav.tsx`, and `MentorAuthContext.tsx`. Previously, `pathname.startsWith('/mentor')` matched `/mentorship` and incorrectly suppressed the global Header, Breadcrumbs, and Bottom Navigation on `http://localhost:3000/mentorship`.
+    - Corrected check to `pathname === '/mentor' || pathname?.startsWith('/mentor/')`.
+    - Added `'mentorship': 'Mentorship'` to `ROUTE_LABELS` in `Breadcrumbs.tsx` so `Home › Mentorship` renders correctly.
+  - **Backend (`apps/api`):**
+    - Created `MentorshipCourse` MongoDB model (`apps/api/src/models/MentorshipCourse.ts`).
+    - Created `mentorship.controller.ts` for full CRUD operations with auto-seeding defaults if collection is empty.
+    - Created `mentorship.routes.ts` mounted at `/api/mentorship-courses`.
+  - **Admin Portal (`apps/client`):**
+    - Built Admin Management page at `apps/client/app/admin/mentorship/page.tsx` allowing admins to create, edit, publish/unpublish, reorder, and delete mentorship course cards.
+    - Added "Mentorship Cards" link to Admin Sidebar (`apps/client/app/admin/layout.tsx`).
+- **Verified:** Type-checked clean with `pnpm --filter api exec tsc --noEmit` and `pnpm --filter client exec tsc --noEmit`. Production build succeeded cleanly across all 54 routes.
 
 ### Session: 2026-05-27 (Content Rendering: Lists + Tables)
 - **Who:** AI (Antigravity)

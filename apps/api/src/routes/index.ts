@@ -17,3 +17,5 @@ export { default as mainsTestSeriesRoutes } from './mainsTestSeries.routes.js';
 export { default as mainsSubmissionRoutes } from './mainsSubmission.routes.js';
 export { default as mentorRoutes } from './mentor.routes.js';
 export { default as mainsPracticeTestRoutes } from './mainsPracticeTest.routes.js';
+export { default as mentorshipRoutes } from './mentorship.routes.js';
+

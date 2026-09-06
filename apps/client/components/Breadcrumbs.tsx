@@ -18,7 +18,9 @@ const ROUTE_LABELS: Record<string, string> = {
     'topics':         'Browse Topics',
     'search':         'Search',
     'resources':      'Resources',
+    'mentorship':     'Mentorship',
     'current-affairs': 'Current Affairs',
+
     'tests':          'Tests',
     'prelims-test-series':  'Prelims Test Series',
     'prelims-practice-test': 'Prelims Practice Test',
@@ -44,7 +46,8 @@ export default function Breadcrumbs() {
     const pathname = usePathname();
 
     // Don't show on landing page, admin pages, or mentor pages
-    if (!pathname || pathname === '/' || pathname.startsWith('/admin') || pathname.startsWith('/mentor')) return null;
+    if (!pathname || pathname === '/' || pathname.startsWith('/admin') || pathname === '/mentor' || pathname.startsWith('/mentor/')) return null;
+
 
     const segments = pathname.split('/').filter(Boolean);
 

@@ -19,12 +19,17 @@ export const createDoubt = async (req: AuthRequest, res: Response): Promise<void
             subject,
             title,
             description,
+            imageUrl,
+            attachmentUrl,
+            screenshotUrl,
         } = req.body;
 
         if (!subject || !title || !description) {
             res.status(400).json({ success: false, message: 'Subject, title and description are required' });
             return;
         }
+
+        const finalImageUrl = imageUrl || attachmentUrl || screenshotUrl || undefined;
 
         const doubt = new Doubt({
             student: req.user?._id,
@@ -37,6 +42,7 @@ export const createDoubt = async (req: AuthRequest, res: Response): Promise<void
             subject,
             title,
             description,
+            imageUrl: finalImageUrl,
             status: 'pending',
             messages: [],
         });
@@ -189,7 +195,7 @@ export const getDoubtById = async (req: AuthRequest, res: Response): Promise<voi
  */
 export const addDoubtMessage = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const { message } = req.body;
+        const { message, imageUrl, attachmentUrl, screenshotUrl } = req.body;
         if (!message) {
             res.status(400).json({ success: false, message: 'Message text is required' });
             return;
@@ -216,6 +222,7 @@ export const addDoubtMessage = async (req: AuthRequest, res: Response): Promise<
             senderId: req.user._id as any,
             senderName: req.user.name || 'User',
             message,
+            imageUrl: imageUrl || attachmentUrl || screenshotUrl || undefined,
             createdAt: new Date(),
         };
 

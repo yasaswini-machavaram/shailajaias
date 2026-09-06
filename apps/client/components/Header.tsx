@@ -11,7 +11,8 @@ export default function Header() {
     const { isLoggedIn, user } = useStudentAuth();
 
     // Don't show on admin or mentor pages
-    if (pathname?.startsWith('/admin') || pathname?.startsWith('/mentor')) return null;
+    if (pathname?.startsWith('/admin') || pathname === '/mentor' || pathname?.startsWith('/mentor/')) return null;
+
 
     return (
         <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100 h-16">

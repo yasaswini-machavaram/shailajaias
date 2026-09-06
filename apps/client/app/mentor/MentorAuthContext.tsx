@@ -44,7 +44,8 @@ export function MentorAuthProvider({ children }: { children: ReactNode }) {
         if (!isLoading) {
             if (pathname === '/mentor/login' && token && user?.role === 'mentor') {
                 router.push('/mentor');
-            } else if (pathname?.startsWith('/mentor') && pathname !== '/mentor/login') {
+            } else if ((pathname === '/mentor' || pathname?.startsWith('/mentor/')) && pathname !== '/mentor/login') {
+
                 if (!token || !user) {
                     router.push('/mentor/login');
                 } else if (user.role !== 'mentor') {
