@@ -430,7 +430,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
                     email: user.email,
                     role: user.role,
                     status: user.status,
-                    token: generateToken(user._id.toString(), user.tokenVersion, clientDeviceId),
+                    token: generateToken(user._id.toString(), user.tokenVersion ?? 0, clientDeviceId),
                     isNewUser: false,
                 },
             });
@@ -460,14 +460,14 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
                     phone: user.phone,
                     role: user.role,
                     status: user.status,
-                    token: generateToken(user._id.toString(), user.tokenVersion, clientDeviceId),
+                    token: generateToken(user._id.toString(), user.tokenVersion ?? 0, clientDeviceId),
                     isNewUser: true,
                 },
             });
         }
     } catch (error) {
         console.error('Verify OTP error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: (error as Error)?.message || 'Server error' });
     }
 };
 
