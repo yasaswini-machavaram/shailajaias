@@ -72,7 +72,7 @@ export const getMainsTestSeriesById = async (req: Request, res: Response): Promi
 // @access  Private/Admin
 export const createMainsTestSeries = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { title, description, brochureUrl, brochureKey, introVideoUrl, tests, sectionalCount, fullLengthCount, isPublished } = req.body;
+        const { title, description, brochureUrl, brochureKey, introVideoUrl, tests, sectionalCount, fullLengthCount, price, mentorTags, isPublished } = req.body;
         const user = (req as Request & { user: { _id: string } }).user;
 
         if (!title?.trim()) {
@@ -96,6 +96,8 @@ export const createMainsTestSeries = async (req: Request, res: Response): Promis
             tests: formattedTests,
             sectionalCount: sectionalCount || 0,
             fullLengthCount: fullLengthCount || 0,
+            price: price !== undefined ? price : 0,
+            mentorTags: mentorTags || [],
             isPublished: isPublished !== undefined ? isPublished : false,
             createdBy: user._id,
         });
@@ -112,7 +114,7 @@ export const createMainsTestSeries = async (req: Request, res: Response): Promis
 // @access  Private/Admin
 export const updateMainsTestSeries = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { title, description, brochureUrl, brochureKey, introVideoUrl, tests, sectionalCount, fullLengthCount, isPublished } = req.body;
+        const { title, description, brochureUrl, brochureKey, introVideoUrl, tests, sectionalCount, fullLengthCount, price, mentorTags, isPublished } = req.body;
 
         const series = await MainsTestSeries.findById(req.params.id);
         if (!series) {
@@ -127,6 +129,8 @@ export const updateMainsTestSeries = async (req: Request, res: Response): Promis
         if (introVideoUrl !== undefined) series.introVideoUrl = introVideoUrl?.trim() || undefined;
         if (sectionalCount !== undefined) series.sectionalCount = sectionalCount;
         if (fullLengthCount !== undefined) series.fullLengthCount = fullLengthCount;
+        if (price !== undefined) series.price = price;
+        if (mentorTags !== undefined) series.mentorTags = mentorTags;
         if (isPublished !== undefined) series.isPublished = isPublished;
 
         if (tests !== undefined) {

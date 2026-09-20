@@ -24,6 +24,12 @@ import {
   mentorRoutes,
   mainsPracticeTestRoutes,
   mentorshipRoutes,
+  purchaseRoutes,
+  testAttemptRoutes,
+  courseGroupRoutes,
+  mentorshipDashboardRoutes,
+  mentorshipStudentRoutes,
+  mentorPortalRoutes,
 } from "./routes/index.js";
 
 
@@ -86,6 +92,12 @@ app.use('/api/mts/submissions', mainsSubmissionRoutes);
 app.use('/api/mentors', mentorRoutes);
 app.use('/api/mentorship-courses', mentorshipRoutes);
 app.use('/api/mpt', mainsPracticeTestRoutes);
+app.use('/api/purchase', purchaseRoutes);
+app.use('/api/test-attempts', testAttemptRoutes);
+app.use('/api/course-groups', courseGroupRoutes);
+app.use('/api/mentorship-dashboard', mentorshipDashboardRoutes);
+app.use('/api/mentorship-student', mentorshipStudentRoutes);
+app.use('/api/mentor-portal', mentorPortalRoutes);
 
 
 // 404 handler

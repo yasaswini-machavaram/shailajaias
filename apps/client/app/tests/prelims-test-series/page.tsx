@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getTestSeriesList, getTestSeriesById, API_URL, type TestSeries, type TestSeriesItem, type Quiz, type Question } from '@/lib/api';
 import { useStudentAuth } from '@/contexts/StudentAuthContext';
+import { useAuthorization } from '@/hooks/useAuthorization';
+import PurchasePrompt from '@/components/PurchasePrompt';
 
 const optionLabels = ['A', 'B', 'C', 'D'];
 
@@ -109,6 +111,7 @@ function PrelimsTestSeriesInner() {
 
     // Doubt states
     const studentAuth = useStudentAuth();
+    const auth = useAuthorization();
     const studentUser = studentAuth?.user || null;
     const studentToken = studentAuth?.token || null;
     const [doubtSubject, setDoubtSubject] = useState('Polity');
@@ -414,7 +417,7 @@ function PrelimsTestSeriesInner() {
             const res = await fetch(`${API_URL}/api/doubts`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-[#1E3A5F]': 'application/json',
                     'Authorization': `Bearer ${studentToken}`
                 },
                 body: JSON.stringify(body)
@@ -435,8 +438,38 @@ function PrelimsTestSeriesInner() {
         }
     };
 
-    // Start Online Quiz
-    const handleStartOnlineQuiz = (quiz: Quiz, testItem: TestSeriesItem) => {
+    // Start Online Quiz (with 2 free attempt check for unpurchased users)
+    const handleStartOnlineQuiz = async (quiz: Quiz, testItem: TestSeriesItem, testIndex: number) => {
+        if (!studentToken) {
+            alert('Please log in to take tests.');
+            router.push('/login');
+            return;
+        }
+
+        const isPurchased = selectedSeries ? auth.hasPtsAccess(selectedSeries._id) : false;
+
+        if (!isPurchased && selectedSeries) {
+            try {
+                // Record test attempt
+                const res = await fetch(`${API_URL}/api/test-attempts/record`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${studentToken}`,
+                    },
+                    body: JSON.stringify({ ptsId: selectedSeries._id, testIndex }),
+                });
+
+                const data = await res.json();
+                if (!data.success) {
+                    alert(data.message || 'Limit reached');
+                    return;
+                }
+            } catch (err) {
+                console.error('Failed to record test attempt:', err);
+            }
+        }
+
         setActiveQuiz(quiz);
         setActiveTestItem(testItem);
         setLearnMode(true);
@@ -1735,6 +1768,19 @@ function PrelimsTestSeriesInner() {
                     ) : (
                         <div>
                             {/* Selected Series Header Info */}
+                            {!auth.hasPtsAccess(selectedSeries._id) && (
+                                <div className="mb-6">
+                                    <PurchasePrompt
+                                        title={`Unlock ${selectedSeries.title}`}
+                                        description="Gain unlimited test attempts, unlock subject expert doubt resolution, and access full test discussion videos."
+                                        itemType="pts"
+                                        itemId={selectedSeries._id}
+                                        price={(selectedSeries as any).price || 0}
+                                        buttonText="Buy Test Series"
+                                    />
+                                </div>
+                            )}
+
                             <div className="bg-white border border-gray-150/60 rounded-3xl p-6 md:p-8 shadow-sm mb-8 space-y-6">
                                 {/* Back to All Series button (only if multiple groups) */}
                                 {seriesList.length > 1 && (
@@ -1871,147 +1917,151 @@ function PrelimsTestSeriesInner() {
                                                     </div>
 
                                                     <div className="flex items-center gap-4">
-                                                        {test.quizId && typeof test.quizId === 'object' && (
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleStartOnlineQuiz(test.quizId as Quiz, test);
-                                                                }}
-                                                                className="bg-[#1E3A5F] hover:bg-[#2A4E7D] text-white font-bold text-xs md:text-sm px-5 py-3 rounded-xl shadow-md transition-all active:scale-[0.98]"
-                                                            >
-                                                                START <span className="tracking-tighter">&gt;&gt;</span>
-                                                            </button>
-                                                        )}
-                                                        <button
-                                                            onClick={() => setExpandedIndex(isExpanded ? null : index)}
-                                                            className="w-10 h-10 rounded-full hover:bg-slate-200/50 flex items-center justify-center text-slate-500 transition-colors"
-                                                        >
-                                                            <svg
-                                                                className={`w-5 h-5 transform transition-transform ${isExpanded ? 'rotate-180' : ''
-                                                                    }`}
-                                                                fill="none"
-                                                                stroke="currentColor"
-                                                                viewBox="0 0 24 24"
-                                                            >
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                </div>
+                                                         {test.quizId && typeof test.quizId === 'object' && (
+                                                             <button
+                                                                 onClick={(e) => {
+                                                                     e.stopPropagation();
+                                                                     handleStartOnlineQuiz(test.quizId as Quiz, test, index);
+                                                                 }}
+                                                                 className="bg-[#1E3A5F] hover:bg-[#2A4E7D] text-white font-bold text-xs md:text-sm px-5 py-3 rounded-xl shadow-md transition-all active:scale-[0.98]"
+                                                             >
+                                                                 START <span className="tracking-tighter">&gt;&gt;</span>
+                                                             </button>
+                                                         )}
+                                                         <button
+                                                             onClick={() => setExpandedIndex(isExpanded ? null : index)}
+                                                             className="w-10 h-10 rounded-full hover:bg-slate-200/50 flex items-center justify-center text-slate-500 transition-colors"
+                                                         >
+                                                             <svg
+                                                                 className={`w-5 h-5 transform transition-transform ${isExpanded ? 'rotate-180' : ''
+                                                                     }`}
+                                                                 fill="none"
+                                                                 stroke="currentColor"
+                                                                 viewBox="0 0 24 24"
+                                                             >
+                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                             </svg>
+                                                         </button>
+                                                     </div>
+                                                 </div>
 
-                                                {/* Expanded syllabus & resources box */}
-                                                {isExpanded && (
-                                                    <div className="px-5 pb-6 border-t border-gray-150/40 bg-white/40 pt-4 space-y-6 animate-fade-in-up">
-                                                        {/* Syllabus Topics */}
-                                                        {test.syllabus && (
-                                                            <div className="bg-white/80 p-5 rounded-2xl border border-gray-100">
-                                                                <h4 className="text-[#1E3A5F] font-bold text-xs uppercase tracking-wider mb-3">
-                                                                    Syllabus & Topics Covered
-                                                                </h4>
-                                                                <ul className="space-y-1.5">
-                                                                    {test.syllabus.split('\n').filter(line => line.trim()).map((line, lIdx) => (
-                                                                        <li key={lIdx} className="text-gray-700 text-sm flex items-start gap-2">
-                                                                            <span className="text-amber-500 font-bold shrink-0">•</span>
-                                                                            <span>{line.replace(/^-\s*/, '')}</span>
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
-                                                            </div>
-                                                        )}
+                                                 {/* Expanded syllabus & resources box */}
+                                                 {isExpanded && (
+                                                     <div className="px-5 pb-6 border-t border-gray-150/40 bg-white/40 pt-4 space-y-6 animate-fade-in-up">
+                                                         {/* Syllabus Topics */}
+                                                         {test.syllabus && (
+                                                             <div className="bg-white/80 p-5 rounded-2xl border border-gray-100">
+                                                                 <h4 className="text-[#1E3A5F] font-bold text-xs uppercase tracking-wider mb-3">
+                                                                     Syllabus & Topics Covered
+                                                                 </h4>
+                                                                 <ul className="space-y-1.5">
+                                                                     {test.syllabus.split('\n').filter(line => line.trim()).map((line, lIdx) => (
+                                                                         <li key={lIdx} className="text-gray-700 text-sm flex items-start gap-2">
+                                                                             <span className="text-amber-500 font-bold shrink-0">•</span>
+                                                                             <span>{line.replace(/^-\s*/, '')}</span>
+                                                                         </li>
+                                                                     ))}
+                                                                 </ul>
+                                                             </div>
+                                                         )}
 
-                                                        {/* Four Action Options */}
-                                                        {(() => {
-                                                            const quizId = test.quizId && typeof test.quizId === 'object' ? (test.quizId as any)._id : test.quizId;
-                                                            return (
-                                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                                                    {/* 1. Download Question Paper */}
-                                                                    {test.questionPaperUrl || quizId ? (
-                                                                        <a
-                                                                            href={test.questionPaperUrl ? (test.questionPaperUrl.startsWith('http') ? test.questionPaperUrl : `${API_URL}${test.questionPaperUrl}`) : `/tests/print-test?id=${quizId}&mode=question`}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                            className="bg-white hover:bg-slate-50 border border-gray-200/80 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all shadow-sm hover:border-[#1E3A5F]/20 group"
-                                                                        >
-                                                                            <span className="text-2xl mb-1.5">📥</span>
-                                                                            <span className="text-xs font-bold text-[#1E3A5F] group-hover:text-[#D97706] transition-colors leading-snug">Download Question</span>
-                                                                        </a>
-                                                                    ) : (
-                                                                        <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center text-center opacity-50 cursor-not-allowed">
-                                                                            <span className="text-2xl mb-1.5">📥</span>
-                                                                            <span className="text-xs font-bold text-gray-400 leading-snug">Question Pending</span>
-                                                                        </div>
-                                                                    )}
+                                                         {/* Four Action Options */}
+                                                         {(() => {
+                                                             const quizId = test.quizId && typeof test.quizId === 'object' ? (test.quizId as any)._id : test.quizId;
+                                                             const isPurchased = selectedSeries ? auth.hasPtsAccess(selectedSeries._id) : false;
+                                                             const isDoubtLocked = test.isLocked || !isPurchased;
+                                                             const isVideoLocked = test.isLocked || !isPurchased || !test.discussionVideoUrl;
 
-                                                                    {/* 2. Download Detailed Solution */}
-                                                                    {test.solutionPaperUrl || quizId ? (
-                                                                        <a
-                                                                            href={test.solutionPaperUrl ? (test.solutionPaperUrl.startsWith('http') ? test.solutionPaperUrl : `${API_URL}${test.solutionPaperUrl}`) : `/tests/print-test?id=${quizId}&mode=solution`}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                            className="bg-white hover:bg-slate-50 border border-gray-200/80 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all shadow-sm hover:border-[#1E3A5F]/20 group"
-                                                                        >
-                                                                            <span className="text-2xl mb-1.5">📝</span>
-                                                                            <span className="text-xs font-bold text-[#1E3A5F] group-hover:text-[#D97706] transition-colors leading-snug">Detailed Solution</span>
-                                                                        </a>
-                                                                    ) : (
-                                                                        <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center text-center opacity-50 cursor-not-allowed">
-                                                                            <span className="text-2xl mb-1.5">📝</span>
-                                                                            <span className="text-xs font-bold text-gray-400 leading-snug">Solution Pending</span>
-                                                                        </div>
-                                                                    )}
+                                                             return (
+                                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                                     {/* 1. Download Question Paper */}
+                                                                     {test.questionPaperUrl || quizId ? (
+                                                                         <a
+                                                                             href={test.questionPaperUrl ? (test.questionPaperUrl.startsWith('http') ? test.questionPaperUrl : `${API_URL}${test.questionPaperUrl}`) : `/tests/print-test?id=${quizId}&mode=question`}
+                                                                             target="_blank"
+                                                                             rel="noopener noreferrer"
+                                                                             className="bg-white hover:bg-slate-50 border border-gray-200/80 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all shadow-sm hover:border-[#1E3A5F]/20 group"
+                                                                         >
+                                                                             <span className="text-2xl mb-1.5">📥</span>
+                                                                             <span className="text-xs font-bold text-[#1E3A5F] group-hover:text-[#D97706] transition-colors leading-snug">Download Question</span>
+                                                                         </a>
+                                                                     ) : (
+                                                                         <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center text-center opacity-50 cursor-not-allowed">
+                                                                             <span className="text-2xl mb-1.5">📥</span>
+                                                                             <span className="text-xs font-bold text-gray-400 leading-snug">Question Pending</span>
+                                                                         </div>
+                                                                     )}
 
-                                                                    {/* 3. Ask Doubt */}
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            if (!test.isLocked) {
-                                                                                setDoubtQuestionIndex(null);
-                                                                                setDoubtQuestionText('');
-                                                                                setDoubtTitle(`Doubt regarding ${test.title}`);
-                                                                                setDoubtSubject(getSubjectFromTitle(test.title));
-                                                                                setDoubtSubmitSuccess(false);
-                                                                                setDoubtError('');
-                                                                                setShowDoubtModal(test);
-                                                                            }
-                                                                        }}
-                                                                        disabled={test.isLocked}
-                                                                        className={`bg-white border rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all shadow-sm group ${test.isLocked
-                                                                            ? 'opacity-40 border-gray-100 cursor-not-allowed'
-                                                                            : 'hover:bg-slate-50 border-gray-200/80 hover:border-[#1E3A5F]/20'
-                                                                            }`}
-                                                                    >
-                                                                        <span className="text-2xl mb-1.5">❓{test.isLocked && '🔒'}</span>
-                                                                        <span className={`text-xs font-bold leading-snug ${test.isLocked ? 'text-gray-400' : 'text-[#1E3A5F] group-hover:text-[#D97706] transition-colors'
-                                                                            }`}>
-                                                                            Ask Doubt
-                                                                        </span>
-                                                                    </button>
+                                                                     {/* 2. Download Detailed Solution */}
+                                                                     {test.solutionPaperUrl || quizId ? (
+                                                                         <a
+                                                                             href={test.solutionPaperUrl ? (test.solutionPaperUrl.startsWith('http') ? test.solutionPaperUrl : `${API_URL}${test.solutionPaperUrl}`) : `/tests/print-test?id=${quizId}&mode=solution`}
+                                                                             target="_blank"
+                                                                             rel="noopener noreferrer"
+                                                                             className="bg-white hover:bg-slate-50 border border-gray-200/80 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all shadow-sm hover:border-[#1E3A5F]/20 group"
+                                                                         >
+                                                                             <span className="text-2xl mb-1.5">📝</span>
+                                                                             <span className="text-xs font-bold text-[#1E3A5F] group-hover:text-[#D97706] transition-colors leading-snug">Detailed Solution</span>
+                                                                         </a>
+                                                                     ) : (
+                                                                         <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center text-center opacity-50 cursor-not-allowed">
+                                                                             <span className="text-2xl mb-1.5">📝</span>
+                                                                             <span className="text-xs font-bold text-gray-400 leading-snug">Solution Pending</span>
+                                                                         </div>
+                                                                     )}
 
-                                                                    {/* 4. Test Discussion Video */}
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            if (!test.isLocked && test.discussionVideoUrl) {
-                                                                                setVideoModalUrl(test.discussionVideoUrl);
-                                                                            }
-                                                                        }}
-                                                                        disabled={test.isLocked || !test.discussionVideoUrl}
-                                                                        className={`bg-white border rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all shadow-sm group ${test.isLocked || !test.discussionVideoUrl
-                                                                            ? 'opacity-40 border-gray-100 cursor-not-allowed'
-                                                                            : 'hover:bg-slate-50 border-gray-200/80 hover:border-[#1E3A5F]/20'
-                                                                            }`}
-                                                                    >
-                                                                        <span className="text-2xl mb-1.5">🎥{test.isLocked && '🔒'}</span>
-                                                                        <span className={`text-xs font-bold leading-snug ${test.isLocked || !test.discussionVideoUrl ? 'text-gray-400' : 'text-[#1E3A5F] group-hover:text-[#D97706] transition-colors'
-                                                                            }`}>
-                                                                            Discussion Video
-                                                                        </span>
-                                                                    </button>
-                                                                </div>
-                                                            );
-                                                        })()}
-                                                    </div>
-                                                )}
+                                                                     {/* 3. Ask Doubt */}
+                                                                     <button
+                                                                         type="button"
+                                                                         onClick={() => {
+                                                                             if (!isDoubtLocked) {
+                                                                                 setDoubtQuestionIndex(null);
+                                                                                 setDoubtQuestionText('');
+                                                                                 setDoubtTitle(`Doubt regarding ${test.title}`);
+                                                                                 setDoubtSubject(getSubjectFromTitle(test.title));
+                                                                                 setDoubtSubmitSuccess(false);
+                                                                                 setDoubtError('');
+                                                                                 setShowDoubtModal(test);
+                                                                             }
+                                                                         }}
+                                                                         disabled={isDoubtLocked}
+                                                                         className={`bg-white border rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all shadow-sm group ${isDoubtLocked
+                                                                             ? 'opacity-40 border-gray-100 cursor-not-allowed'
+                                                                             : 'hover:bg-slate-50 border-gray-200/80 hover:border-[#1E3A5F]/20'
+                                                                             }`}
+                                                                     >
+                                                                         <span className="text-2xl mb-1.5">❓{isDoubtLocked && '🔒'}</span>
+                                                                         <span className={`text-xs font-bold leading-snug ${isDoubtLocked ? 'text-gray-400' : 'text-[#1E3A5F] group-hover:text-[#D97706] transition-colors'
+                                                                             }`}>
+                                                                             Ask Doubt
+                                                                         </span>
+                                                                     </button>
+
+                                                                     {/* 4. Test Discussion Video */}
+                                                                     <button
+                                                                         type="button"
+                                                                         onClick={() => {
+                                                                             if (!isVideoLocked && test.discussionVideoUrl) {
+                                                                                 setVideoModalUrl(test.discussionVideoUrl);
+                                                                             }
+                                                                         }}
+                                                                         disabled={isVideoLocked}
+                                                                         className={`bg-white border rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all shadow-sm group ${isVideoLocked
+                                                                             ? 'opacity-40 border-gray-100 cursor-not-allowed'
+                                                                             : 'hover:bg-slate-50 border-gray-200/80 hover:border-[#1E3A5F]/20'
+                                                                             }`}
+                                                                     >
+                                                                         <span className="text-2xl mb-1.5">🎥{isVideoLocked && '🔒'}</span>
+                                                                         <span className={`text-xs font-bold leading-snug ${isVideoLocked ? 'text-gray-400' : 'text-[#1E3A5F] group-hover:text-[#D97706] transition-colors'
+                                                                             }`}>
+                                                                             Discussion Video
+                                                                         </span>
+                                                                     </button>
+                                                                 </div>
+                                                             );
+                                                         })()}
+                                                     </div>
+                                                 )}
                                             </div>
                                         );
                                     })}

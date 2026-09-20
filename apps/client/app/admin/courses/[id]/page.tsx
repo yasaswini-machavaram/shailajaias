@@ -105,6 +105,24 @@ export default function CourseBuilderPage() {
     const [videos, setVideos] = useState<VideoItem[]>([]);
     const [selectedVideoIndex, setSelectedVideoIndex] = useState<number>(0);
 
+    // Prelims Quiz Excel Import Modal State
+    const [showPrelimsExcelModal, setShowPrelimsExcelModal] = useState(false);
+    const [prelimsQuizTitle, setPrelimsQuizTitle] = useState('');
+    const [prelimsQuizDate, setPrelimsQuizDate] = useState('');
+    const [prelimsExcelFile, setPrelimsExcelFile] = useState<File | null>(null);
+    const [prelimsImporting, setPrelimsImporting] = useState(false);
+    const [prelimsImportMsg, setPrelimsImportMsg] = useState('');
+    const [prelimsImportError, setPrelimsImportError] = useState('');
+
+    // Mains Practice Test Excel Import Modal State
+    const [showMainsExcelModal, setShowMainsExcelModal] = useState(false);
+    const [mainsTestTitle, setMainsTestTitle] = useState('');
+    const [mainsSubjectCategory, setMainsSubjectCategory] = useState('General Studies');
+    const [mainsExcelFile, setMainsExcelFile] = useState<File | null>(null);
+    const [mainsImporting, setMainsImporting] = useState(false);
+    const [mainsImportMsg, setMainsImportMsg] = useState('');
+    const [mainsImportError, setMainsImportError] = useState('');
+
     useEffect(() => {
         if (token && courseId) {
             fetchCourseTree();
@@ -112,6 +130,142 @@ export default function CourseBuilderPage() {
             fetchAvailableMpt();
         }
     }, [token, courseId]);
+
+    // ── Handle Prelims Quiz Excel Import ─────────────────────────────
+    const handleImportPrelimsExcel = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setPrelimsImportError('');
+        setPrelimsImportMsg('');
+
+        if (!prelimsExcelFile) {
+            setPrelimsImportError('Please select an Excel file');
+            return;
+        }
+
+        setPrelimsImporting(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', prelimsExcelFile);
+            formData.append('title', prelimsQuizTitle || 'Prelims Practice Quiz');
+            formData.append('date', prelimsQuizDate || new Date().toISOString().split('T')[0]);
+            formData.append('tags', 'prelims-practice,course-practice');
+
+            const res = await fetch(`${API_URL}/api/quizzes/import-excel`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData,
+            });
+
+            const data = await res.json();
+            if (data.success && data.data) {
+                const newQuiz = data.data;
+                setQuizzes((prev) => [newQuiz, ...prev]);
+                updateCurrentVideoField('prelimsQuizId', newQuiz._id);
+                setPrelimsImportMsg(`Successfully created Quiz "${newQuiz.title}" and linked to this video!`);
+                setTimeout(() => {
+                    setShowPrelimsExcelModal(false);
+                    setPrelimsImportMsg('');
+                    setPrelimsExcelFile(null);
+                }, 1500);
+            } else {
+                setPrelimsImportError(data.message || 'Failed to import quiz from Excel');
+            }
+        } catch (err) {
+            console.error('Import prelims excel error:', err);
+            setPrelimsImportError('Network error while importing Excel file');
+        } finally {
+            setPrelimsImporting(false);
+        }
+    };
+
+    // ── Handle Mains Practice Test Excel Import ───────────────────────
+    const handleImportMainsExcel = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setMainsImportError('');
+        setMainsImportMsg('');
+
+        if (!mainsExcelFile) {
+            setMainsImportError('Please select an Excel file');
+            return;
+        }
+
+        setMainsImporting(true);
+        try {
+            // Step 1: Parse Excel questions via MPT excel import service
+            const formData = new FormData();
+            formData.append('excel', mainsExcelFile);
+
+            const parseRes = await fetch(`${API_URL}/api/mpt/import-excel`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData,
+            });
+
+            const parseData = await parseRes.json();
+            if (!parseData.success || !parseData.data || parseData.data.length === 0) {
+                setMainsImportError(parseData.message || 'Failed to parse Mains Excel questions');
+                setMainsImporting(false);
+                return;
+            }
+
+            const questions = parseData.data;
+
+            // Step 2: Create Mains Practice Test record
+            const createRes = await fetch(`${API_URL}/api/mpt`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    title: mainsTestTitle || 'Mains Practice Test',
+                    subjectCategory: mainsSubjectCategory || 'General Studies',
+                    topicsSummary: 'Course Practice Test',
+                    isPublished: true,
+                    questions: questions.map((q: any) => ({
+                        questionText: q.questionText || '',
+                        marks: q.marks || 10,
+                        wordLimit: q.wordLimit || 150,
+                        difficultyLevel: q.difficultyLevel || 'Moderate',
+                        modelAnswer: q.modelAnswer || '',
+                        approach: q.approach || '',
+                        topicTags: Array.isArray(q.topicTags) ? q.topicTags : [],
+                    })),
+                }),
+            });
+
+            const createData = await createRes.json();
+            if (createData.success && createData.data) {
+                const newMpt = createData.data;
+                setMptList((prev) => [newMpt, ...prev]);
+                updateCurrentVideoField('mainsPracticeTestId', newMpt._id);
+
+                // If 1 question, also auto-populate question text & model answer for inline convenience
+                if (questions.length > 0) {
+                    if (questions[0].questionText) {
+                        updateCurrentVideoField('mainsQuestionText', questions[0].questionText);
+                    }
+                    if (questions[0].modelAnswer) {
+                        updateCurrentVideoField('mainsModelAnswer', questions[0].modelAnswer);
+                    }
+                }
+
+                setMainsImportMsg(`Successfully created Mains Test "${newMpt.title}" with ${questions.length} question(s) and linked to this video!`);
+                setTimeout(() => {
+                    setShowMainsExcelModal(false);
+                    setMainsImportMsg('');
+                    setMainsExcelFile(null);
+                }, 1500);
+            } else {
+                setMainsImportError(createData.message || 'Failed to create Mains Practice Test');
+            }
+        } catch (err) {
+            console.error('Import mains excel error:', err);
+            setMainsImportError('Network error while importing Excel file');
+        } finally {
+            setMainsImporting(false);
+        }
+    };
 
     const fetchCourseTree = async () => {
         setIsLoading(true);
@@ -791,6 +945,21 @@ export default function CourseBuilderPage() {
                                         <div className="p-4 rounded-xl border border-gray-200 bg-slate-50/70 space-y-3">
                                             <h4 className="font-bold text-gray-900 text-xs flex items-center justify-between">
                                                 <span>📝 Prelims Practice &amp; Discussion Video</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const curTitle = videos[selectedVideoIndex]?.title;
+                                                        setPrelimsQuizTitle(curTitle ? `${curTitle} - Prelims Quiz` : 'Prelims Practice Quiz');
+                                                        setPrelimsQuizDate(new Date().toISOString().split('T')[0]);
+                                                        setPrelimsExcelFile(null);
+                                                        setPrelimsImportMsg('');
+                                                        setPrelimsImportError('');
+                                                        setShowPrelimsExcelModal(true);
+                                                    }}
+                                                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold rounded-md flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                                                >
+                                                    📥 Import Excel (Prelims)
+                                                </button>
                                             </h4>
 
                                             <div className="grid grid-cols-2 gap-4">
@@ -835,6 +1004,21 @@ export default function CourseBuilderPage() {
                                         <div className="p-4 rounded-xl border border-gray-200 bg-slate-50/70 space-y-3">
                                             <h4 className="font-bold text-gray-900 text-xs flex items-center justify-between">
                                                 <span>✍️ Mains Practice &amp; Discussion Video</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const curTitle = videos[selectedVideoIndex]?.title;
+                                                        setMainsTestTitle(curTitle ? `${curTitle} - Mains Practice Test` : 'Mains Practice Test');
+                                                        setMainsSubjectCategory('General Studies');
+                                                        setMainsExcelFile(null);
+                                                        setMainsImportMsg('');
+                                                        setMainsImportError('');
+                                                        setShowMainsExcelModal(true);
+                                                    }}
+                                                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold rounded-md flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                                                >
+                                                    📥 Import Excel (Mains)
+                                                </button>
                                             </h4>
 
                                             <div className="grid grid-cols-2 gap-4">
@@ -1052,6 +1236,205 @@ export default function CourseBuilderPage() {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal for Prelims Quiz Excel Import */}
+            {showPrelimsExcelModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl space-y-4">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                            <div>
+                                <h3 className="text-base font-bold text-gray-900">
+                                    📝 Import Prelims Quiz from Excel
+                                </h3>
+                                <p className="text-xs text-gray-500">
+                                    Upload `.xlsx`/`.xls` file to parse &amp; create Quiz questions automatically.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowPrelimsExcelModal(false)}
+                                className="text-gray-400 hover:text-gray-600 font-bold text-lg"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleImportPrelimsExcel} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                    Quiz Title *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={prelimsQuizTitle}
+                                    onChange={(e) => setPrelimsQuizTitle(e.target.value)}
+                                    required
+                                    placeholder="e.g. Fundamental Rights Prelims MCQ"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                    Quiz Date *
+                                </label>
+                                <input
+                                    type="date"
+                                    value={prelimsQuizDate}
+                                    onChange={(e) => setPrelimsQuizDate(e.target.value)}
+                                    required
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                    Excel File (.xlsx / .xls) *
+                                </label>
+                                <input
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    onChange={(e) => setPrelimsExcelFile(e.target.files?.[0] || null)}
+                                    required
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-slate-50"
+                                />
+                                <div className="mt-2 p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-[11px] text-amber-900 leading-relaxed">
+                                    <strong>Expected Excel Columns (8 columns):</strong><br />
+                                    1. Question | 2. Option A | 3. Option B | 4. Option C | 5. Option D | 6. Correct Answer (A/B/C/D) | 7. Explanation | 8. Subject (Optional)
+                                </div>
+                            </div>
+
+                            {prelimsImportError && (
+                                <div className="p-2.5 bg-red-50 text-red-700 text-xs font-medium rounded-lg border border-red-200">
+                                    {prelimsImportError}
+                                </div>
+                            )}
+
+                            {prelimsImportMsg && (
+                                <div className="p-2.5 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-lg border border-emerald-200">
+                                    {prelimsImportMsg}
+                                </div>
+                            )}
+
+                            <div className="flex gap-2 pt-2">
+                                <button
+                                    type="submit"
+                                    disabled={prelimsImporting}
+                                    className="flex-1 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors"
+                                >
+                                    {prelimsImporting ? 'Importing...' : 'Upload & Link Prelims Quiz'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPrelimsExcelModal(false)}
+                                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal for Mains Practice Test Excel Import */}
+            {showMainsExcelModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl space-y-4">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                            <div>
+                                <h3 className="text-base font-bold text-gray-900">
+                                    ✍️ Import Mains Practice Test from Excel
+                                </h3>
+                                <p className="text-xs text-gray-500">
+                                    Upload `.xlsx`/`.xls` file to parse &amp; create Mains test questions automatically.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowMainsExcelModal(false)}
+                                className="text-gray-400 hover:text-gray-600 font-bold text-lg"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleImportMainsExcel} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                    Test Title *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={mainsTestTitle}
+                                    onChange={(e) => setMainsTestTitle(e.target.value)}
+                                    required
+                                    placeholder="e.g. Polity Mains Answer Writing Practice"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                    Subject Category *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={mainsSubjectCategory}
+                                    onChange={(e) => setMainsSubjectCategory(e.target.value)}
+                                    required
+                                    placeholder="e.g. Indian Polity / General Studies 2"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                    Excel File (.xlsx / .xls) *
+                                </label>
+                                <input
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    onChange={(e) => setMainsExcelFile(e.target.files?.[0] || null)}
+                                    required
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-slate-50"
+                                />
+                                <div className="mt-2 p-2.5 bg-indigo-50 rounded-lg border border-indigo-200 text-[11px] text-indigo-900 leading-relaxed">
+                                    <strong>Expected Excel Columns (7 columns):</strong><br />
+                                    1. Question | 2. Marks | 3. Word Limit | 4. Difficulty | 5. Model Answer | 6. Approach | 7. Tags
+                                </div>
+                            </div>
+
+                            {mainsImportError && (
+                                <div className="p-2.5 bg-red-50 text-red-700 text-xs font-medium rounded-lg border border-red-200">
+                                    {mainsImportError}
+                                </div>
+                            )}
+
+                            {mainsImportMsg && (
+                                <div className="p-2.5 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-lg border border-emerald-200">
+                                    {mainsImportMsg}
+                                </div>
+                            )}
+
+                            <div className="flex gap-2 pt-2">
+                                <button
+                                    type="submit"
+                                    disabled={mainsImporting}
+                                    className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors"
+                                >
+                                    {mainsImporting ? 'Importing...' : 'Upload & Link Mains Test'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowMainsExcelModal(false)}
+                                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

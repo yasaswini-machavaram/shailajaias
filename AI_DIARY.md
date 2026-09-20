@@ -1268,6 +1268,22 @@ Admin creates content
     - Displays live doubt status badges (`Pending Review`, `Responded by Mentor`, `Resolved`), attached screenshots (with lightbox click to expand), full conversation threads with mentor replies, follow-up reply input, and `Mark Resolved` button.
 - **Verified:** Both `api` and `client` type-checked clean with `tsc --noEmit` and full build verified via `pnpm run build:all`.
 
+### Session: 2026-09-20 (Course Practice Tab Excel Import for Prelims & Mains)
+- **Who:** AI (Antigravity)
+- **What:** Integrated direct Excel file import capabilities for both **Prelims Practice Quizzes** and **Mains Practice Tests** directly inside the Admin Portal Course Module (`apps/client/app/admin/courses/[id]/page.tsx`).
+- **Changes:**
+  - **Prelims Practice Excel Import**:
+    - Added `📥 Import Excel (Prelims)` button to the **Prelims Practice & Discussion Video** section header in the video playlist editor.
+    - Built a dedicated modal with inputs for Quiz Title, Quiz Date, and Excel File upload (`.xlsx`/`.xls`).
+    - Uses `/api/quizzes/import-excel` (8 columns format) with tags `['prelims-practice', 'course-practice']`.
+    - Automatically appends the newly created Quiz to the `quizzes` state and attaches its ID (`prelimsQuizId`) to the active lecture video.
+  - **Mains Practice Excel Import**:
+    - Added `📥 Import Excel (Mains)` button to the **Mains Practice & Discussion Video** section header.
+    - Built a dedicated modal with inputs for Test Title, Subject Category, and Excel File upload (`.xlsx`/`.xls`).
+    - Uses `/api/mpt/import-excel` to parse questions (7 columns format), then creates a `MainsPracticeTest` via `/api/mpt`.
+    - Automatically appends the newly created Test to `mptList` state and attaches its ID (`mainsPracticeTestId`) to the active lecture video. If 1 question is imported, also populates `mainsQuestionText` and `mainsModelAnswer` fields for instant preview/editing.
+- **Verified:** Type-checked clean with `pnpm --filter client exec tsc --noEmit`.
+
 ### Session: 2026-09-06 (Course Player Practice Module Enhancements)
 - **Who:** AI (Antigravity)
 - **What:** Refactored Course Practice module & Prelims Test view at `apps/client/app/courses/[id]/page.tsx`.
@@ -1297,7 +1313,67 @@ Admin creates content
     - Added "Mentorship Cards" link to Admin Sidebar (`apps/client/app/admin/layout.tsx`).
 - **Verified:** Type-checked clean with `pnpm --filter api exec tsc --noEmit` and `pnpm --filter client exec tsc --noEmit`. Production build succeeded cleanly across all 54 routes.
 
-### Session: 2026-05-27 (Content Rendering: Lists + Tables)
+### Session: 2026-09-20 (Global Authorization, Mentorship Master Key, Video-Level Locks & Mentorship Dashboard)
+- **Who:** AI (Antigravity)
+- **What:** Implemented the complete Global Authorization system, Mentorship Master Key bypass, Standalone Item Purchases, Video-Level Course Locks, Course Groups (Bundles), and the Mentorship Tracking UI.
+- **Key Implementation Details:**
+  - **Global Authorization & Purchase Pathway:**
+    - **Mentorship Master Key:** Students with `isMentorshipStudent: true` bypass ALL locks platform-wide (PTS, MTS, and Courses).
+    - **Standalone Purchases:** Students can purchase individual PTS, MTS, or Courses at prices specified by Admin. Purchasing a standalone item unlocks locks for that specific item.
+    - **Mentor Tagging Rule:** Even if a PTS or MTS has mentor tags attached, buying it standalone only unlocks its specific locks and does not grant global mentorship tracking.
+  - **Backend Models & Controllers:**
+    - `User.ts`: Added `isMentorshipStudent`, `purchasedMentorTags`, `purchasedPtsGroups`, `purchasedMtsGroups`, `purchasedCourseGroups`.
+    - `TestSeries.ts` & `MainsTestSeries.ts`: Added `price` and `mentorTags`.
+    - `Course.ts`: Moved `isPracticeLocked` and `isHelpLocked` down to each `videoItem`. Added `price`, `mentorTags`, `linkedPtsId`, `linkedMtsId` to `CourseNode`.
+    - `CourseGroup.ts`: Created parent bundle container model.
+    - `TestAttempt.ts`: Created model to enforce 2-attempt limit for non-purchased PTS users.
+    - `MentorshipTaskProgress.ts`: Created model to track daily student task checkoffs.
+    - `auth.middleware.ts`: Added `optionalAuth` middleware.
+    - Created controllers & routes: `purchase.controller.ts`, `testAttempt.controller.ts`, `courseGroup.controller.ts`, `mentorshipDashboard.controller.ts`.
+  - **Shared Types & Client Authorization Hook:**
+    - Extended `@repo/types` with purchase & mentorship interfaces.
+    - Created `useAuthorization.ts` hook providing `isMentorshipStudent`, `hasPtsAccess`, `hasMtsAccess`, `hasCourseAccess`, `isPracticeLockedForVideo`, and `isHelpLockedForVideo`.
+  - **Student Portal UI & Components:**
+    - Created `PurchasePrompt.tsx` and `PurchaseConfirmModal.tsx` for mock instant purchases.
+    - Updated `prelims-test-series/page.tsx`: Enforced 2 free attempts rule for non-purchased users, locked doubt & discussion video overlays, buy buttons.
+    - Updated `mains-test-series/page.tsx`: Enforced default locked state for doubt, discussion video, answer upload, and evaluation copy unless purchased or mentorship student.
+    - Updated `courses/[id]/page.tsx`: Enforced video-level practice & help locks via `useAuthorization`.
+    - Created `app/mentorship/dashboard/page.tsx`: Built student mentorship tracking dashboard featuring tag filter tabs, day card grid, task completion checkoffs, interactive video/notes/test/upload modals.
+  - **Admin Management Portal:**
+    - Updated Admin PTS & MTS pages with price and mentor tag inputs.
+    - Updated Admin Courses builder page with video-level lock controls.
+    - Created Admin Course Groups page (`app/admin/course-groups/page.tsx`) and linked in sidebar (`layout.tsx`).
+    - Updated Admin Users drawer (`app/admin/users/page.tsx`) with Mentorship Master Key checkbox.
+  - **Migration Script:**
+    - Created `apps/api/src/scripts/migrate-video-locks.ts` to migrate legacy node locks to video level.
+- **Verification:**
+  - Type-checked clean with `pnpm --filter api exec tsc --noEmit` (0 errors) and `pnpm --filter client exec tsc --noEmit` (0 errors).
+
+### Session: 2026-09-20 (Mentorship Platform & Mentor Portal Concluded)
+- **Who:** AI (Antigravity)
+- **What:** Completed full implementation and real-time MongoDB database integration for both the **Student Mentorship Platform** (`/mentorship`) and the **Mentor Portal** (`/mentor`), matching the design system, UX, and CTAs of `ShailajaIAS Mentorship Desktop v2.html` and `ShailajaIAS Mentor Portal.html`.
+- **Backend (`apps/api`):**
+  - Created MongoDB Models: `MentorshipLog.ts` (study hours & low-hour reasons), `MentorshipSubjectProgress.ts` (subject progress & roadmap sequence), `MentorChat.ts` (1-on-1 mentor messaging), `MentorBroadcast.ts` (announcement notices), and `MentorNote.ts` (session notes & private internal notes).
+  - Created Controllers & Routes:
+    - `mentorshipStudent.controller.ts` / `mentorshipStudent.routes.ts` mounted at `/api/mentorship-student` (daily task logging, roadmap tag progress, uploads, session logs, chat).
+    - `mentorPortal.controller.ts` / `mentorPortal.routes.ts` mounted at `/api/mentor-portal` (assigned roster with live risk metrics `Δ Tasks`/`Δ Log`/`Uploads Pending`/`Evaluated`, 1-on-1 chat, evaluation queue, broadcasts, analytics & inactive tagging, mentee dossier & notes).
+- **Student Mentorship Platform (`apps/client/app/mentorship/dashboard/page.tsx`):**
+  - **Module 1 (Daily Task):** 7-day week strip (Mon-Sun cards), 14-day cutoff window, hours console with low-hour reason dropdown, 28-day drawer, track chips (`GS`, `Optional`, `Essay`, `CA`, `CSAT`), and 4-step task card (`Watch Video`, `Recall Notes`, `Take Test`, `Upload Answer`) with `Mark Complete` & `Partially done` CTAs.
+  - **Module 2 (Roadmap):** Subscribed tag tracking across Courses, MTS, PTS; `Subjects` vs `Partially done tasks` sub-tabs; active subject progress bar; completed history; paused subjects; reorderable upcoming queue (`Move Up`/`Move Down`).
+  - **Module 3 (Chat):** 1-on-1 thread switcher (Assigned Mentor vs Desk), date dividers, live messaging.
+  - **Module 4 (Uploads):** Submitted answer scripts & evaluated returns table with scores, feedback, and PDF links.
+  - **Module 5 (Mentorship):** Consistency bar chart (W3-W14, avg hours/week, task completion %), mentor session logs, account status card & break request modal.
+- **Mentor Portal (`apps/client/app/mentor/page.tsx`):**
+  - Integrated with mentors created via `/admin/mentors`.
+  - **Module 1 (Roster):** Tabular assigned mentees list sorted by risk (`Δ Tasks + Δ Log` descending), filter bar, extra columns toggle.
+  - **Module 2 (Chat):** Mentee threads list (All vs Starred), live messaging, star student CTA, dossier shortcut.
+  - **Module 3 (Evaluation):** Answer copy queue (`Pending`, `Evaluated`, `Open pool`), `Claim Copy` & `Reopen` CTAs.
+  - **Module 4 (Broadcast):** Batch notice composer with filtering (`All Inactive`, `Δ Log 3+`, `Uploads Pending`), message preview, and confirm send.
+  - **Module 5 (Analytics):** Cohort performance metrics, assigned per day chart, at-risk review table with `Confirm Tag Inactive` CTA.
+  - **Module 6 (Mentee Dossier):** Student detail view, attempt history, score trends, 1-on-1 session note composer & private internal mentor notes editor saved to MongoDB.
+- **Verified:** Both `api` and `client` type-checked 100% clean (`pnpm --filter api exec tsc --noEmit && pnpm --filter client exec tsc --noEmit` returned 0 errors).
+
+### Session: 2026-09-18 (Mentorship Course Cards & Admin CMS)
 - **Who:** AI (Antigravity)
 - **What:** Fixed content rendering for Excel-imported Prelims articles and added full table support.
 - **Problem:** Excel content uses `<li level="0">` and `<li level="1">` without wrapping `<ul>` — browsers can't render these as lists.

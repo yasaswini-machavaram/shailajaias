@@ -142,4 +142,32 @@ export const mentorOnly = (
     next();
 };
 
-export default { protect, adminOnly, mentorOrAdmin, mentorOnly, generateToken };
+/**
+ * Optional Auth middleware — attaches req.user if valid token provided, but doesn't fail if missing/invalid
+ */
+export const optionalAuth = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+): Promise<void> => {
+    try {
+        let token: string | undefined;
+        if (req.headers.authorization?.startsWith('Bearer')) {
+            token = req.headers.authorization.split(' ')[1];
+        }
+
+        if (token) {
+            const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+            const user = await User.findById(decoded.id);
+            if (user && user.status !== 'suspended') {
+                req.user = user;
+            }
+        }
+    } catch (error) {
+        // Silently ignore auth failure for optionalAuth
+    }
+    next();
+};
+
+export default { protect, adminOnly, mentorOrAdmin, mentorOnly, optionalAuth, generateToken };
+

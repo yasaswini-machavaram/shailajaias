@@ -13,6 +13,14 @@ export interface IUser extends Document {
     tokenVersion: number;
     enrolledCourses: mongoose.Types.ObjectId[];
     enrolledTestSeries: mongoose.Types.ObjectId[];
+    // Purchase & Authorization fields
+    isMentorshipStudent?: boolean;
+    purchasedMentorTags?: string[];
+    purchasedPtsGroups?: mongoose.Types.ObjectId[];
+    purchasedMtsGroups?: mongoose.Types.ObjectId[];
+    purchasedCourseGroups?: mongoose.Types.ObjectId[];
+    purchasedCourses?: mongoose.Types.ObjectId[];
+    mentorshipPurchasedAt?: Date;
     // Mentor-specific fields
     assignedMtsGroups: mongoose.Types.ObjectId[];
     assignedStudents: mongoose.Types.ObjectId[];
@@ -77,6 +85,44 @@ const UserSchema = new Schema<IUser>(
                 ref: 'TestSeries',
             },
         ],
+        // Purchase & Authorization fields
+        isMentorshipStudent: {
+            type: Boolean,
+            default: false,
+        },
+        purchasedMentorTags: [
+            {
+                type: String,
+                trim: true,
+            },
+        ],
+        purchasedPtsGroups: [
+            {
+                type: Schema.Types.ObjectId,
+                ref: 'TestSeries',
+            },
+        ],
+        purchasedMtsGroups: [
+            {
+                type: Schema.Types.ObjectId,
+                ref: 'MainsTestSeries',
+            },
+        ],
+        purchasedCourseGroups: [
+            {
+                type: Schema.Types.ObjectId,
+                ref: 'CourseGroup',
+            },
+        ],
+        purchasedCourses: [
+            {
+                type: Schema.Types.ObjectId,
+                ref: 'CourseNode',
+            },
+        ],
+        mentorshipPurchasedAt: {
+            type: Date,
+        },
         // Mentor-specific: which MTS groups this mentor can access
         assignedMtsGroups: [
             {

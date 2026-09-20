@@ -311,7 +311,13 @@ export const whatsappLogin = async (req: Request, res: Response): Promise<void> 
 // @access  Private
 export const getMe = async (req: Request, res: Response): Promise<void> => {
     try {
-        const user = (req as Request & { user: { _id: string; name: string; email: string; phone?: string; role: string } }).user;
+        const reqUser = (req as Request & { user: any }).user;
+        const user = await User.findById(reqUser._id);
+        if (!user) {
+            res.status(404).json({ success: false, message: 'User not found' });
+            return;
+        }
+
         res.json({
             success: true,
             data: {
@@ -320,6 +326,14 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
                 email: user.email,
                 phone: user.phone,
                 role: user.role,
+                status: user.status,
+                isMentorshipStudent: user.isMentorshipStudent || false,
+                purchasedMentorTags: user.purchasedMentorTags || [],
+                purchasedPtsGroups: user.purchasedPtsGroups || [],
+                purchasedMtsGroups: user.purchasedMtsGroups || [],
+                purchasedCourseGroups: user.purchasedCourseGroups || [],
+                purchasedCourses: user.purchasedCourses || [],
+                mentorshipPurchasedAt: user.mentorshipPurchasedAt,
             },
         });
     } catch (error) {

@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import confetti from 'canvas-confetti';
 import { useStudentAuth } from '@/contexts/StudentAuthContext';
+import { useAuthorization } from '@/hooks/useAuthorization';
+import PurchaseConfirmModal from '@/components/PurchaseConfirmModal';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -43,6 +45,9 @@ interface VideoItem {
     // Help & FAQ
     helpContactInfo?: string;
     faqs: FaqItem[];
+    // Locks
+    isPracticeLocked?: boolean;
+    isHelpLocked?: boolean;
 }
 
 interface CourseNode {
@@ -495,9 +500,11 @@ export default function StudentCoursePlayerPage() {
 
     const effectiveSubTab = hasPrelims && (!hasMains || practiceSubTab === 'prelims') ? 'prelims' : 'mains';
 
+    const { isPracticeLockedForVideo, isHelpLockedForVideo, hasCourseAccess } = useAuthorization();
+
     // Lock flags
-    const isPracticeLocked = activeNode?.isPracticeLocked || false;
-    const isHelpLocked = activeNode?.isHelpLocked || false;
+    const isPracticeLocked = isPracticeLockedForVideo(activeVideo || undefined, rootCourse?._id);
+    const isHelpLocked = isHelpLockedForVideo(activeVideo || undefined, rootCourse?._id);
     const isNodeLocked = activeNode?.isLocked || false;
 
     const toggleNodeExpand = (nodeId: string, e: React.MouseEvent) => {

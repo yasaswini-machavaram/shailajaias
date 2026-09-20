@@ -10,6 +10,13 @@ export interface IUser {
   tokenVersion?: number;
   enrolledCourses?: string[];
   enrolledTestSeries?: string[];
+  isMentorshipStudent?: boolean;
+  purchasedMentorTags?: string[];
+  purchasedPtsGroups?: string[];
+  purchasedMtsGroups?: string[];
+  purchasedCourseGroups?: string[];
+  purchasedCourses?: string[];
+  mentorshipPurchasedAt?: string;
   createdAt: string;
 }
 
@@ -78,16 +85,20 @@ export interface ITestSeriesItem {
   syllabus?: string;
   discussionVideoUrl?: string;
   isLocked: boolean;
+  subjectTags?: string[];
 }
 
 export interface ITestSeries {
   id: string;
+  uniqueId: string;
   title: string;
   description?: string;
   brochureUrl?: string;
   brochureKey?: string;
   introVideoUrl?: string;
   tests: ITestSeriesItem[];
+  price?: number;
+  mentorTags?: string[];
   isPublished: boolean;
   createdAt: string;
   updatedAt: string;
@@ -131,6 +142,9 @@ export interface IVideoItem {
   // Help & FAQ section
   helpContactInfo?: string;
   faqs: IFaqItem[];
+  // Video-level locks
+  isPracticeLocked?: boolean;
+  isHelpLocked?: boolean;
 }
 
 export interface IContentTab {
@@ -152,9 +166,11 @@ export type CourseLevel = 'course' | 'subject' | 'topic' | 'subtopic';
 
 export interface ICourseNode {
   id: string;
+  _id?: string;
   title: string;
   description?: string;
   parentId?: string;
+  parent?: string | null;
   order: number;
   level: CourseLevel;
   videos?: IVideoItem[];
@@ -163,7 +179,50 @@ export interface ICourseNode {
   isPracticeLocked?: boolean;
   isHelpLocked?: boolean;
   isLocked?: boolean;
+  price?: number;
+  mentorTags?: string[];
+  linkedPtsId?: string | any;
+  linkedMtsId?: string | any;
   createdAt: string;
+}
+
+export interface ICourseGroup {
+  id: string;
+  _id?: string;
+  title: string;
+  description?: string;
+  brochureUrl?: string;
+  brochureKey?: string;
+  introVideoUrl?: string;
+  courseIds: (string | ICourseNode)[];
+  price: number;
+  mentorTags: string[];
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ITestAttempt {
+  id: string;
+  ptsId: string;
+  testIndex: number;
+  attemptCount: number;
+  lastAttemptAt: string;
+}
+
+export type MentorshipTaskType = 'watch' | 'notes' | 'test' | 'upload';
+
+export interface IMentorshipTaskProgress {
+  id: string;
+  userId: string;
+  tag: string;
+  dayNumber: number;
+  taskType: MentorshipTaskType;
+  completed: boolean;
+  completedAt?: string;
+  notesText?: string;
+  mainsAnswerText?: string;
+  mainsAnswerFileUrl?: string;
 }
 
 // Tag constants

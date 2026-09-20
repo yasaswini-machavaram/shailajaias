@@ -26,6 +26,8 @@ interface TestSeriesForm {
     brochureUrl: string;
     brochureKey: string;
     introVideoUrl: string;
+    price?: number;
+    mentorTags?: string;
     tests: TestItemForm[];
     isPublished: boolean;
 }
@@ -41,6 +43,8 @@ export default function AdminPrelimsTestSeriesPage() {
         brochureUrl: '',
         brochureKey: '',
         introVideoUrl: '',
+        price: 0,
+        mentorTags: '',
         tests: [],
         isPublished: false,
     });
@@ -235,6 +239,10 @@ export default function AdminPrelimsTestSeriesPage() {
                     brochureUrl: form.brochureUrl,
                     brochureKey: form.brochureKey,
                     introVideoUrl: form.introVideoUrl,
+                    price: Number(form.price) || 0,
+                    mentorTags: form.mentorTags
+                        ? form.mentorTags.split(',').map((s) => s.trim()).filter(Boolean)
+                        : [],
                     isPublished: form.isPublished,
                     tests: form.tests.map((t) => ({
                         ...t,
@@ -288,6 +296,8 @@ export default function AdminPrelimsTestSeriesPage() {
             brochureUrl: series.brochureUrl || '',
             brochureKey: series.brochureKey || '',
             introVideoUrl: series.introVideoUrl || '',
+            price: series.price || 0,
+            mentorTags: Array.isArray(series.mentorTags) ? series.mentorTags.join(', ') : '',
             isPublished: series.isPublished || false,
             tests: (series.tests || []).map((t: any) => ({
                 title: t.title || '',
@@ -513,6 +523,26 @@ export default function AdminPrelimsTestSeriesPage() {
                                         value={form.introVideoUrl}
                                         onChange={(e) => setForm(prev => ({ ...prev, introVideoUrl: e.target.value }))}
                                         placeholder="https://www.youtube.com/watch?v=..."
+                                        className="w-full h-11 px-4 border border-slate-200 focus:border-2 focus:border-[#1E3A5F] rounded-xl text-sm font-medium outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Standalone Price (₹)</label>
+                                    <input
+                                        type="number"
+                                        value={form.price || ''}
+                                        onChange={(e) => setForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                                        placeholder="e.g. 2999"
+                                        className="w-full h-11 px-4 border border-slate-200 focus:border-2 focus:border-[#1E3A5F] rounded-xl text-sm font-medium outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Mentorship Module Tags (Comma Separated)</label>
+                                    <input
+                                        type="text"
+                                        value={form.mentorTags || ''}
+                                        onChange={(e) => setForm(prev => ({ ...prev, mentorTags: e.target.value }))}
+                                        placeholder="e.g. Prelims Masterclass 2026, Integrated Batch"
                                         className="w-full h-11 px-4 border border-slate-200 focus:border-2 focus:border-[#1E3A5F] rounded-xl text-sm font-medium outline-none transition-all"
                                     />
                                 </div>

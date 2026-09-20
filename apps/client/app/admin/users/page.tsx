@@ -44,6 +44,7 @@ export default function AdminUsersPage() {
     const [editEmail, setEditEmail] = useState('');
     const [editPhone, setEditPhone] = useState('');
     const [editStatus, setEditStatus] = useState<'active' | 'suspended'>('active');
+    const [editIsMentorshipStudent, setEditIsMentorshipStudent] = useState(false);
     const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
     const [selectedTestSeries, setSelectedTestSeries] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
@@ -134,6 +135,7 @@ export default function AdminUsersPage() {
                 setEditEmail(detailedStudent.email || '');
                 setEditPhone(detailedStudent.phone || '');
                 setEditStatus(detailedStudent.status || 'active');
+                setEditIsMentorshipStudent(!!detailedStudent.isMentorshipStudent);
                 
                 // Set initial course and test series arrays
                 setSelectedCourses(detailedStudent.enrolledCourses?.map((c: any) => typeof c === 'object' ? c._id : c) || []);
@@ -164,6 +166,7 @@ export default function AdminUsersPage() {
                     email: editEmail || '',
                     phone: editPhone || '',
                     status: editStatus,
+                    isMentorshipStudent: editIsMentorshipStudent,
                     enrolledCourses: selectedCourses,
                     enrolledTestSeries: selectedTestSeries,
                 }),
@@ -470,7 +473,22 @@ export default function AdminUsersPage() {
                                             />
                                             🔴 Suspended
                                         </label>
-                                    </div>
+                                     </div>
+                                 </div>
+
+                                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+                                    <label className="flex items-center gap-2 text-xs font-bold text-amber-900 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={editIsMentorshipStudent}
+                                            onChange={(e) => setEditIsMentorshipStudent(e.target.checked)}
+                                            className="w-4 h-4 text-[#1E3A5F] rounded accent-amber-600"
+                                        />
+                                        <span>🔑 Mentorship Student ("Master Key" Full Unlocks)</span>
+                                    </label>
+                                    <p className="text-[10px] text-amber-800 leading-tight pl-6">
+                                        Bypasses all locks across PTS, MTS, and Courses platform-wide.
+                                    </p>
                                 </div>
                             </div>
 

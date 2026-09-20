@@ -110,6 +110,8 @@ const sanitizeVideos = (videosList: any[]) => {
             mainsPracticeTestId: v.mainsPracticeTestId && String(v.mainsPracticeTestId).trim() !== '' && mongoose.Types.ObjectId.isValid(v.mainsPracticeTestId) ? v.mainsPracticeTestId : null,
             pdfFiles: Array.isArray(v.pdfFiles) ? v.pdfFiles.filter((p: any) => p && (p.title?.trim() || p.pdfUrl?.trim())) : [],
             faqs: Array.isArray(v.faqs) ? v.faqs.filter((f: any) => f && (f.question?.trim() || f.answer?.trim())) : [],
+            isPracticeLocked: !!v.isPracticeLocked,
+            isHelpLocked: !!v.isHelpLocked,
         };
         if (!cleaned._id || String(cleaned._id).trim() === '' || !mongoose.Types.ObjectId.isValid(cleaned._id)) {
             delete cleaned._id;
@@ -123,10 +125,12 @@ const sanitizeVideos = (videosList: any[]) => {
 // @access  Private/Admin
 export const createCourse = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { title, description, level, parent, order, videos, contentTabs, isPublished, isPracticeLocked, isHelpLocked, isLocked } = req.body;
+        const { title, description, level, parent, order, videos, contentTabs, isPublished, isPracticeLocked, isHelpLocked, isLocked, price, mentorTags, linkedPtsId, linkedMtsId } = req.body;
         const user = (req as Request & { user: { _id: string } }).user;
 
         const parentId = parent && String(parent).trim() !== '' && mongoose.Types.ObjectId.isValid(parent) ? parent : null;
+        const validLinkedPtsId = linkedPtsId && String(linkedPtsId).trim() !== '' && mongoose.Types.ObjectId.isValid(linkedPtsId) ? linkedPtsId : null;
+        const validLinkedMtsId = linkedMtsId && String(linkedMtsId).trim() !== '' && mongoose.Types.ObjectId.isValid(linkedMtsId) ? linkedMtsId : null;
 
         // Create the node
         const course = await CourseNode.create({
@@ -141,6 +145,10 @@ export const createCourse = async (req: Request, res: Response): Promise<void> =
             isPracticeLocked: isPracticeLocked ?? false,
             isHelpLocked: isHelpLocked ?? false,
             isLocked: isLocked ?? false,
+            price: price !== undefined ? price : 0,
+            mentorTags: mentorTags || [],
+            linkedPtsId: validLinkedPtsId,
+            linkedMtsId: validLinkedMtsId,
             createdBy: user._id,
         });
 
@@ -156,7 +164,7 @@ export const createCourse = async (req: Request, res: Response): Promise<void> =
 // @access  Private/Admin
 export const updateCourse = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { title, description, level, order, videos, contentTabs, isPublished, isPracticeLocked, isHelpLocked, isLocked } = req.body;
+        const { title, description, level, order, videos, contentTabs, isPublished, isPracticeLocked, isHelpLocked, isLocked, price, mentorTags, linkedPtsId, linkedMtsId } = req.body;
 
         const course = await CourseNode.findById(req.params.id);
         if (!course) {
@@ -175,6 +183,14 @@ export const updateCourse = async (req: Request, res: Response): Promise<void> =
         if (isPracticeLocked !== undefined) course.isPracticeLocked = isPracticeLocked;
         if (isHelpLocked !== undefined) course.isHelpLocked = isHelpLocked;
         if (isLocked !== undefined) course.isLocked = isLocked;
+        if (price !== undefined) course.price = price;
+        if (mentorTags !== undefined) course.mentorTags = mentorTags;
+        if (linkedPtsId !== undefined) {
+            course.linkedPtsId = linkedPtsId && String(linkedPtsId).trim() !== '' && mongoose.Types.ObjectId.isValid(linkedPtsId) ? linkedPtsId : null;
+        }
+        if (linkedMtsId !== undefined) {
+            course.linkedMtsId = linkedMtsId && String(linkedMtsId).trim() !== '' && mongoose.Types.ObjectId.isValid(linkedMtsId) ? linkedMtsId : null;
+        }
 
         await course.save();
 

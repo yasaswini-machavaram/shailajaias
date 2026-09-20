@@ -80,6 +80,7 @@ const navItems = [
     { href: '/admin/magazines', icon: MagazineIcon, label: 'Magazines' },
     { href: '/admin/quizzes', icon: QuizIcon, label: 'Quizzes' },
     { href: '/admin/courses', icon: CourseIcon, label: 'Courses' },
+    { href: '/admin/course-groups', icon: CourseIcon, label: 'Course Groups' },
     { href: '/admin/mentorship', icon: CourseIcon, label: 'Mentorship Cards' },
     { href: '/admin/resources', icon: ResourceIcon, label: 'Resources' },
 

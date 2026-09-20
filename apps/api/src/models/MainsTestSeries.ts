@@ -24,6 +24,8 @@ export interface IMainsTestSeries extends Document {
     tests: IMainsTestSeriesItem[];
     sectionalCount: number;
     fullLengthCount: number;
+    price?: number;
+    mentorTags?: string[];
     isPublished: boolean;
     createdBy: Types.ObjectId;
     createdAt: Date;
@@ -113,6 +115,16 @@ const MainsTestSeriesSchema = new Schema<IMainsTestSeries>(
             type: Number,
             default: 0,
         },
+        price: {
+            type: Number,
+            default: 0,
+        },
+        mentorTags: [
+            {
+                type: String,
+                trim: true,
+            },
+        ],
         isPublished: {
             type: Boolean,
             default: false,

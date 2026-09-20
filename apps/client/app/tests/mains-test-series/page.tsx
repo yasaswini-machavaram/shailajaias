@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { getMainsTestSeriesList, getMainsTestSeriesById, API_URL, type MainsTestSeries, type MainsTestSeriesItem, type MainsSubmission } from '@/lib/api';
 import { useStudentAuth } from '@/contexts/StudentAuthContext';
+import { useAuthorization } from '@/hooks/useAuthorization';
+import PurchasePrompt from '@/components/PurchasePrompt';
 
 const SUBJECT_CATEGORIES = ['All', 'GS-1', 'GS-2', 'GS-3', 'GS-4', 'Essay', 'Optional'];
 
@@ -33,6 +35,7 @@ function getCategoryStyles(cat: string) {
 
 export default function MainsTestSeriesPage() {
     const { user, token, isLoggedIn } = useStudentAuth();
+    const auth = useAuthorization();
 
     // Data state
     const [seriesList, setSeriesList] = useState<MainsTestSeries[]>([]);
@@ -325,6 +328,20 @@ export default function MainsTestSeriesPage() {
                     )}
                 </div>
 
+                {/* Purchase Prompt if not owned */}
+                {selectedSeries && !auth.hasMtsAccess(selectedSeries._id) && (
+                    <div className="mb-4">
+                        <PurchasePrompt
+                            title={`Unlock ${selectedSeries.title}`}
+                            description="Access answer sheet uploads, mentor evaluations, test discussion videos, and 1-on-1 doubt resolution."
+                            itemType="mts"
+                            itemId={selectedSeries._id}
+                            price={(selectedSeries as any).price || 0}
+                            buttonText="Buy Mains Test Series"
+                        />
+                    </div>
+                )}
+
                 {/* Header */}
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-4 animate-fade-in-up">
                     <div className="flex items-center gap-4 mb-4">
@@ -461,56 +478,70 @@ export default function MainsTestSeriesPage() {
                                         )}
 
                                         {/* Action Buttons Grid */}
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 mb-3">
-                                            {/* Download Question Booklet */}
-                                            <a
-                                                href={test.questionPaperUrl ? `${API_URL}${test.questionPaperUrl}` : '#'}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all ${
-                                                    test.questionPaperUrl ? 'bg-white border-gray-200 hover:shadow-sm cursor-pointer' : 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-50'
-                                                }`}
-                                                onClick={e => { if (!test.questionPaperUrl) e.preventDefault(); }}
-                                            >
-                                                <span className="text-2xl">📄</span>
-                                                <span className="text-[10px] font-bold text-gray-700 leading-tight">Download Question Booklet</span>
-                                            </a>
+                                        {(() => {
+                                            const isPurchased = selectedSeries ? auth.hasMtsAccess(selectedSeries._id) : false;
+                                            const isDoubtLocked = test.isLocked || !isPurchased;
+                                            const isVideoLocked = test.isLocked || !isPurchased || !test.discussionVideoUrl;
+                                            const isUploadLocked = test.isLocked || !isPurchased;
 
-                                            {/* Download Detailed Solution */}
-                                            <a
-                                                href={test.solutionPaperUrl ? `${API_URL}${test.solutionPaperUrl}` : '#'}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all ${
-                                                    test.solutionPaperUrl ? 'bg-white border-gray-200 hover:shadow-sm cursor-pointer' : 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-50'
-                                                }`}
-                                                onClick={e => { if (!test.solutionPaperUrl) e.preventDefault(); }}
-                                            >
-                                                <span className="text-2xl">📋</span>
-                                                <span className="text-[10px] font-bold text-gray-700 leading-tight">Download Detailed Solution</span>
-                                            </a>
+                                            return (
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 mb-3">
+                                                    {/* 1. Download Question Booklet */}
+                                                    <a
+                                                        href={test.questionPaperUrl ? `${API_URL}${test.questionPaperUrl}` : '#'}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all ${
+                                                            test.questionPaperUrl ? 'bg-white border-gray-200 hover:shadow-sm cursor-pointer' : 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-50'
+                                                        }`}
+                                                        onClick={e => { if (!test.questionPaperUrl) e.preventDefault(); }}
+                                                    >
+                                                        <span className="text-2xl">📄</span>
+                                                        <span className="text-[10px] font-bold text-gray-700 leading-tight">Download Question Booklet</span>
+                                                    </a>
 
-                                            {/* Ask Doubt */}
-                                            <Link
-                                                href="/profile"
-                                                className="flex flex-col items-center gap-1 p-3 rounded-xl border bg-white border-gray-200 hover:shadow-sm text-center transition-all"
-                                            >
-                                                <span className="text-2xl">❓</span>
-                                                <span className="text-[10px] font-bold text-gray-700 leading-tight">Ask Doubt</span>
-                                            </Link>
+                                                    {/* 2. Download Detailed Solution */}
+                                                    <a
+                                                        href={test.solutionPaperUrl ? `${API_URL}${test.solutionPaperUrl}` : '#'}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all ${
+                                                            test.solutionPaperUrl ? 'bg-white border-gray-200 hover:shadow-sm cursor-pointer' : 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-50'
+                                                        }`}
+                                                        onClick={e => { if (!test.solutionPaperUrl) e.preventDefault(); }}
+                                                    >
+                                                        <span className="text-2xl">📋</span>
+                                                        <span className="text-[10px] font-bold text-gray-700 leading-tight">Download Detailed Solution</span>
+                                                    </a>
 
-                                            {/* Test Discussion Video */}
-                                            <button
-                                                onClick={() => { if (test.discussionVideoUrl) { setVideoUrl(test.discussionVideoUrl); setShowVideoModal(true); } }}
-                                                className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all ${
-                                                    test.discussionVideoUrl ? 'bg-white border-gray-200 hover:shadow-sm cursor-pointer' : 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-50'
-                                                }`}
-                                                disabled={!test.discussionVideoUrl}
-                                            >
-                                                <span className="text-2xl">🎬</span>
-                                                <span className="text-[10px] font-bold text-gray-700 leading-tight">Test Discussion Video</span>
-                                            </button>
-                                        </div>
+                                                    {/* 3. Ask Doubt */}
+                                                    <Link
+                                                        href={isDoubtLocked ? '#' : '/profile'}
+                                                        onClick={e => { if (isDoubtLocked) e.preventDefault(); }}
+                                                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all ${
+                                                            isDoubtLocked
+                                                                ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-50'
+                                                                : 'bg-white border-gray-200 hover:shadow-sm text-gray-700'
+                                                        }`}
+                                                    >
+                                                        <span className="text-2xl">❓{isDoubtLocked && '🔒'}</span>
+                                                        <span className="text-[10px] font-bold leading-tight">Ask Doubt</span>
+                                                    </Link>
+
+                                                    {/* 4. Test Discussion Video */}
+                                                    <button
+                                                        onClick={() => { if (!isVideoLocked && test.discussionVideoUrl) { setVideoUrl(test.discussionVideoUrl); setShowVideoModal(true); } }}
+                                                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all ${
+                                                            !isVideoLocked && test.discussionVideoUrl ? 'bg-white border-gray-200 hover:shadow-sm cursor-pointer' : 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-50'
+                                                        }`}
+                                                        disabled={isVideoLocked}
+                                                    >
+                                                        <span className="text-2xl">🎬{isVideoLocked && '🔒'}</span>
+                                                        <span className="text-[10px] font-bold text-gray-700 leading-tight">Test Discussion Video</span>
+                                                    </button>
+                                                </div>
+                                            );
+                                        })()}
 
                                         {/* Upload / Reupload & Evaluated Copy Action Bar */}
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -518,18 +549,19 @@ export default function MainsTestSeriesPage() {
                                             {!submission && (
                                                 <button
                                                     onClick={() => {
-                                                        if (test.isLocked) return;
+                                                        const isPurchased = selectedSeries ? auth.hasMtsAccess(selectedSeries._id) : false;
+                                                        if (test.isLocked || !isPurchased) return;
                                                         openUploadModal(originalIndex);
                                                     }}
-                                                    disabled={test.isLocked}
+                                                    disabled={test.isLocked || !(selectedSeries && auth.hasMtsAccess(selectedSeries._id))}
                                                     className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold border-2 transition-all ${
-                                                        test.isLocked
+                                                        test.isLocked || !(selectedSeries && auth.hasMtsAccess(selectedSeries._id))
                                                             ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                                                             : 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100 shadow-xs'
                                                     }`}
                                                 >
                                                     📤 Upload Your Answers
-                                                    {test.isLocked && <span>🔒</span>}
+                                                    {(test.isLocked || !(selectedSeries && auth.hasMtsAccess(selectedSeries._id))) && <span>🔒</span>}
                                                 </button>
                                             )}
 

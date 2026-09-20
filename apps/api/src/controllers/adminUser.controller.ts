@@ -77,12 +77,25 @@ export const getStudentById = async (req: Request, res: Response): Promise<void>
     }
 };
 
-// @desc    Update student details, status, and course/test-series enrollments
+// @desc    Update student details, status, course/test-series enrollments, and purchase/mentorship access
 // @route   PUT /api/admin/users/:id
 // @access  Private/Admin
 export const updateStudent = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { name, email, phone, status, enrolledCourses, enrolledTestSeries } = req.body;
+        const {
+            name,
+            email,
+            phone,
+            status,
+            enrolledCourses,
+            enrolledTestSeries,
+            isMentorshipStudent,
+            purchasedMentorTags,
+            purchasedPtsGroups,
+            purchasedMtsGroups,
+            purchasedCourseGroups,
+            purchasedCourses,
+        } = req.body;
 
         const student = await User.findOne({ _id: req.params.id, role: 'student' });
         if (!student) {
@@ -121,6 +134,19 @@ export const updateStudent = async (req: Request, res: Response): Promise<void> 
         if (enrolledTestSeries !== undefined) {
             student.enrolledTestSeries = enrolledTestSeries;
         }
+
+        // Update purchase and mentorship access
+        if (isMentorshipStudent !== undefined) {
+            student.isMentorshipStudent = isMentorshipStudent;
+            if (isMentorshipStudent && !student.mentorshipPurchasedAt) {
+                student.mentorshipPurchasedAt = new Date();
+            }
+        }
+        if (purchasedMentorTags !== undefined) student.purchasedMentorTags = purchasedMentorTags;
+        if (purchasedPtsGroups !== undefined) student.purchasedPtsGroups = purchasedPtsGroups;
+        if (purchasedMtsGroups !== undefined) student.purchasedMtsGroups = purchasedMtsGroups;
+        if (purchasedCourseGroups !== undefined) student.purchasedCourseGroups = purchasedCourseGroups;
+        if (purchasedCourses !== undefined) student.purchasedCourses = purchasedCourses;
 
         await student.save();
 

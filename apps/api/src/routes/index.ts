@@ -18,4 +18,10 @@ export { default as mainsSubmissionRoutes } from './mainsSubmission.routes.js';
 export { default as mentorRoutes } from './mentor.routes.js';
 export { default as mainsPracticeTestRoutes } from './mainsPracticeTest.routes.js';
 export { default as mentorshipRoutes } from './mentorship.routes.js';
+export { default as purchaseRoutes } from './purchase.routes.js';
+export { default as testAttemptRoutes } from './testAttempt.routes.js';
+export { default as courseGroupRoutes } from './courseGroup.routes.js';
+export { default as mentorshipDashboardRoutes } from './mentorshipDashboard.routes.js';
+export { default as mentorshipStudentRoutes } from './mentorshipStudent.routes.js';
+export { default as mentorPortalRoutes } from './mentorPortal.routes.js';
 

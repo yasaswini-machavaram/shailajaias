@@ -23,6 +23,8 @@ export interface ITestSeries extends Document {
     brochureKey?: string;
     introVideoUrl?: string;
     tests: ITestSeriesItem[];
+    price?: number;
+    mentorTags?: string[];
     isPublished: boolean;
     createdBy: Types.ObjectId;
     createdAt: Date;
@@ -107,6 +109,16 @@ const TestSeriesSchema = new Schema<ITestSeries>(
             type: [TestSeriesItemSchema],
             default: [],
         },
+        price: {
+            type: Number,
+            default: 0,
+        },
+        mentorTags: [
+            {
+                type: String,
+                trim: true,
+            },
+        ],
         isPublished: {
             type: Boolean,
             default: false,

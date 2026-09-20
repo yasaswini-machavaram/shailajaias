@@ -36,6 +36,9 @@ export interface IVideoItem {
     // Help & FAQ section
     helpContactInfo?: string;
     faqs: IFaqItem[];
+    // Video-level locks
+    isPracticeLocked?: boolean;
+    isHelpLocked?: boolean;
 }
 
 export interface IContentTab {
@@ -62,9 +65,13 @@ export interface ICourseNode extends Document {
     videos: IVideoItem[];
     contentTabs: IContentTab[];
     isPublished: boolean;
-    isPracticeLocked: boolean;
-    isHelpLocked: boolean;
+    isPracticeLocked?: boolean; // Deprecated: moved to VideoItem
+    isHelpLocked?: boolean;     // Deprecated: moved to VideoItem
     isLocked: boolean;
+    price?: number;
+    mentorTags?: string[];
+    linkedPtsId?: Types.ObjectId;
+    linkedMtsId?: Types.ObjectId;
     createdBy: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
@@ -125,6 +132,8 @@ const VideoItemSchema = new Schema<IVideoItem>(
         },
         helpContactInfo: String,
         faqs: { type: [FaqItemSchema], default: [] },
+        isPracticeLocked: { type: Boolean, default: false },
+        isHelpLocked: { type: Boolean, default: false },
     },
     { _id: true }
 );
@@ -203,6 +212,26 @@ const CourseNodeSchema = new Schema<ICourseNode>(
         isLocked: {
             type: Boolean,
             default: false,
+        },
+        price: {
+            type: Number,
+            default: 0,
+        },
+        mentorTags: [
+            {
+                type: String,
+                trim: true,
+            },
+        ],
+        linkedPtsId: {
+            type: Schema.Types.ObjectId,
+            ref: 'TestSeries',
+            default: null,
+        },
+        linkedMtsId: {
+            type: Schema.Types.ObjectId,
+            ref: 'MainsTestSeries',
+            default: null,
         },
         createdBy: {
             type: Schema.Types.ObjectId,

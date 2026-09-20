@@ -79,7 +79,7 @@ export const getTestSeriesById = async (req: Request, res: Response): Promise<vo
 // @access  Private/Admin
 export const createTestSeries = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { title, description, brochureUrl, brochureKey, introVideoUrl, tests, isPublished } = req.body;
+        const { title, description, brochureUrl, brochureKey, introVideoUrl, tests, price, mentorTags, isPublished } = req.body;
         const user = (req as Request & { user: { _id: string } }).user;
 
         if (!title?.trim()) {
@@ -102,6 +102,8 @@ export const createTestSeries = async (req: Request, res: Response): Promise<voi
             brochureKey,
             introVideoUrl: introVideoUrl?.trim() || undefined,
             tests: formattedTests,
+            price: price !== undefined ? price : 0,
+            mentorTags: mentorTags || [],
             isPublished: isPublished !== undefined ? isPublished : false,
             createdBy: user._id,
         });
@@ -118,7 +120,7 @@ export const createTestSeries = async (req: Request, res: Response): Promise<voi
 // @access  Private/Admin
 export const updateTestSeries = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { title, description, brochureUrl, brochureKey, introVideoUrl, tests, isPublished } = req.body;
+        const { title, description, brochureUrl, brochureKey, introVideoUrl, tests, price, mentorTags, isPublished } = req.body;
 
         const series = await TestSeries.findById(req.params.id);
         if (!series) {
@@ -131,6 +133,8 @@ export const updateTestSeries = async (req: Request, res: Response): Promise<voi
         if (brochureUrl !== undefined) series.brochureUrl = brochureUrl;
         if (brochureKey !== undefined) series.brochureKey = brochureKey;
         if (introVideoUrl !== undefined) series.introVideoUrl = introVideoUrl?.trim() || undefined;
+        if (price !== undefined) series.price = price;
+        if (mentorTags !== undefined) series.mentorTags = mentorTags;
         if (isPublished !== undefined) series.isPublished = isPublished;
 
         if (tests !== undefined) {

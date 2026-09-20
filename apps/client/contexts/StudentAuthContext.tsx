@@ -9,6 +9,13 @@ interface StudentUser {
     email?: string;
     role: 'admin' | 'student';
     status?: 'active' | 'suspended';
+    isMentorshipStudent?: boolean;
+    purchasedMentorTags?: string[];
+    purchasedPtsGroups?: string[];
+    purchasedMtsGroups?: string[];
+    purchasedCourseGroups?: string[];
+    purchasedCourses?: string[];
+    mentorshipPurchasedAt?: string;
 }
 
 interface DeviceInfo {
@@ -26,6 +33,7 @@ interface StudentAuthContextType {
     sendOtp: (phone: string) => Promise<{ success: boolean; message?: string; error?: string; devOtp?: string }>;
     verifyOtp: (phone: string, otp: string) => Promise<{ success: boolean; isNewUser?: boolean; error?: string }>;
     updateProfile: (name: string, email: string) => Promise<{ success: boolean; error?: string }>;
+    refreshUser: () => Promise<void>;
     logout: () => void;
     logoutAllDevices: () => Promise<{ success: boolean; error?: string }>;
     getActiveDevices: () => Promise<{ success: boolean; data?: DeviceInfo[]; error?: string }>;
@@ -360,6 +368,12 @@ export function StudentAuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    const refreshUser = useCallback(async () => {
+        if (token) {
+            await refreshProfile(token);
+        }
+    }, [token, refreshProfile]);
+
     return (
         <StudentAuthContext.Provider
             value={{
@@ -370,6 +384,7 @@ export function StudentAuthProvider({ children }: { children: ReactNode }) {
                 sendOtp,
                 verifyOtp,
                 updateProfile,
+                refreshUser,
                 logout,
                 logoutAllDevices,
                 getActiveDevices,

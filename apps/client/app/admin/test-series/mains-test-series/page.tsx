@@ -29,6 +29,8 @@ interface MtsForm {
     introVideoUrl: string;
     sectionalCount: number;
     fullLengthCount: number;
+    price?: number;
+    mentorTags?: string;
     tests: TestItemForm[];
     isPublished: boolean;
 }
@@ -41,7 +43,7 @@ const emptyTest: TestItemForm = {
 
 const emptyForm: MtsForm = {
     title: '', description: '', brochureUrl: '', brochureKey: '',
-    introVideoUrl: '', sectionalCount: 0, fullLengthCount: 0, tests: [], isPublished: false,
+    introVideoUrl: '', sectionalCount: 0, fullLengthCount: 0, price: 0, mentorTags: '', tests: [], isPublished: false,
 };
 
 export default function AdminMainsTestSeriesPage() {
@@ -129,6 +131,10 @@ export default function AdminMainsTestSeriesPage() {
                     brochureUrl: form.brochureUrl, brochureKey: form.brochureKey,
                     introVideoUrl: form.introVideoUrl,
                     sectionalCount: form.sectionalCount, fullLengthCount: form.fullLengthCount,
+                    price: Number(form.price) || 0,
+                    mentorTags: form.mentorTags
+                        ? form.mentorTags.split(',').map((s) => s.trim()).filter(Boolean)
+                        : [],
                     isPublished: form.isPublished,
                     tests: form.tests,
                 }),
@@ -159,6 +165,8 @@ export default function AdminMainsTestSeriesPage() {
             brochureUrl: series.brochureUrl || '', brochureKey: series.brochureKey || '',
             introVideoUrl: series.introVideoUrl || '',
             sectionalCount: series.sectionalCount || 0, fullLengthCount: series.fullLengthCount || 0,
+            price: series.price || 0,
+            mentorTags: Array.isArray(series.mentorTags) ? series.mentorTags.join(', ') : '',
             isPublished: series.isPublished || false,
             tests: (series.tests || []).map((t: any) => ({
                 title: t.title || '', date: t.date ? t.date.split('T')[0] : new Date().toISOString().split('T')[0],
@@ -214,6 +222,18 @@ export default function AdminMainsTestSeriesPage() {
                                     <label className="block text-sm font-semibold text-slate-700 mb-1">Full Length Test Count</label>
                                     <input type="number" value={form.fullLengthCount} onChange={e => setForm(p => ({ ...p, fullLengthCount: Number(e.target.value) }))}
                                         className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:border-[#1E3A5F] focus:outline-none" min={0} />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">Standalone Price (₹)</label>
+                                    <input type="number" value={form.price || ''} onChange={e => setForm(p => ({ ...p, price: parseFloat(e.target.value) || 0 }))}
+                                        className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:border-[#1E3A5F] focus:outline-none" placeholder="e.g. 4999" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">Mentorship Module Tags (Comma Separated)</label>
+                                    <input type="text" value={form.mentorTags || ''} onChange={e => setForm(p => ({ ...p, mentorTags: e.target.value }))}
+                                        className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:border-[#1E3A5F] focus:outline-none" placeholder="e.g. Mains Guidance 2026, Integrated Batch" />
                                 </div>
                             </div>
                             <div>
