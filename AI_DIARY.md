@@ -1349,6 +1349,36 @@ Admin creates content
 - **Verification:**
   - Type-checked clean with `pnpm --filter api exec tsc --noEmit` (0 errors) and `pnpm --filter client exec tsc --noEmit` (0 errors).
 
+### Session: 2026-09-20 (Centralized Master Mentorship Tags & Unified Admin CMS)
+- **Who:** AI (Antigravity)
+- **What:** Designed and built a Centralized Master Mentorship Tags repository (`/admin/master-tags`) with an interactive Deep-Link Inspector, consolidated Courses and Course Groups into a unified single admin page (`/admin/courses`), and updated tag selection across Course Groups, PTS Groups, and MTS Groups to derive tags from the central master repository.
+- **Backend Infrastructure (`apps/api`):**
+  - Model: `MasterTag.ts` (`title`, `code` unique uppercase index, `description`, `colorHex`, `createdBy`).
+  - Controller & Routes: `masterTag.controller.ts` / `masterTag.routes.ts` mounted at `/api/master-tags` with CRUD endpoints and `getLinkedItemsForTag` deep-link inspector query (searching connected items across `CourseGroup`, `CourseNode`, `TestSeries`, `MainsTestSeries`, and `MentorshipCourse`).
+- **Centralized Master Tag Manager (`apps/client/app/admin/master-tags/page.tsx`):**
+  - Full CRUD interface for managing tag definitions from ONE place.
+  - Interactive Tag Deep-Link Inspector panel that visually renders every linked resource (Course Groups, Courses, PTS Groups, MTS Groups, and Mentorship Cards) when clicking on any tag.
+  - Added "🏷️ Master Mentorship Tags" navigation item to Admin Sidebar in `app/admin/layout.tsx`.
+- **Mentorship Cards Admin (`apps/client/app/admin/mentorship/page.tsx`):**
+  - Updated `MentorshipCourse.ts` model and API controller with `mentorTags: [String]`.
+  - Added Centralized Master Tag chip selector to Mentorship Card editor modal so admins can attach master tags (e.g. `GS-1`, `GS-2`, `PRELIMS-2027`) to mentorship programs.
+  - Rendered master tag pills on cards in admin list view.
+- **Mentorship Landing Page Direct Purchase & Sign-In Flow (`apps/client/app/mentorship/page.tsx`):**
+  - Integrated `useStudentAuth` on `http://localhost:3000/mentorship`.
+  - **Not Logged In**: Clicking any "Join Now" / "Enroll" / "Talk to us" button displays a Sign In Required modal prompting the student to log in first at `/login`.
+  - **Logged In**: Clicking "Join Now" opens the `PurchaseConfirmModal` for instant simulated purchase.
+  - Upon purchase confirmation: Sends `POST /api/purchase` with `{ itemType: 'mentorship', itemId }`, sets `isMentorshipStudent = true`, grants all attached `purchasedMentorTags`, silently refreshes user profile, and automatically redirects to the Student Mentorship Dashboard (`/mentorship/dashboard`) where all subscribed tags across Courses, MTS, and PTS are tracked in their Roadmap!
+- **Consolidated Course & Course Group Admin UI (`apps/client/app/admin/courses/page.tsx`):**
+  - Rebuilt `/admin/courses` into a unified tabbed CMS layout (`Course Groups & Bundles` vs `Root Courses Hierarchy`).
+  - Removed separate `Course Groups` link from Admin sidebar nav items in `layout.tsx` and converted legacy `/admin/course-groups` route into an auto-redirect to `/admin/courses`.
+  - Integrated the Centralized Master Tag selector chip picker at the Course Group / Bundle container level.
+- **Group-Level Master Tag Pickers in PTS & MTS Admin:**
+  - `apps/client/app/admin/test-series/prelims-test-series/page.tsx`: Updated PTS Group editor with chip selector for Centralized Master Tags.
+  - `apps/client/app/admin/test-series/mains-test-series/page.tsx`: Updated MTS Group editor with chip selector for Centralized Master Tags.
+- **Student Roadmap Integration (`apps/client/app/mentorship/dashboard/page.tsx`):**
+  - Student Roadmap displays all subscribed Master Tags aggregated across purchased Courses, MTS Groups, and PTS Groups.
+- **Verification:** Both `api` and `client` compile cleanly (`pnpm --filter api exec tsc --noEmit && pnpm --filter client exec tsc --noEmit` returned 0 errors).
+
 ### Session: 2026-09-20 (Mentorship Platform & Mentor Portal Concluded)
 - **Who:** AI (Antigravity)
 - **What:** Completed full implementation and real-time MongoDB database integration for both the **Student Mentorship Platform** (`/mentorship`) and the **Mentor Portal** (`/mentor`), matching the design system, UX, and CTAs of `ShailajaIAS Mentorship Desktop v2.html` and `ShailajaIAS Mentor Portal.html`.
@@ -1367,11 +1397,16 @@ Admin creates content
   - Integrated with mentors created via `/admin/mentors`.
   - **Module 1 (Roster):** Tabular assigned mentees list sorted by risk (`Δ Tasks + Δ Log` descending), filter bar, extra columns toggle.
   - **Module 2 (Chat):** Mentee threads list (All vs Starred), live messaging, star student CTA, dossier shortcut.
-  - **Module 3 (Evaluation):** Answer copy queue (`Pending`, `Evaluated`, `Open pool`), `Claim Copy` & `Reopen` CTAs.
-  - **Module 4 (Broadcast):** Batch notice composer with filtering (`All Inactive`, `Δ Log 3+`, `Uploads Pending`), message preview, and confirm send.
-  - **Module 5 (Analytics):** Cohort performance metrics, assigned per day chart, at-risk review table with `Confirm Tag Inactive` CTA.
-  - **Module 6 (Mentee Dossier):** Student detail view, attempt history, score trends, 1-on-1 session note composer & private internal mentor notes editor saved to MongoDB.
-- **Verified:** Both `api` and `client` type-checked 100% clean (`pnpm --filter api exec tsc --noEmit && pnpm --filter client exec tsc --noEmit` returned 0 errors).
+### Session: 2026-09-21 (Daily Task Left/Right Carousel & Full DB Progress Sync)
+- **Who:** AI (Antigravity)
+- **What:**
+  1. **Daily Task Single-Card Carousel**: Redesigned `/mentorship/dashboard` to render a single focal Task Card at a time matching the user's sample layout (`media__1789957994342.png`), complete with Left (`‹`) and Right (`›`) arrow buttons and `Today` reset controls.
+  2. **Study Hours Header Console**: Removed `/ TARGET 42.0 h` text, rendering `LOGGED: XX.X h` dynamically calculated from active week logs. Clicking Save in Revise Entry console updates logged hours live and posts to `/api/mentorship-student/log-hours`.
+  3. **MongoDB Task Progress Sync**: Created `MentorshipTaskProgress` Mongoose schema and `POST /api/mentorship-student/task-progress` endpoint. Step checkoffs (`watch`, `notes`, `test`, `upload`) save to MongoDB and persist across page refreshes.
+  4. **In-Page Action Modals & Revision Cards**: Actions 01, 02, 03, 04 open in-page modals with no rerouting. Advancing past module video cards displays the Course Revision Checkpoint card with PTS and MTS group codes (`ptsGroupCode`, `mtsGroupCode`) linking directly to `/tests/prelims-test-series` and `/tests/mains-test-series`.
+  5. **Purchased Mentorship Tag Verification**: Mentorship tracking is exclusive to students with purchased mentorship tags (`user.purchasedMentorTags`), displaying a notice banner for non-purchased users while rendering sample foundation cards.
+  6. **Dynamic Sync Across Portals**: Student dashboard (Roadmap, Chat, Uploads, Mentorship) and Mentor Portal (Roster, Chat, Evaluation, Broadcast, Analytics, Mentee Dossier) operate with real MongoDB backend endpoints.
+- **Verified:** Both `api` and `client` type-check with zero errors (`pnpm --filter api exec tsc --noEmit && pnpm --filter client exec tsc --noEmit`).
 
 ### Session: 2026-09-18 (Mentorship Course Cards & Admin CMS)
 - **Who:** AI (Antigravity)

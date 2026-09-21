@@ -47,8 +47,16 @@ const emptyForm: MtsForm = {
 };
 
 export default function AdminMainsTestSeriesPage() {
+interface MasterTag {
+    _id: string;
+    code: string;
+    title: string;
+    colorHex?: string;
+}
+
     const { token } = useAuth();
     const [seriesList, setSeriesList] = useState<any[]>([]);
+    const [masterTagsList, setMasterTagsList] = useState<MasterTag[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [form, setForm] = useState<MtsForm>({ ...emptyForm });
@@ -57,7 +65,30 @@ export default function AdminMainsTestSeriesPage() {
     const [successMessage, setSuccessMessage] = useState('');
     const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
 
-    useEffect(() => { if (token) fetchSeries(); }, [token]);
+    useEffect(() => {
+        if (token) {
+            fetchSeries();
+            fetchMasterTags();
+        }
+    }, [token]);
+
+    const fetchMasterTags = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/master-tags`);
+            const data = await res.json();
+            if (data.success) setMasterTagsList(data.data || []);
+        } catch (err) {
+            console.error('Fetch master tags error:', err);
+        }
+    };
+
+    const toggleMasterTag = (code: string) => {
+        const current = form.mentorTags ? form.mentorTags.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const next = current.includes(code)
+            ? current.filter(t => t !== code)
+            : [...current, code];
+        setForm(prev => ({ ...prev, mentorTags: next.join(', ') }));
+    };
 
     const fetchSeries = async () => {
         setIsLoading(true);
@@ -230,10 +261,46 @@ export default function AdminMainsTestSeriesPage() {
                                     <input type="number" value={form.price || ''} onChange={e => setForm(p => ({ ...p, price: parseFloat(e.target.value) || 0 }))}
                                         className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:border-[#1E3A5F] focus:outline-none" placeholder="e.g. 4999" />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-1">Mentorship Module Tags (Comma Separated)</label>
-                                    <input type="text" value={form.mentorTags || ''} onChange={e => setForm(p => ({ ...p, mentorTags: e.target.value }))}
-                                        className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:border-[#1E3A5F] focus:outline-none" placeholder="e.g. Mains Guidance 2026, Integrated Batch" />
+                                <div className="col-span-2 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                            🏷️ Assign Centralized Master Mentorship Tags (MTS Group Level)
+                                        </label>
+                                        <a href="/admin/master-tags" target="_blank" className="text-xs text-[#E65100] font-bold hover:underline">
+                                            + Manage Master Tags Repository
+                                        </a>
+                                    </div>
+                                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                                        {masterTagsList.length === 0 ? (
+                                            <p className="text-xs text-slate-400">No master tags found in repository.</p>
+                                        ) : (
+                                            masterTagsList.map((tag) => {
+                                                const currentTags = form.mentorTags ? form.mentorTags.split(',').map(s => s.trim()).filter(Boolean) : [];
+                                                const selected = currentTags.includes(tag.code);
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        key={tag._id}
+                                                        onClick={() => toggleMasterTag(tag.code)}
+                                                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                                                            selected
+                                                                ? 'bg-[#E65100] text-white border-[#E65100] shadow-xs'
+                                                                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                                                        }`}
+                                                    >
+                                                        {selected ? '✓ ' : '+ '}#{tag.code} ({tag.title})
+                                                    </button>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={form.mentorTags || ''}
+                                        onChange={(e) => setForm(prev => ({ ...prev, mentorTags: e.target.value }))}
+                                        placeholder="Selected tags (e.g. GS-1, MAINS-2026)"
+                                        className="w-full h-10 px-4 border border-slate-200 focus:border-2 focus:border-[#E65100] rounded-xl text-xs font-medium outline-none transition-all"
+                                    />
                                 </div>
                             </div>
                             <div>

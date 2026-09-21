@@ -7,7 +7,8 @@ import {
     getStudentUploads,
     getStudentSessions,
     getStudentChat,
-    sendStudentChat
+    sendStudentChat,
+    saveTaskProgress
 } from '../controllers/mentorshipStudent.controller.js';
 
 const router: Router = Router();
@@ -16,6 +17,7 @@ router.use(protect);
 
 router.get('/daily-task', getDailyTaskData);
 router.post('/log-hours', logStudyHours);
+router.post('/task-progress', saveTaskProgress);
 router.get('/roadmap', getRoadmapData);
 router.get('/uploads', getStudentUploads);
 router.get('/sessions', getStudentSessions);

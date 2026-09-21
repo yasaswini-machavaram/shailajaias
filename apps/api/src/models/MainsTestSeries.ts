@@ -26,6 +26,8 @@ export interface IMainsTestSeries extends Document {
     fullLengthCount: number;
     price?: number;
     mentorTags?: string[];
+    defaultMentor?: Types.ObjectId;
+    assignedMentors?: Types.ObjectId[];
     isPublished: boolean;
     createdBy: Types.ObjectId;
     createdAt: Date;
@@ -123,6 +125,16 @@ const MainsTestSeriesSchema = new Schema<IMainsTestSeries>(
             {
                 type: String,
                 trim: true,
+            },
+        ],
+        defaultMentor: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+        },
+        assignedMentors: [
+            {
+                type: Schema.Types.ObjectId,
+                ref: 'User',
             },
         ],
         isPublished: {

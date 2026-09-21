@@ -24,6 +24,8 @@ export interface IUser extends Document {
     // Mentor-specific fields
     assignedMtsGroups: mongoose.Types.ObjectId[];
     assignedStudents: mongoose.Types.ObjectId[];
+    // Student-specific: assigned mentor
+    assignedMentor?: mongoose.Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -137,6 +139,12 @@ const UserSchema = new Schema<IUser>(
                 ref: 'User',
             },
         ],
+        // Student-specific: assigned mentor
+        assignedMentor: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            index: true,
+        },
     },
     {
         timestamps: true,

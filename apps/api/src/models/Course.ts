@@ -70,6 +70,8 @@ export interface ICourseNode extends Document {
     isLocked: boolean;
     price?: number;
     mentorTags?: string[];
+    ptsGroupCode?: string;
+    mtsGroupCode?: string;
     linkedPtsId?: Types.ObjectId;
     linkedMtsId?: Types.ObjectId;
     createdBy: Types.ObjectId;
@@ -223,6 +225,14 @@ const CourseNodeSchema = new Schema<ICourseNode>(
                 trim: true,
             },
         ],
+        ptsGroupCode: {
+            type: String,
+            trim: true,
+        },
+        mtsGroupCode: {
+            type: String,
+            trim: true,
+        },
         linkedPtsId: {
             type: Schema.Types.ObjectId,
             ref: 'TestSeries',

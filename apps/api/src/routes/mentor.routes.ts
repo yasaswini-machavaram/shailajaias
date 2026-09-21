@@ -7,6 +7,9 @@ import {
     deleteMentor,
     assignMtsBatch,
     assignStudentsToMentor,
+    getProgramMentorConfigs,
+    updateProgramMentorConfig,
+    reassignStudentMentor,
 } from '../controllers/mentor.controller.js';
 import { protect, adminOnly } from '../middlewares/auth.middleware.js';
 
@@ -17,6 +20,15 @@ router.post('/', protect, adminOnly, createMentor);
 
 // @route   GET /api/mentors — List all mentors
 router.get('/', protect, adminOnly, getAllMentors);
+
+// @route   GET /api/mentors/program-config — Get program & MTS batch mentor config
+router.get('/program-config', protect, adminOnly, getProgramMentorConfigs);
+
+// @route   PUT /api/mentors/program-config/:type/:id — Update program/batch mentor config
+router.put('/program-config/:type/:id', protect, adminOnly, updateProgramMentorConfig);
+
+// @route   PUT /api/mentors/reassign-student — Manually reassign student mentor
+router.put('/reassign-student', protect, adminOnly, reassignStudentMentor);
 
 // @route   GET /api/mentors/:id — Get mentor details
 router.get('/:id', protect, adminOnly, getMentorById);

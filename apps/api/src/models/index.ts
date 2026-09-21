@@ -22,7 +22,7 @@ export { TestAttempt, type ITestAttempt } from './TestAttempt.js';
 export { MentorshipTaskProgress, type IMentorshipTaskProgress, type TaskType } from './MentorshipTaskProgress.js';
 export { MentorshipLog, type IMentorshipLog } from './MentorshipLog.js';
 export { MentorshipSubjectProgress, type IMentorshipSubjectProgress } from './MentorshipSubjectProgress.js';
-export { MentorChat, type IMentorChat } from './MentorChat.js';
+export { MentorChat, type IMentorChat } from './MentorChat.js';export { MasterTag, type IMasterTag } from './MasterTag.js';
 export { MentorBroadcast, type IMentorBroadcast } from './MentorBroadcast.js';
 export { MentorNote, type IMentorNote, type IMentorSessionNote } from './MentorNote.js';
 

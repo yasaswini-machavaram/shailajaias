@@ -12,6 +12,9 @@ export interface IMentorshipCourse extends Document {
     availability: string;
     bundleNote?: string;
     description: string;
+    mentorTags?: string[];
+    defaultMentor?: mongoose.Types.ObjectId;
+    assignedMentors?: mongoose.Types.ObjectId[];
     order: number;
     isPublished: boolean;
     createdBy?: mongoose.Types.ObjectId;
@@ -72,6 +75,20 @@ const MentorshipCourseSchema = new Schema<IMentorshipCourse>(
             required: [true, 'Description is required'],
             trim: true,
         },
+        mentorTags: {
+            type: [String],
+            default: [],
+        },
+        defaultMentor: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+        },
+        assignedMentors: [
+            {
+                type: Schema.Types.ObjectId,
+                ref: 'User',
+            },
+        ],
         order: {
             type: Number,
             default: 0,

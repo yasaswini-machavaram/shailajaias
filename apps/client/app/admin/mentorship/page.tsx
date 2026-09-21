@@ -5,6 +5,13 @@ import { useAuth } from '../AuthContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
+interface MasterTag {
+    _id: string;
+    code: string;
+    title: string;
+    colorHex?: string;
+}
+
 interface MentorshipCourse {
     _id: string;
     title: string;
@@ -18,6 +25,7 @@ interface MentorshipCourse {
     availability: string;
     bundleNote?: string;
     description: string;
+    mentorTags?: string[];
     order: number;
     isPublished: boolean;
 }
@@ -25,6 +33,7 @@ interface MentorshipCourse {
 export default function AdminMentorshipPage() {
     const { token } = useAuth();
     const [courses, setCourses] = useState<MentorshipCourse[]>([]);
+    const [masterTagsList, setMasterTagsList] = useState<MasterTag[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     // Modal state for Create / Edit
@@ -44,13 +53,35 @@ export default function AdminMentorshipPage() {
         availability: 'Start Now',
         bundleNote: '',
         description: '',
+        mentorTags: [] as string[],
         order: 0,
         isPublished: true,
     });
 
     useEffect(() => {
         fetchCourses();
+        fetchMasterTags();
     }, [token]);
+
+    const fetchMasterTags = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/master-tags`);
+            const data = await res.json();
+            if (data.success) setMasterTagsList(data.data || []);
+        } catch (err) {
+            console.error('Fetch master tags error:', err);
+        }
+    };
+
+    const toggleMasterTag = (code: string) => {
+        setFormData(prev => {
+            const exists = prev.mentorTags.includes(code);
+            return {
+                ...prev,
+                mentorTags: exists ? prev.mentorTags.filter(t => t !== code) : [...prev.mentorTags, code],
+            };
+        });
+    };
 
     const fetchCourses = async () => {
         setIsLoading(true);
@@ -85,6 +116,7 @@ export default function AdminMentorshipPage() {
             availability: 'Start Now',
             bundleNote: '',
             description: '',
+            mentorTags: [],
             order: courses.length + 1,
             isPublished: true,
         });
@@ -105,6 +137,7 @@ export default function AdminMentorshipPage() {
             availability: course.availability,
             bundleNote: course.bundleNote || '',
             description: course.description,
+            mentorTags: course.mentorTags || [],
             order: course.order || 0,
             isPublished: course.isPublished,
         });
@@ -131,6 +164,7 @@ export default function AdminMentorshipPage() {
             availability: formData.availability,
             bundleNote: formData.bundleNote,
             description: formData.description,
+            mentorTags: formData.mentorTags,
             order: Number(formData.order),
             isPublished: formData.isPublished,
         };
@@ -291,6 +325,17 @@ export default function AdminMentorshipPage() {
                                         </span>
                                     ))}
                                 </div>
+
+                                {course.mentorTags && course.mentorTags.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 pt-1">
+                                        <span className="text-[10px] font-bold text-amber-800 self-center mr-1">🏷️ Master Tags:</span>
+                                        {course.mentorTags.map((t) => (
+                                            <span key={t} className="text-[10px] bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full font-bold border border-amber-200">
+                                                #{t}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Actions */}
@@ -421,16 +466,50 @@ export default function AdminMentorshipPage() {
                                 />
                             </div>
 
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-700">Bundle Note / Savings Tag (Optional)</label>
-                                <input
-                                    type="text"
-                                    placeholder="e.g. Bundles Advanced Revision Mains + Prelims Crash Course · saves ₹99"
-                                    value={formData.bundleNote}
-                                    onChange={e => setFormData({ ...formData, bundleNote: e.target.value })}
-                                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900"
-                                />
-                            </div>
+                             <div className="space-y-1.5">
+                                 <div className="flex items-center justify-between">
+                                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                         🏷️ Assign Centralized Master Mentorship Tags (Purchasing Unlocks These Tags)
+                                     </label>
+                                     <a href="/admin/master-tags" target="_blank" className="text-[11px] text-amber-600 font-bold hover:underline">
+                                         + Manage Repository
+                                     </a>
+                                 </div>
+                                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap gap-2 max-h-36 overflow-y-auto">
+                                     {masterTagsList.length === 0 ? (
+                                         <p className="text-xs text-slate-400">No master tags found in repository.</p>
+                                     ) : (
+                                         masterTagsList.map((tag) => {
+                                             const selected = formData.mentorTags.includes(tag.code);
+                                             return (
+                                                 <button
+                                                     type="button"
+                                                     key={tag._id}
+                                                     onClick={() => toggleMasterTag(tag.code)}
+                                                     className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
+                                                         selected
+                                                             ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                                                             : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                                                     }`}
+                                                 >
+                                                     {selected ? '✓ ' : '+ '}#{tag.code} ({tag.title})
+                                                 </button>
+                                             );
+                                         })
+                                     )}
+                                 </div>
+                             </div>
+
+                             <div className="space-y-1">
+                                 <label className="text-xs font-bold text-slate-700">Bundle Note / Savings Tag (Optional)</label>
+                                 <input
+                                     type="text"
+                                     placeholder="e.g. Bundles Advanced Revision Mains + Prelims Crash Course · saves ₹99"
+                                     value={formData.bundleNote}
+                                     onChange={e => setFormData({ ...formData, bundleNote: e.target.value })}
+                                     className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                 />
+                             </div>
 
                             <div className="space-y-1">
                                 <label className="text-xs font-bold text-slate-700">Detailed Description *</label>

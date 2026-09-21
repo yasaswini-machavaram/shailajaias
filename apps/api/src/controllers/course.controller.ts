@@ -125,7 +125,7 @@ const sanitizeVideos = (videosList: any[]) => {
 // @access  Private/Admin
 export const createCourse = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { title, description, level, parent, order, videos, contentTabs, isPublished, isPracticeLocked, isHelpLocked, isLocked, price, mentorTags, linkedPtsId, linkedMtsId } = req.body;
+        const { title, description, level, parent, order, videos, contentTabs, isPublished, isPracticeLocked, isHelpLocked, isLocked, price, mentorTags, ptsGroupCode, mtsGroupCode, linkedPtsId, linkedMtsId } = req.body;
         const user = (req as Request & { user: { _id: string } }).user;
 
         const parentId = parent && String(parent).trim() !== '' && mongoose.Types.ObjectId.isValid(parent) ? parent : null;
@@ -147,6 +147,8 @@ export const createCourse = async (req: Request, res: Response): Promise<void> =
             isLocked: isLocked ?? false,
             price: price !== undefined ? price : 0,
             mentorTags: mentorTags || [],
+            ptsGroupCode: ptsGroupCode ? String(ptsGroupCode).trim() : undefined,
+            mtsGroupCode: mtsGroupCode ? String(mtsGroupCode).trim() : undefined,
             linkedPtsId: validLinkedPtsId,
             linkedMtsId: validLinkedMtsId,
             createdBy: user._id,
@@ -164,7 +166,7 @@ export const createCourse = async (req: Request, res: Response): Promise<void> =
 // @access  Private/Admin
 export const updateCourse = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { title, description, level, order, videos, contentTabs, isPublished, isPracticeLocked, isHelpLocked, isLocked, price, mentorTags, linkedPtsId, linkedMtsId } = req.body;
+        const { title, description, level, order, videos, contentTabs, isPublished, isPracticeLocked, isHelpLocked, isLocked, price, mentorTags, ptsGroupCode, mtsGroupCode, linkedPtsId, linkedMtsId } = req.body;
 
         const course = await CourseNode.findById(req.params.id);
         if (!course) {
@@ -185,6 +187,8 @@ export const updateCourse = async (req: Request, res: Response): Promise<void> =
         if (isLocked !== undefined) course.isLocked = isLocked;
         if (price !== undefined) course.price = price;
         if (mentorTags !== undefined) course.mentorTags = mentorTags;
+        if (ptsGroupCode !== undefined) course.ptsGroupCode = ptsGroupCode ? String(ptsGroupCode).trim() : undefined;
+        if (mtsGroupCode !== undefined) course.mtsGroupCode = mtsGroupCode ? String(mtsGroupCode).trim() : undefined;
         if (linkedPtsId !== undefined) {
             course.linkedPtsId = linkedPtsId && String(linkedPtsId).trim() !== '' && mongoose.Types.ObjectId.isValid(linkedPtsId) ? linkedPtsId : null;
         }

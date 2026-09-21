@@ -227,55 +227,57 @@ export default function MentorDashboard() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-[#fdfbf6] flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#1d3557]" />
+            <div className="min-h-screen bg-[#FAFAF8] flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#1E3A5F]" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-[#fdfbf6] text-[#221f1a] font-sans flex">
+        <div className="min-h-screen bg-[#FAFAF8] text-[#1E293B] font-sans flex">
             {/* Left Sidebar Navigation */}
-            <aside className="w-64 bg-[#efe9dc] border-r border-[#ddd4c1] p-6 space-y-8 flex-shrink-0">
-                <div>
-                    <h1 className="font-serif text-xl font-bold text-[#1d3557]">ShailajaIAS</h1>
-                    <span className="text-[10px] font-bold text-[#6f6754] uppercase tracking-wider">MENTOR PORTAL</span>
+            <aside className="w-64 bg-[#1E3A5F] text-white p-6 flex-shrink-0 flex flex-col justify-between shadow-lg">
+                <div className="space-y-6">
+                    <div>
+                        <h1 className="font-serif text-xl font-bold text-amber-400">ShailajaIAS</h1>
+                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">MENTOR PORTAL</span>
+                    </div>
+
+                    {/* Nav Items */}
+                    <nav className="space-y-1.5">
+                        {NAV.map((n) => {
+                            const on = activeTab === n.id;
+                            return (
+                                <button
+                                    key={n.id}
+                                    onClick={() => {
+                                        setActiveTab(n.id);
+                                        if (n.id === 'mentee' && selectedStudent) fetchDossier(selectedStudent.id);
+                                    }}
+                                    className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${
+                                        on
+                                            ? 'bg-amber-500 text-white shadow-sm font-bold'
+                                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                    }`}
+                                >
+                                    <span>{n.label}</span>
+                                    {n.id === 'chat' && <span className="px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 text-[10px] font-bold">12</span>}
+                                    {n.id === 'evaluation' && <span className="px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 text-[10px] font-bold">8</span>}
+                                    {n.id === 'analytics' && <span className="px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 text-[10px] font-bold">3</span>}
+                                </button>
+                            );
+                        })}
+                    </nav>
                 </div>
 
-                {/* Nav Items */}
-                <nav className="space-y-1.5">
-                    {NAV.map((n) => {
-                        const on = activeTab === n.id;
-                        return (
-                            <button
-                                key={n.id}
-                                onClick={() => {
-                                    setActiveTab(n.id);
-                                    if (n.id === 'mentee' && selectedStudent) fetchDossier(selectedStudent.id);
-                                }}
-                                className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${
-                                    on
-                                        ? 'bg-[#1d3557] text-[#f7f4ec] shadow-sm'
-                                        : 'text-[#4a4437] hover:bg-[#e3dac6]'
-                                }`}
-                            >
-                                <span>{n.label}</span>
-                                {n.id === 'chat' && <span className="px-2 py-0.5 rounded-full bg-[#e3dac6] text-[#6f6754] text-[10px]">12</span>}
-                                {n.id === 'evaluation' && <span className="px-2 py-0.5 rounded-full bg-[#e3dac6] text-[#6f6754] text-[10px]">8</span>}
-                                {n.id === 'analytics' && <span className="px-2 py-0.5 rounded-full bg-[#e3dac6] text-[#6f6754] text-[10px]">3</span>}
-                            </button>
-                        );
-                    })}
-                </nav>
-
-                <div className="pt-6 border-t border-[#ddd4c1]">
-                    <p className="text-xs font-bold text-[#221f1a]">{user?.name || 'Mentor R. Anand'}</p>
-                    <p className="text-[10px] text-[#6f6754]">{user?.email}</p>
+                <div className="pt-4 border-t border-slate-700">
+                    <p className="text-xs font-bold text-white">{user?.name || 'Mentor'}</p>
+                    <p className="text-[10px] text-slate-300 truncate">{user?.email}</p>
                 </div>
             </aside>
 
             {/* Right Main Body Content */}
-            <main className="flex-1 p-8 space-y-6 overflow-x-hidden">
+            <main className="flex-1 p-8 space-y-6 overflow-x-hidden bg-[#FAFAF8]">
                 {/* ----------------- 1. ROSTER MODULE ----------------- */}
                 {activeTab === 'roster' && (
                     <div className="space-y-6">

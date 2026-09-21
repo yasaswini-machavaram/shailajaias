@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useStudentAuth } from '@/contexts/StudentAuthContext';
+import PurchaseConfirmModal from '@/components/PurchaseConfirmModal';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -81,6 +84,9 @@ const STAGES = ['Prelims', 'Mains', 'Both'];
 const LEVELS = ['Beginner', 'Veteran'];
 
 export default function MentorshipLandingPage() {
+    const router = useRouter();
+    const { isLoggedIn } = useStudentAuth();
+
     // ─── State Management ──────────────────────────────────────────────────────
     const [coursesList, setCoursesList] = useState<Course[]>(DEFAULT_COURSES);
     const [view, setView] = useState<'list' | 'detail'>('list');
@@ -92,6 +98,9 @@ export default function MentorshipLandingPage() {
     const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
     const [enquiryCourse, setEnquiryCourse] = useState<Course>(DEFAULT_COURSES[0]);
+    const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+    const [showLoginPromptModal, setShowLoginPromptModal] = useState(false);
+    const [selectedCourseForPurchase, setSelectedCourseForPurchase] = useState<Course | null>(null);
 
     // Sticky Scroll Bar
     const [scrolled, setScrolled] = useState(false);
@@ -170,13 +179,16 @@ export default function MentorshipLandingPage() {
     const activeFilterCount = (selectedStage ? 1 : 0) + (selectedLevel ? 1 : 0);
 
     const handleOpenEnrollModal = (course?: Course) => {
-        if (course) {
-            setEnquiryCourse(course);
-        } else {
-            setEnquiryCourse(currentCourse);
+        const targetCourse = course || currentCourse;
+        setSelectedCourseForPurchase(targetCourse);
+        setEnquiryCourse(targetCourse);
+
+        if (!isLoggedIn) {
+            setShowLoginPromptModal(true);
+            return;
         }
-        setEnquirySubmitted(false);
-        setIsEnrollModalOpen(true);
+
+        setShowPurchaseModal(true);
     };
 
     const handleEnquirySubmit = (e: React.FormEvent) => {
@@ -1070,6 +1082,52 @@ export default function MentorshipLandingPage() {
                                 </button>
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* ─── INSTANT PURCHASE SIMULATOR MODAL (WHEN LOGGED IN) ────────────────── */}
+            {showPurchaseModal && selectedCourseForPurchase && (
+                <PurchaseConfirmModal
+                    isOpen={showPurchaseModal}
+                    onClose={() => setShowPurchaseModal(false)}
+                    onSuccess={() => {
+                        setShowPurchaseModal(false);
+                        router.push('/mentorship/dashboard');
+                    }}
+                    title={selectedCourseForPurchase.title}
+                    description={selectedCourseForPurchase.coverage || selectedCourseForPurchase.description}
+                    itemType="mentorship"
+                    itemId={selectedCourseForPurchase._id || selectedCourseForPurchase.id}
+                    price={parseInt((selectedCourseForPurchase.price || '0').replace(/[^0-9]/g, ''), 10) || 0}
+                />
+            )}
+
+            {/* ─── LOGIN PROMPT MODAL (WHEN NOT LOGGED IN) ─────────────────────────── */}
+            {showLoginPromptModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl overflow-hidden max-w-md w-full shadow-2xl border border-gray-200 p-6 space-y-4 text-center">
+                        <div className="w-14 h-14 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto text-2xl font-bold">
+                            🎓
+                        </div>
+                        <h3 className="text-xl font-bold font-serif text-[#1E3A5F]">Sign In Required</h3>
+                        <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
+                            Please log in to your student account to buy <strong className="text-gray-900">{selectedCourseForPurchase?.title || 'ShailajaIAS Mentorship'}</strong> and unlock your personalized roadmap.
+                        </p>
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                onClick={() => setShowLoginPromptModal(false)}
+                                className="flex-1 py-3 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl"
+                            >
+                                Cancel
+                            </button>
+                            <Link
+                                href="/login"
+                                className="flex-1 py-3 text-xs font-bold text-white bg-[#1E3A5F] hover:bg-[#152C4A] rounded-xl text-center shadow-md flex items-center justify-center"
+                            >
+                                Sign In Now →
+                            </Link>
+                        </div>
                     </div>
                 </div>
             )}

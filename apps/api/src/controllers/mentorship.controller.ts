@@ -123,6 +123,7 @@ export const createMentorshipCourse = async (req: Request, res: Response): Promi
             availability,
             bundleNote,
             description,
+            mentorTags,
             order,
             isPublished,
         } = req.body;
@@ -144,6 +145,7 @@ export const createMentorshipCourse = async (req: Request, res: Response): Promi
             availability: availability || 'Start Now',
             bundleNote,
             description,
+            mentorTags: Array.isArray(mentorTags) ? mentorTags : [],
             order: order ?? 0,
             isPublished: isPublished ?? true,
             createdBy: (req as any).user?._id,

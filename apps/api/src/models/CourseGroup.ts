@@ -9,6 +9,8 @@ export interface ICourseGroup extends Document {
     courseIds: Types.ObjectId[];
     price: number;
     mentorTags: string[];
+    ptsGroupCode?: string;
+    mtsGroupCode?: string;
     isPublished: boolean;
     createdBy: Types.ObjectId;
     createdAt: Date;
@@ -52,6 +54,14 @@ const CourseGroupSchema = new Schema<ICourseGroup>(
                 trim: true,
             },
         ],
+        ptsGroupCode: {
+            type: String,
+            trim: true,
+        },
+        mtsGroupCode: {
+            type: String,
+            trim: true,
+        },
         isPublished: {
             type: Boolean,
             default: true,

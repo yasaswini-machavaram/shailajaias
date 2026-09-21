@@ -49,6 +49,14 @@ export default function AdminPrelimsTestSeriesPage() {
         isPublished: false,
     });
     
+interface MasterTag {
+    _id: string;
+    code: string;
+    title: string;
+    colorHex?: string;
+}
+
+    const [masterTagsList, setMasterTagsList] = useState<MasterTag[]>([]);
     const [uploadingField, setUploadingField] = useState<string | null>(null); // brochure, or 'excel-{index}'
     const [errorMessage, setErrorMessage] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
@@ -56,8 +64,27 @@ export default function AdminPrelimsTestSeriesPage() {
     useEffect(() => {
         if (token) {
             fetchSeries();
+            fetchMasterTags();
         }
     }, [token]);
+
+    const fetchMasterTags = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/master-tags`);
+            const data = await res.json();
+            if (data.success) setMasterTagsList(data.data || []);
+        } catch (err) {
+            console.error('Fetch master tags error:', err);
+        }
+    };
+
+    const toggleMasterTag = (code: string) => {
+        const current = form.mentorTags ? form.mentorTags.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const next = current.includes(code)
+            ? current.filter(t => t !== code)
+            : [...current, code];
+        setForm(prev => ({ ...prev, mentorTags: next.join(', ') }));
+    };
 
     const fetchSeries = async () => {
         setIsLoading(true);
@@ -536,14 +563,45 @@ export default function AdminPrelimsTestSeriesPage() {
                                         className="w-full h-11 px-4 border border-slate-200 focus:border-2 focus:border-[#1E3A5F] rounded-xl text-sm font-medium outline-none transition-all"
                                     />
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Mentorship Module Tags (Comma Separated)</label>
+                                <div className="md:col-span-2 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                            🏷️ Assign Centralized Master Mentorship Tags (PTS Group Level)
+                                        </label>
+                                        <a href="/admin/master-tags" target="_blank" className="text-xs text-[#1E3A5F] font-bold hover:underline">
+                                            + Manage Master Tags Repository
+                                        </a>
+                                    </div>
+                                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                                        {masterTagsList.length === 0 ? (
+                                            <p className="text-xs text-slate-400">No master tags found in repository.</p>
+                                        ) : (
+                                            masterTagsList.map((tag) => {
+                                                const currentTags = form.mentorTags ? form.mentorTags.split(',').map(s => s.trim()).filter(Boolean) : [];
+                                                const selected = currentTags.includes(tag.code);
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        key={tag._id}
+                                                        onClick={() => toggleMasterTag(tag.code)}
+                                                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                                                            selected
+                                                                ? 'bg-[#1E3A5F] text-white border-[#1E3A5F] shadow-xs'
+                                                                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                                                        }`}
+                                                    >
+                                                        {selected ? '✓ ' : '+ '}#{tag.code} ({tag.title})
+                                                    </button>
+                                                );
+                                            })
+                                        )}
+                                    </div>
                                     <input
                                         type="text"
                                         value={form.mentorTags || ''}
                                         onChange={(e) => setForm(prev => ({ ...prev, mentorTags: e.target.value }))}
-                                        placeholder="e.g. Prelims Masterclass 2026, Integrated Batch"
-                                        className="w-full h-11 px-4 border border-slate-200 focus:border-2 focus:border-[#1E3A5F] rounded-xl text-sm font-medium outline-none transition-all"
+                                        placeholder="Selected tags (e.g. GS-1, PRELIMS-2026)"
+                                        className="w-full h-10 px-4 border border-slate-200 focus:border-2 focus:border-[#1E3A5F] rounded-xl text-xs font-medium outline-none transition-all mt-1"
                                     />
                                 </div>
                                 <div className="md:col-span-2 space-y-1.5">

@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
-export type TaskType = 'watch' | 'notes' | 'test' | 'upload';
+export type TaskType = 'watch' | 'notes' | 'test' | 'upload' | 'overall';
 
 export interface IMentorshipTaskProgress extends Document {
     userId: Types.ObjectId;
@@ -8,6 +8,8 @@ export interface IMentorshipTaskProgress extends Document {
     dayNumber: number;
     taskType: TaskType;
     completed: boolean;
+    isPartial?: boolean;
+    status?: 'completed' | 'partial' | 'pending';
     completedAt?: Date;
     notesText?: string;
     mainsAnswerText?: string;
@@ -36,12 +38,21 @@ const MentorshipTaskProgressSchema = new Schema<IMentorshipTaskProgress>(
         },
         taskType: {
             type: String,
-            enum: ['watch', 'notes', 'test', 'upload'],
+            enum: ['watch', 'notes', 'test', 'upload', 'overall'],
             required: true,
         },
         completed: {
             type: Boolean,
             default: false,
+        },
+        isPartial: {
+            type: Boolean,
+            default: false,
+        },
+        status: {
+            type: String,
+            enum: ['completed', 'partial', 'pending'],
+            default: 'pending',
         },
         completedAt: {
             type: Date,

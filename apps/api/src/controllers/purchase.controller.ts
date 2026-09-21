@@ -1,6 +1,8 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
-import { User, TestSeries, MainsTestSeries, CourseGroup, CourseNode } from '../models/index.js';
+import { User, TestSeries, MainsTestSeries, CourseGroup, CourseNode, MentorshipCourse } from '../models/index.js';
+
+import { autoAllocateStudentMentor } from './mentor.controller.js';
 
 export const purchaseItem = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -25,6 +27,16 @@ export const purchaseItem = async (req: AuthRequest, res: Response): Promise<voi
         if (itemType === 'mentorship') {
             user.isMentorshipStudent = true;
             user.mentorshipPurchasedAt = user.mentorshipPurchasedAt || new Date();
+
+            if (itemId) {
+                const mc = await MentorshipCourse.findById(itemId);
+                if (mc && mc.mentorTags && mc.mentorTags.length > 0) {
+                    const existing = new Set(user.purchasedMentorTags || []);
+                    mc.mentorTags.forEach((t) => existing.add(t));
+                    user.purchasedMentorTags = Array.from(existing);
+                }
+            }
+
             if (tag && !user.purchasedMentorTags?.includes(tag)) {
                 user.purchasedMentorTags = [...(user.purchasedMentorTags || []), tag];
             }
@@ -88,6 +100,12 @@ export const purchaseItem = async (req: AuthRequest, res: Response): Promise<voi
 
         await user.save();
 
+        // Auto-allocate mentor if mentorship or mts purchase and no assigned mentor yet (or allocate from program pool)
+        let assignedMentor: any = null;
+        if ((itemType === 'mentorship' || itemType === 'mts') && itemId) {
+            assignedMentor = await autoAllocateStudentMentor(user._id.toString(), itemType, itemId);
+        }
+
         res.json({
             success: true,
             message: 'Purchase completed successfully',
@@ -98,6 +116,7 @@ export const purchaseItem = async (req: AuthRequest, res: Response): Promise<voi
                 purchasedMtsGroups: user.purchasedMtsGroups || [],
                 purchasedCourseGroups: user.purchasedCourseGroups || [],
                 purchasedCourses: user.purchasedCourses || [],
+                assignedMentor: assignedMentor ? { _id: assignedMentor._id, name: assignedMentor.name } : undefined,
             },
         });
     } catch (error) {

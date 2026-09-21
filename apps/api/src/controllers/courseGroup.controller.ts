@@ -52,7 +52,7 @@ export const createCourseGroup = async (req: AuthRequest, res: Response): Promis
             return;
         }
 
-        const { title, description, brochureUrl, brochureKey, introVideoUrl, courseIds, price, mentorTags, isPublished } = req.body;
+        const { title, description, brochureUrl, brochureKey, introVideoUrl, courseIds, price, mentorTags, ptsGroupCode, mtsGroupCode, isPublished } = req.body;
 
         if (!title) {
             res.status(400).json({ success: false, message: 'Title is required' });
@@ -68,6 +68,8 @@ export const createCourseGroup = async (req: AuthRequest, res: Response): Promis
             courseIds: courseIds || [],
             price: price || 0,
             mentorTags: mentorTags || [],
+            ptsGroupCode: ptsGroupCode ? String(ptsGroupCode).trim() : undefined,
+            mtsGroupCode: mtsGroupCode ? String(mtsGroupCode).trim() : undefined,
             isPublished: isPublished !== undefined ? isPublished : true,
             createdBy: req.user._id,
         });
@@ -82,7 +84,7 @@ export const createCourseGroup = async (req: AuthRequest, res: Response): Promis
 export const updateCourseGroup = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-        const { title, description, brochureUrl, brochureKey, introVideoUrl, courseIds, price, mentorTags, isPublished } = req.body;
+        const { title, description, brochureUrl, brochureKey, introVideoUrl, courseIds, price, mentorTags, ptsGroupCode, mtsGroupCode, isPublished } = req.body;
 
         const group = await CourseGroup.findById(id);
         if (!group) {
@@ -98,6 +100,8 @@ export const updateCourseGroup = async (req: Request, res: Response): Promise<vo
         if (courseIds !== undefined) group.courseIds = courseIds;
         if (price !== undefined) group.price = price;
         if (mentorTags !== undefined) group.mentorTags = mentorTags;
+        if (ptsGroupCode !== undefined) group.ptsGroupCode = ptsGroupCode ? String(ptsGroupCode).trim() : undefined;
+        if (mtsGroupCode !== undefined) group.mtsGroupCode = mtsGroupCode ? String(mtsGroupCode).trim() : undefined;
         if (isPublished !== undefined) group.isPublished = isPublished;
 
         await group.save();

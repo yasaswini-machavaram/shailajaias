@@ -30,6 +30,7 @@ import {
   mentorshipDashboardRoutes,
   mentorshipStudentRoutes,
   mentorPortalRoutes,
+  masterTagRoutes,
 } from "./routes/index.js";
 
 
@@ -98,6 +99,7 @@ app.use('/api/course-groups', courseGroupRoutes);
 app.use('/api/mentorship-dashboard', mentorshipDashboardRoutes);
 app.use('/api/mentorship-student', mentorshipStudentRoutes);
 app.use('/api/mentor-portal', mentorPortalRoutes);
+app.use('/api/master-tags', masterTagRoutes);
 
 
 // 404 handler
