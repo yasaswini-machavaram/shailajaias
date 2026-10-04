@@ -26,6 +26,8 @@ export interface IUser extends Document {
     assignedStudents: mongoose.Types.ObjectId[];
     // Student-specific: assigned mentor
     assignedMentor?: mongoose.Types.ObjectId;
+    mentorshipAccountStatus?: 'active' | 'break' | 'inactive';
+    mentorshipCourseOrder?: string[];
     createdAt: Date;
     updatedAt: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -145,6 +147,16 @@ const UserSchema = new Schema<IUser>(
             ref: 'User',
             index: true,
         },
+        mentorshipAccountStatus: {
+            type: String,
+            enum: ['active', 'break', 'inactive'],
+            default: 'active',
+        },
+        mentorshipCourseOrder: [
+            {
+                type: String,
+            },
+        ],
     },
     {
         timestamps: true,

@@ -1,0 +1,64 @@
+services:
+  mongodb:
+    image: mongo:7-jammy
+    container_name: shailaja-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: shailaja-ias
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: shailaja-api
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      MONGO_URI: mongodb://mongodb:27017/shailaja-ias
+      JWT_SECRET: ${JWT_SECRET:-change-this-to-a-secure-random-secret-in-production}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      OTPLESS_CLIENT_ID: ${OTPLESS_CLIENT_ID:-}
+      OTPLESS_CLIENT_SECRET: ${OTPLESS_CLIENT_SECRET:-}
+    volumes:
+      - uploads_data:/app/apps/api/uploads
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  client:
+    build:
+      context: .
+      dockerfile: apps/client/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+        NEXT_PUBLIC_OTPLESS_APP_ID: ${NEXT_PUBLIC_OTPLESS_APP_ID:-}
+    container_name: shailaja-client
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+    depends_on:
+      - api
+
+volumes:
+  mongo_data:
+  uploads_data:

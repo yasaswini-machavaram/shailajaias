@@ -249,6 +249,12 @@ export default function UnifiedCoursesAdminPage() {
                     >
                         🎓 Root Courses ({courses.length})
                     </button>
+                    <Link
+                        href="/admin/task-cards"
+                        className="ml-2 px-3 py-2 bg-[#1E3A5F] hover:bg-[#152C4A] text-amber-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs"
+                    >
+                        <span>🗂️</span> Task Card Sequencer ↗
+                    </Link>
                 </div>
             </div>
 
@@ -581,6 +587,12 @@ export default function UnifiedCoursesAdminPage() {
                                     </div>
 
                                     <div className="flex items-center gap-2">
+                                        <Link
+                                            href={`/admin/task-cards?courseId=${course._id}`}
+                                            className="px-3 py-2 bg-amber-50 text-amber-900 hover:bg-amber-100 text-xs font-bold rounded-xl transition-colors flex items-center gap-1 border border-amber-200"
+                                        >
+                                            <span>🗂️</span> Sequence Cards
+                                        </Link>
                                         <Link
                                             href={`/admin/courses/${course._id}`}
                                             className="px-4 py-2 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold rounded-xl transition-colors"

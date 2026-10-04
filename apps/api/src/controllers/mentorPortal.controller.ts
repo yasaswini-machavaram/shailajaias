@@ -8,7 +8,8 @@ import {
     MentorChat,
     MentorBroadcast,
     MentorNote,
-    MentorshipSubjectProgress
+    MentorshipSubjectProgress,
+    MentorshipRequest,
 } from '../models/index.js';
 
 // @desc    Get mentor roster with live risk metrics (Δ Tasks, Δ Log, Uploads Pending, Evaluated)
@@ -23,7 +24,7 @@ export const getMentorRoster = async (req: AuthRequest, res: Response): Promise<
         }
 
         // Find mentor and their assigned students
-        const mentor = await User.findById(mentorId).populate('assignedStudents').lean();
+        const mentor = await User.findById(mentorId).lean();
         if (!mentor) {
             res.status(404).json({ success: false, message: 'Mentor not found' });
             return;
@@ -34,7 +35,14 @@ export const getMentorRoster = async (req: AuthRequest, res: Response): Promise<
         if (req.user?.role === 'admin') {
             students = await User.find({ role: 'student' }).lean();
         } else {
-            students = (mentor.assignedStudents as any[]) || [];
+            const assignedIds = Array.isArray(mentor.assignedStudents) ? mentor.assignedStudents : [];
+            students = await User.find({
+                role: 'student',
+                $or: [
+                    { assignedMentor: mentorId },
+                    { _id: { $in: assignedIds } },
+                ],
+            }).lean();
             // Fallback: if no assigned students, fetch all students for preview
             if (students.length === 0) {
                 students = await User.find({ role: 'student' }).limit(50).lean();
@@ -58,7 +66,9 @@ export const getMentorRoster = async (req: AuthRequest, res: Response): Promise<
                 }
 
                 // Get latest task progress
-                const latestTask = await MentorshipTaskProgress.findOne({ student: s._id }).sort({ updatedAt: -1 }).lean();
+                const latestTask = await MentorshipTaskProgress.findOne({
+                    $or: [{ userId: s._id }, { student: s._id }],
+                }).sort({ updatedAt: -1 }).lean();
                 let deltaTasks = 0;
                 if (latestTask?.updatedAt) {
                     const taskDate = new Date(latestTask.updatedAt);
@@ -72,30 +82,47 @@ export const getMentorRoster = async (req: AuthRequest, res: Response): Promise<
                 const uploadsPending = await MainsSubmission.countDocuments({ student: s._id, status: { $ne: 'evaluated' } });
                 const evaluated = await MainsSubmission.countDocuments({ student: s._id, status: 'evaluated' });
 
-                // Subjects completed
+                // Subjects tracking
+                const totalSubjectsCount = await MentorshipSubjectProgress.countDocuments({ student: s._id });
                 const completedSubjects = await MentorshipSubjectProgress.countDocuments({ student: s._id, state: 'done' });
                 const currentSubject = await MentorshipSubjectProgress.findOne({ student: s._id, state: 'current' }).lean();
+
+                const cComp = currentSubject?.completedTasks || 0;
+                const cTotal = currentSubject?.totalTasks || 0;
+                let posSubject = currentSubject?.subjectName || '';
+                let posTasks = cTotal > 0 ? `${cComp}/${cTotal} tasks` : (currentSubject ? 'Active' : '');
+
+                if (!posSubject && latestTask) {
+                    posSubject = latestTask.tag ? (latestTask.tag.charAt(0).toUpperCase() + latestTask.tag.slice(1)) : 'General Studies';
+                    posTasks = latestTask.dayNumber ? `Day ${latestTask.dayNumber}` : 'In Progress';
+                }
+                if (!posSubject) {
+                    posSubject = 'General Studies';
+                    posTasks = '—';
+                }
 
                 // Mentor note info
                 const mentorNote = await MentorNote.findOne({ student: s._id }).lean();
 
                 return {
-                    id: s._id,
-                    name: s.name || 'Student',
+                    id: s._id.toString(),
+                    name: s.name && s.name !== 'Student' ? s.name : (s.phone ? `Student (${s.phone})` : (s.name || 'Student')),
+                    displayName: s.name || 'Student',
                     email: s.email || '',
                     phone: s.phone || '',
-                    startDate: s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '12 Jan 2026',
-                    posSubject: currentSubject?.subjectName || 'GS Foundation',
-                    posTasks: `${currentSubject?.completedTasks || 3}/${currentSubject?.totalTasks || 12} tasks`,
+                    startDate: s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
+                    posSubject,
+                    posTasks,
                     deltaTasks,
                     deltaLog,
                     uploadsPending,
                     evaluated,
-                    subjects: `${completedSubjects} / 11`,
-                    optional: 'PSIR',
-                    attempts: 1,
-                    mains: 'Yes',
+                    subjects: totalSubjectsCount > 0 ? `${completedSubjects} / ${totalSubjectsCount}` : `${completedSubjects}`,
+                    optional: s.optionalSubject || '—',
+                    attempts: s.upscAttempts !== undefined ? s.upscAttempts : '—',
+                    mains: s.mainsQualified ? 'Yes' : 'No',
                     isTaggedInactive: mentorNote?.isTaggedInactive || false,
+                    risk: deltaTasks + deltaLog,
                 };
             })
         );
@@ -118,7 +145,33 @@ export const getMentorChats = async (req: AuthRequest, res: Response): Promise<v
             return;
         }
 
-        const chats = await MentorChat.find({ threadType: 'mentor' })
+        let query: any = {};
+        if (req.user?.role !== 'admin') {
+            const mentor = await User.findById(mentorId).lean();
+            const assignedIds = Array.isArray(mentor?.assignedStudents) ? mentor.assignedStudents : [];
+            let assignedStudents = await User.find({
+                role: 'student',
+                $or: [
+                    { assignedMentor: mentorId },
+                    { _id: { $in: assignedIds } },
+                ],
+            }).select('_id').lean();
+
+            // Fallback: if mentor has no assigned students yet, allow fallback roster students
+            if (assignedStudents.length === 0) {
+                assignedStudents = await User.find({ role: 'student' }).limit(50).select('_id').lean();
+            }
+            const studentIds = assignedStudents.map(s => s._id);
+
+            query = {
+                $or: [
+                    { mentor: mentorId },
+                    { student: { $in: studentIds } },
+                ],
+            };
+        }
+
+        const chats = await MentorChat.find(query)
             .populate('student', 'name email phone')
             .sort({ createdAt: 1 })
             .lean();
@@ -149,7 +202,9 @@ export const sendMentorChat = async (req: AuthRequest, res: Response): Promise<v
             isRead: false,
         });
 
-        res.status(201).json({ success: true, data: chat });
+        const populated = await MentorChat.findById(chat._id).populate('student', 'name email phone').lean();
+
+        res.status(201).json({ success: true, data: populated || chat });
     } catch (error) {
         console.error('sendMentorChat error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -162,7 +217,8 @@ export const sendMentorChat = async (req: AuthRequest, res: Response): Promise<v
 export const getMentorEvaluations = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const submissions = await MainsSubmission.find()
-            .populate('student', 'name email')
+            .populate('student', 'name email phone')
+            .populate('mentor', 'name email')
             .sort({ createdAt: -1 })
             .lean();
 
@@ -294,6 +350,120 @@ export const saveMenteeNotes = async (req: AuthRequest, res: Response): Promise<
         res.json({ success: true, data: note, message: 'Mentor notes saved successfully' });
     } catch (error) {
         console.error('saveMenteeNotes error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @desc    Get pending break, reorder, and pause intimation requests for mentor's mentees
+// @route   GET /api/mentor-portal/requests
+// @access  Private (Mentor)
+export const getMentorRequests = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const mentorId = req.user?._id;
+        if (!mentorId) {
+            res.status(401).json({ success: false, message: 'Unauthorized' });
+            return;
+        }
+
+        const mentor = await User.findById(mentorId).lean();
+        const assignedStudentIds = mentor?.assignedStudents || [];
+
+        let query: any = {};
+        if (req.user?.role === 'admin') {
+            query = {};
+        } else {
+            query = {
+                $or: [
+                    { mentor: mentorId },
+                    { student: { $in: assignedStudentIds } },
+                ],
+            };
+        }
+
+        const requests = await MentorshipRequest.find(query)
+            .populate('student', 'name email phone mentorshipAccountStatus')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        res.json({ success: true, data: requests });
+    } catch (error) {
+        console.error('getMentorRequests error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @desc    Approve or reject a student break request or reorder request
+// @route   POST /api/mentor-portal/requests/:id/review
+// @access  Private (Mentor)
+export const reviewMentorRequest = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const mentorId = req.user?._id;
+        const { id } = req.params;
+        const { action } = req.body; // 'approve' | 'reject' | 'acknowledge'
+
+        if (!mentorId) {
+            res.status(401).json({ success: false, message: 'Unauthorized' });
+            return;
+        }
+
+        const request = await MentorshipRequest.findById(id);
+        if (!request) {
+            res.status(404).json({ success: false, message: 'Request not found' });
+            return;
+        }
+
+        const student = await User.findById(request.student);
+        if (!student) {
+            res.status(404).json({ success: false, message: 'Student not found' });
+            return;
+        }
+
+        const isApprove = action === 'approve';
+        request.status = isApprove ? 'approved' : 'rejected';
+        request.reviewedAt = new Date();
+        request.reviewedBy = mentorId;
+        await request.save();
+
+        if (request.type === 'break') {
+            student.mentorshipAccountStatus = isApprove ? 'break' : 'active';
+            await student.save();
+        } else if (request.type === 'reorder') {
+            if (isApprove && request.details?.proposedOrder) {
+                student.mentorshipCourseOrder = request.details.proposedOrder;
+                await student.save();
+
+                // Also update MentorshipSubjectProgress orders
+                for (let i = 0; i < request.details.proposedOrder.length; i++) {
+                    const identifier = request.details.proposedOrder[i];
+                    await MentorshipSubjectProgress.updateMany(
+                        {
+                            student: student._id,
+                            $or: [{ courseId: identifier }, { subjectName: identifier }],
+                        },
+                        { order: i }
+                    );
+                }
+            }
+        }
+
+        // Intimate student in chat
+        await MentorChat.create({
+            student: student._id,
+            threadType: 'mentor',
+            senderRole: 'mentor',
+            text: isApprove
+                ? `Your ${request.type === 'break' ? 'Break' : 'Subject Reorder'} request has been APPROVED.`
+                : `Your ${request.type === 'break' ? 'Break' : 'Subject Reorder'} request was not approved. Please consult during our next session.`,
+            isRead: false,
+        });
+
+        res.json({
+            success: true,
+            data: request,
+            message: `Request successfully ${isApprove ? 'approved' : 'rejected'}`,
+        });
+    } catch (error) {
+        console.error('reviewMentorRequest error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };

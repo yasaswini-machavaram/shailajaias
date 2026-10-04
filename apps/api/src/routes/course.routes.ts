@@ -7,6 +7,9 @@ import {
     updateCourse,
     updateLockStatus,
     deleteCourse,
+    getCourseTaskCards,
+    updateCourseTaskCards,
+    getTestsCatalog,
 } from '../controllers/course.controller.js';
 import { protect, adminOnly } from '../middlewares/auth.middleware.js';
 
@@ -17,10 +20,25 @@ const router: ReturnType<typeof Router> = Router();
 // @access  Public
 router.get('/', getCourses);
 
+// @route   GET /api/courses/tests-catalog
+// @desc    Get catalog of PTS and MTS tests for sequencer dropdowns
+// @access  Private/Admin
+router.get('/tests-catalog', protect, adminOnly, getTestsCatalog);
+
 // @route   GET /api/courses/tree/:id?
 // @desc    Get full course tree for root node or all
 // @access  Public
 router.get('/tree/:id?', getCourseTree);
+
+// @route   GET /api/courses/:id/task-cards
+// @desc    Get task cards sequence for a course
+// @access  Private/Admin
+router.get('/:id/task-cards', protect, adminOnly, getCourseTaskCards);
+
+// @route   PUT /api/courses/:id/task-cards
+// @desc    Update task cards sequence for a course
+// @access  Private/Admin
+router.put('/:id/task-cards', protect, adminOnly, updateCourseTaskCards);
 
 // @route   GET /api/courses/:id
 // @desc    Get single course node with immediate children

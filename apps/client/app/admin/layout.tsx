@@ -73,6 +73,12 @@ const DoubtIcon = () => (
     </svg>
 );
 
+const TaskCardIcon = () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+    </svg>
+);
+
 const navItems = [
     { href: '/admin', icon: HomeIcon, label: 'Dashboard' },
     { href: '/admin/articles', icon: ArticleIcon, label: 'Articles' },
@@ -81,6 +87,7 @@ const navItems = [
     { href: '/admin/quizzes', icon: QuizIcon, label: 'Quizzes' },
     { href: '/admin/courses', icon: CourseIcon, label: 'Courses' },
     { href: '/admin/mentorship', icon: CourseIcon, label: 'Mentorship Cards' },
+    { href: '/admin/task-cards', icon: TaskCardIcon, label: 'Task Cards' },
     { href: '/admin/master-tags', icon: ResourceIcon, label: 'Master Tags' },
     { href: '/admin/resources', icon: ResourceIcon, label: 'Resources' },
 

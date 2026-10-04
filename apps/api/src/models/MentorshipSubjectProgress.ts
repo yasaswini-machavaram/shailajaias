@@ -4,6 +4,7 @@ export interface IMentorshipSubjectProgress extends Document {
     student: mongoose.Types.ObjectId;
     track: 'GS' | 'Optional' | 'Essay' | 'CA' | 'CSAT';
     subjectName: string;
+    courseId?: mongoose.Types.ObjectId;
     state: 'current' | 'done' | 'upcoming' | 'paused';
     completedTasks: number;
     totalTasks: number;
@@ -19,6 +20,7 @@ const MentorshipSubjectProgressSchema: Schema = new Schema(
         student: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
         track: { type: String, enum: ['GS', 'Optional', 'Essay', 'CA', 'CSAT'], required: true },
         subjectName: { type: String, required: true },
+        courseId: { type: Schema.Types.ObjectId, ref: 'CourseNode' },
         state: { type: String, enum: ['current', 'done', 'upcoming', 'paused'], default: 'upcoming' },
         completedTasks: { type: Number, default: 0 },
         totalTasks: { type: Number, default: 10 },

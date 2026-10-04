@@ -4,7 +4,7 @@ export interface IMentorChat extends Document {
     student: mongoose.Types.ObjectId;
     mentor?: mongoose.Types.ObjectId;
     threadType: 'mentor' | 'desk';
-    senderRole: 'student' | 'mentor' | 'desk';
+    senderRole: 'student' | 'mentor' | 'desk' | 'system';
     text: string;
     attachments?: string[];
     isRead: boolean;
@@ -16,7 +16,7 @@ const MentorChatSchema: Schema = new Schema(
         student: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
         mentor: { type: Schema.Types.ObjectId, ref: 'User', index: true },
         threadType: { type: String, enum: ['mentor', 'desk'], default: 'mentor' },
-        senderRole: { type: String, enum: ['student', 'mentor', 'desk'], required: true },
+        senderRole: { type: String, enum: ['student', 'mentor', 'desk', 'system'], required: true },
         text: { type: String, required: true },
         attachments: [{ type: String }],
         isRead: { type: Boolean, default: false },

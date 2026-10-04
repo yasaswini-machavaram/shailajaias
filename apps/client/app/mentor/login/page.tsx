@@ -65,6 +65,11 @@ export default function MentorLoginPage() {
                     <p className="text-[10px] text-center text-slate-400 mt-4">
                         Credentials are provided by the admin. Contact admin for access.
                     </p>
+                    <div className="text-center mt-3">
+                        <a href="/" className="text-xs text-teal-600 hover:text-teal-700 font-bold hover:underline">
+                            ← Back to Main Website
+                        </a>
+                    </div>
                 </form>
             </div>
         </div>

@@ -25,4 +25,5 @@ export { MentorshipSubjectProgress, type IMentorshipSubjectProgress } from './Me
 export { MentorChat, type IMentorChat } from './MentorChat.js';export { MasterTag, type IMasterTag } from './MasterTag.js';
 export { MentorBroadcast, type IMentorBroadcast } from './MentorBroadcast.js';
 export { MentorNote, type IMentorNote, type IMentorSessionNote } from './MentorNote.js';
+export { MentorshipRequest, type IMentorshipRequest, type MentorshipRequestType, type MentorshipRequestStatus } from './MentorshipRequest.js';
 

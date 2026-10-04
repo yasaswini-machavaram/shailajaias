@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '../AuthContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -254,12 +255,20 @@ export default function AdminMentorshipPage() {
                         Add, update, or remove course cards displayed on the Mentorship landing page.
                     </p>
                 </div>
-                <button
-                    onClick={handleOpenCreateModal}
-                    className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold text-xs rounded-xl shadow transition-all hover:scale-[1.02]"
-                >
-                    + Add Mentorship Card
-                </button>
+                <div className="flex items-center gap-3">
+                    <Link
+                        href="/admin/task-cards"
+                        className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-xl shadow border border-slate-700 transition-all flex items-center gap-1.5"
+                    >
+                        <span>🗂️</span> Task Card Sequencer ↗
+                    </Link>
+                    <button
+                        onClick={handleOpenCreateModal}
+                        className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold text-xs rounded-xl shadow transition-all hover:scale-[1.02]"
+                    >
+                        + Add Mentorship Card
+                    </button>
+                </div>
             </div>
 
             {/* Courses Table / Cards List */}

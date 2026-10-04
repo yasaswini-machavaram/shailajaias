@@ -7,6 +7,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 const NAV = [
     { id: 'roster', label: 'Roster' },
+    { id: 'requests', label: 'Requests' },
     { id: 'chat', label: 'Chat' },
     { id: 'evaluation', label: 'Evaluation' },
     { id: 'broadcast', label: 'Broadcast' },
@@ -17,7 +18,7 @@ const NAV = [
 const BC_FILTERS = ['All students', 'All inactive', 'Δ Log 1', 'Δ Log 2', 'Δ Log 3+', 'Δ Task 2', 'Δ Task 3+', 'Uploads pending', 'Mains qualified'];
 
 export default function MentorDashboard() {
-    const { user, token } = useMentorAuth();
+    const { user, token, logout } = useMentorAuth();
 
     const [activeTab, setActiveTab] = useState<string>('roster');
 
@@ -29,6 +30,12 @@ export default function MentorDashboard() {
     const [sortKey, setSortKey] = useState<string>('risk');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
     const [showExtraCols, setShowExtraCols] = useState(false);
+
+    // Requests state
+    const [requestsList, setRequestsList] = useState<any[]>([]);
+    const [requestsFilter, setRequestsFilter] = useState<'pending' | 'all' | 'reviewed'>('pending');
+    const [isReviewingId, setIsReviewingId] = useState<string | null>(null);
+    const [requestsSuccessMsg, setRequestsSuccessMsg] = useState<string>('');
 
     // Selected Mentee for Dossier
     const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
@@ -61,8 +68,22 @@ export default function MentorDashboard() {
             fetchRoster();
             fetchEvaluations();
             fetchChats();
+            fetchRequests();
         }
     }, [token]);
+
+    useEffect(() => {
+        if (!token || activeTab !== 'chat') return;
+        fetchChats();
+        if (!openThreadId && rosterData.length > 0) {
+            setOpenThreadId(rosterData[0].id);
+            if (!selectedStudent) setSelectedStudent(rosterData[0]);
+        }
+        const interval = setInterval(() => {
+            fetchChats();
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [token, activeTab, openThreadId, rosterData]);
 
     const fetchRoster = async () => {
         setIsLoading(true);
@@ -73,9 +94,9 @@ export default function MentorDashboard() {
             const data = await res.json();
             if (data.success) {
                 setRosterData(data.data || []);
-                if (data.data?.length > 0 && !selectedStudent) {
-                    setSelectedStudent(data.data[0]);
-                    setOpenThreadId(data.data[0].id);
+                if (data.data?.length > 0) {
+                    if (!selectedStudent) setSelectedStudent(data.data[0]);
+                    if (!openThreadId) setOpenThreadId(data.data[0].id);
                 }
             }
         } catch (e) {
@@ -128,24 +149,65 @@ export default function MentorDashboard() {
         }
     };
 
+    const fetchRequests = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/mentor-portal/requests`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            if (data.success) {
+                setRequestsList(data.data || []);
+            }
+        } catch (e) {
+            console.error('Fetch requests error:', e);
+        }
+    };
+
+    const handleReviewRequest = async (requestId: string, action: 'approve' | 'reject' | 'acknowledge') => {
+        setIsReviewingId(requestId);
+        try {
+            const res = await fetch(`${API_URL}/api/mentor-portal/requests/${requestId}/review`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ action }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setRequestsSuccessMsg(data.message || `Request ${action}d successfully`);
+                fetchRequests();
+                fetchRoster();
+                setTimeout(() => setRequestsSuccessMsg(''), 4000);
+            }
+        } catch (e) {
+            console.error('Review request error:', e);
+        } finally {
+            setIsReviewingId(null);
+        }
+    };
+
     const handleSendMentorChat = async () => {
         if (!chatInput.trim() || !openThreadId) return;
         const text = chatInput.trim();
         setChatInput('');
 
-        setChatMessages((prev) => [
-            ...prev,
-            { student: openThreadId, senderRole: 'mentor', text, createdAt: new Date().toISOString() },
-        ]);
-
         try {
-            await fetch(`${API_URL}/api/mentor-portal/chat/send`, {
+            const res = await fetch(`${API_URL}/api/mentor-portal/chat/send`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ studentId: openThreadId, text }),
             });
+            const data = await res.json();
+            if (data.success && data.data) {
+                setChatMessages((prev) => [...prev, data.data]);
+            } else {
+                fetchChats();
+            }
         } catch (e) {
             console.error('Send mentor chat error:', e);
+            fetchChats();
         }
     };
 
@@ -209,7 +271,13 @@ export default function MentorDashboard() {
 
     // Filter and Sort Roster
     const filteredRoster = rosterData.filter((r) => {
-        const matchesSearch = !searchTerm || r.name.toLowerCase().includes(searchTerm.toLowerCase()) || r.id.includes(searchTerm);
+        const term = searchTerm.trim().toLowerCase();
+        const matchesSearch = !term ||
+            (r.name && r.name.toLowerCase().includes(term)) ||
+            (r.displayName && r.displayName.toLowerCase().includes(term)) ||
+            (r.id && r.id.toLowerCase().includes(term)) ||
+            (r.phone && r.phone.includes(term)) ||
+            (r.email && r.email.toLowerCase().includes(term));
         if (filterStatus === 'Not logged 7d+' && r.deltaLog < 7) return false;
         if (filterStatus === 'Tasks stalled 5d+' && r.deltaTasks < 5) return false;
         if (filterStatus === 'Uploads pending' && r.uploadsPending === 0) return false;
@@ -247,12 +315,21 @@ export default function MentorDashboard() {
                     <nav className="space-y-1.5">
                         {NAV.map((n) => {
                             const on = activeTab === n.id;
+                            const pendingReqCount = requestsList.filter((r) => r.status === 'pending').length;
                             return (
                                 <button
                                     key={n.id}
                                     onClick={() => {
                                         setActiveTab(n.id);
                                         if (n.id === 'mentee' && selectedStudent) fetchDossier(selectedStudent.id);
+                                        if (n.id === 'requests') fetchRequests();
+                                        if (n.id === 'chat') {
+                                            fetchChats();
+                                            if (!openThreadId && rosterData.length > 0) {
+                                                setOpenThreadId(rosterData[0].id);
+                                                if (!selectedStudent) setSelectedStudent(rosterData[0]);
+                                            }
+                                        }
                                     }}
                                     className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${
                                         on
@@ -261,18 +338,48 @@ export default function MentorDashboard() {
                                     }`}
                                 >
                                     <span>{n.label}</span>
-                                    {n.id === 'chat' && <span className="px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 text-[10px] font-bold">12</span>}
-                                    {n.id === 'evaluation' && <span className="px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 text-[10px] font-bold">8</span>}
-                                    {n.id === 'analytics' && <span className="px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 text-[10px] font-bold">3</span>}
+                                    {n.id === 'requests' && pendingReqCount > 0 && (
+                                        <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold animate-pulse">
+                                            {pendingReqCount}
+                                        </span>
+                                    )}
+                                    {n.id === 'chat' && chatMessages.length > 0 && (
+                                        <span className="px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 text-[10px] font-bold">{chatMessages.length}</span>
+                                    )}
+                                    {n.id === 'evaluation' && evalSubmissions.filter((s) => s.status !== 'evaluated').length > 0 && (
+                                        <span className="px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 text-[10px] font-bold">
+                                            {evalSubmissions.filter((s) => s.status !== 'evaluated').length}
+                                        </span>
+                                    )}
+                                    {n.id === 'analytics' && rosterData.filter((r) => r.deltaTasks >= 5 || r.deltaLog >= 7).length > 0 && (
+                                        <span className="px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 text-[10px] font-bold">
+                                            {rosterData.filter((r) => r.deltaTasks >= 5 || r.deltaLog >= 7).length}
+                                        </span>
+                                    )}
                                 </button>
                             );
                         })}
                     </nav>
                 </div>
 
-                <div className="pt-4 border-t border-slate-700">
-                    <p className="text-xs font-bold text-white">{user?.name || 'Mentor'}</p>
-                    <p className="text-[10px] text-slate-300 truncate">{user?.email}</p>
+                <div className="pt-4 border-t border-slate-700/80 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div className="truncate pr-2">
+                            <p className="text-xs font-bold text-white truncate">{user?.name || 'Mentor'}</p>
+                            <p className="text-[10px] text-slate-300 truncate">{user?.email}</p>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            Active
+                        </span>
+                    </div>
+
+                    <button
+                        onClick={logout}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/30 transition-all shadow-xs"
+                    >
+                        <span>⎋</span>
+                        <span>Sign Out</span>
+                    </button>
                 </div>
             </aside>
 
@@ -378,7 +485,14 @@ export default function MentorDashboard() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#eee6d4] text-xs">
-                                        {sortedRoster.map((r) => (
+                                        {sortedRoster.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={showExtraCols ? 12 : 9} className="py-12 text-center text-[#6f6754] text-xs">
+                                                    No students found matching your criteria.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            sortedRoster.map((r) => (
                                             <tr
                                                 key={r.id}
                                                 onClick={() => {
@@ -389,7 +503,16 @@ export default function MentorDashboard() {
                                                 className="hover:bg-[#efe9dc]/60 cursor-pointer transition-colors"
                                             >
                                                 <td className="py-3.5 px-4 font-bold text-[#1d3557]">{r.id.slice(-6)}</td>
-                                                <td className="py-3.5 px-4 font-bold text-[#221f1a]">{r.name}</td>
+                                                <td className="py-3.5 px-4">
+                                                    <div className="font-bold text-[#221f1a]">
+                                                        {r.displayName && r.displayName !== 'Student' ? r.displayName : (r.phone ? `Student (${r.phone})` : r.name)}
+                                                    </div>
+                                                    {r.phone && (
+                                                        <span className="text-[11px] text-[#6f6754] font-mono block">
+                                                            📱 {r.phone}
+                                                        </span>
+                                                    )}
+                                                </td>
                                                 <td className="py-3.5 px-4 text-[#6f6754]">{r.startDate}</td>
                                                 <td className="py-3.5 px-4">
                                                     <span className="font-bold text-[#221f1a]">{r.posSubject}</span>
@@ -408,7 +531,8 @@ export default function MentorDashboard() {
                                                 {showExtraCols && <td className="py-3.5 px-4 text-right text-[#6f6754]">{r.attempts}</td>}
                                                 {showExtraCols && <td className="py-3.5 px-4 text-[#6f6754]">{r.mains}</td>}
                                             </tr>
-                                        ))}
+                                        ))
+                                    )}
                                     </tbody>
                                 </table>
                             </div>
@@ -416,7 +540,317 @@ export default function MentorDashboard() {
                     </div>
                 )}
 
-                {/* ----------------- 2. CHAT MODULE ----------------- */}
+                {/* ----------------- 2. REQUESTS & APPROVALS MODULE ----------------- */}
+                {activeTab === 'requests' && (
+                    <div className="space-y-6">
+                        {/* Header & Refresh */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div>
+                                <h2 className="text-2xl font-serif font-bold text-[#1d3557]">Student Requests &amp; Approvals</h2>
+                                <p className="text-xs text-[#6f6754]">
+                                    Review student requests for study breaks, subject sequence reordering, and view subject pause intimations.
+                                </p>
+                            </div>
+                            <button
+                                onClick={fetchRequests}
+                                className="px-4 py-2 bg-[#fdfbf6] border border-[#ddd4c1] rounded-xl text-xs font-bold text-[#4a4437] hover:bg-[#efe9dc] flex items-center gap-1.5 transition-colors"
+                            >
+                                <span>↻</span> Refresh Requests
+                            </button>
+                        </div>
+
+                        {/* KPI Cards */}
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                            <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-2xl p-5">
+                                <span className="text-[10px] font-bold text-[#8a3b2e] uppercase">PENDING ACTION</span>
+                                <p className="text-2xl font-bold text-[#8a3b2e] mt-1">
+                                    {requestsList.filter((r) => r.status === 'pending').length}
+                                </p>
+                            </div>
+                            <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-2xl p-5">
+                                <span className="text-[10px] font-bold text-amber-700 uppercase">BREAK REQUESTS</span>
+                                <p className="text-2xl font-bold text-[#221f1a] mt-1">
+                                    {requestsList.filter((r) => r.type === 'break' && r.status === 'pending').length}
+                                </p>
+                            </div>
+                            <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-2xl p-5">
+                                <span className="text-[10px] font-bold text-indigo-700 uppercase">REORDER REQUESTS</span>
+                                <p className="text-2xl font-bold text-[#221f1a] mt-1">
+                                    {requestsList.filter((r) => r.type === 'reorder' && r.status === 'pending').length}
+                                </p>
+                            </div>
+                            <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-2xl p-5">
+                                <span className="text-[10px] font-bold text-emerald-800 uppercase">RESOLVED / ACK</span>
+                                <p className="text-2xl font-bold text-emerald-800 mt-1">
+                                    {requestsList.filter((r) => r.status !== 'pending').length}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Success Notice Banner */}
+                        {requestsSuccessMsg && (
+                            <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold flex items-center justify-between">
+                                <span>✓ {requestsSuccessMsg}</span>
+                                <button onClick={() => setRequestsSuccessMsg('')} className="text-emerald-600 hover:text-emerald-900 font-bold ml-2">✕</button>
+                            </div>
+                        )}
+
+                        {/* Filter Bar */}
+                        <div className="flex items-center gap-2">
+                            {[
+                                { id: 'pending', label: `Pending (${requestsList.filter((r) => r.status === 'pending').length})` },
+                                { id: 'all', label: `All Requests (${requestsList.length})` },
+                                { id: 'reviewed', label: `History (${requestsList.filter((r) => r.status !== 'pending').length})` },
+                            ].map((f) => (
+                                <button
+                                    key={f.id}
+                                    onClick={() => setRequestsFilter(f.id as any)}
+                                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                        requestsFilter === f.id ? 'bg-[#1d3557] text-[#f7f4ec]' : 'bg-[#efe9dc] text-[#4a4437] hover:bg-[#e3dac6]'
+                                    }`}
+                                >
+                                    {f.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Requests List */}
+                        <div className="space-y-4">
+                            {requestsList
+                                .filter((r) => {
+                                    if (requestsFilter === 'pending') return r.status === 'pending';
+                                    if (requestsFilter === 'reviewed') return r.status !== 'pending';
+                                    return true;
+                                })
+                                .length === 0 ? (
+                                <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-3xl p-12 text-center space-y-3">
+                                    <div className="w-12 h-12 rounded-full bg-[#efe9dc] text-[#1d3557] flex items-center justify-center mx-auto text-xl font-bold">✓</div>
+                                    <h3 className="font-serif font-bold text-base text-[#1d3557]">No requests in this view</h3>
+                                    <p className="text-xs text-[#6f6754]">All student requests have been processed or none are currently pending.</p>
+                                </div>
+                            ) : (
+                                requestsList
+                                    .filter((r) => {
+                                        if (requestsFilter === 'pending') return r.status === 'pending';
+                                        if (requestsFilter === 'reviewed') return r.status !== 'pending';
+                                        return true;
+                                    })
+                                    .map((req) => {
+                                        const isPending = req.status === 'pending';
+                                        const studentName = req.student?.name && req.student?.name !== 'Student' 
+                                            ? req.student.name 
+                                            : (req.student?.phone ? `Student (${req.student.phone})` : (req.student?.name || 'Student'));
+                                        const studentEmail = req.student?.email || '';
+                                        const studentPhone = req.student?.phone || '';
+                                        const studentStatus = req.student?.mentorshipAccountStatus || 'active';
+
+                                        return (
+                                            <div
+                                                key={req._id}
+                                                className={`bg-[#fdfbf6] border rounded-3xl p-6 shadow-xs space-y-4 transition-all ${
+                                                    isPending ? 'border-[#1d3557]/40 ring-1 ring-[#1d3557]/10' : 'border-[#ddd4c1]'
+                                                }`}
+                                            >
+                                                {/* Card Header */}
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#eee6d4]">
+                                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                                        <span className="font-serif font-bold text-base text-[#1d3557]">{studentName}</span>
+                                                        {studentPhone && <span className="text-xs text-[#6f6754] font-mono">📱 {studentPhone}</span>}
+                                                        {studentEmail && <span className="text-xs text-[#6f6754]">({studentEmail})</span>}
+                                                        <span
+                                                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                                                studentStatus === 'break'
+                                                                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                            }`}
+                                                        >
+                                                            {studentStatus === 'break' ? 'On Break' : 'Active'}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        {/* Type Badge */}
+                                                        {req.type === 'break' && (
+                                                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                                                                🌴 Study Break Request
+                                                            </span>
+                                                        )}
+                                                        {req.type === 'reorder' && (
+                                                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                                                                🔀 Subject Reorder Request
+                                                            </span>
+                                                        )}
+                                                        {req.type === 'pause_intimation' && (
+                                                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                                                                ⏸ Subject Paused (Intimation)
+                                                            </span>
+                                                        )}
+
+                                                        {/* Status Badge */}
+                                                        {req.status === 'pending' && (
+                                                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500 text-white animate-pulse">
+                                                                Pending Review
+                                                            </span>
+                                                        )}
+                                                        {req.status === 'approved' && (
+                                                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                                ✓ Approved
+                                                            </span>
+                                                        )}
+                                                        {req.status === 'rejected' && (
+                                                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                                                                ✕ Rejected
+                                                            </span>
+                                                        )}
+                                                        {req.status === 'acknowledged' && (
+                                                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                                                ✓ Acknowledged
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Break Details */}
+                                                {req.type === 'break' && (
+                                                    <div className="space-y-2 text-xs">
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#efe9dc]/50 p-4 rounded-2xl">
+                                                            <div>
+                                                                <span className="text-[10px] font-bold text-[#6f6754] uppercase block">Requested Duration</span>
+                                                                <span className="font-bold text-[#1d3557] text-sm">
+                                                                    {req.requestedBreakDays || req.details?.requestedBreakDays || 7} Days
+                                                                </span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[10px] font-bold text-[#6f6754] uppercase block">Date Requested</span>
+                                                                <span className="font-medium text-[#221f1a]">
+                                                                    {new Date(req.createdAt).toLocaleDateString('en-IN', {
+                                                                        day: 'numeric',
+                                                                        month: 'short',
+                                                                        year: 'numeric',
+                                                                        hour: '2-digit',
+                                                                        minute: '2-digit',
+                                                                    })}
+                                                                </span>
+                                                            </div>
+                                                            {req.reason && (
+                                                                <div className="sm:col-span-2">
+                                                                    <span className="text-[10px] font-bold text-[#6f6754] uppercase block">Student Reason / Note</span>
+                                                                    <p className="text-xs text-[#221f1a] italic bg-[#fdfbf6] p-2.5 rounded-xl border border-[#ddd4c1] mt-1">
+                                                                        &ldquo;{req.reason}&rdquo;
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[11px] text-[#6f6754]">
+                                                            ℹ Approving will update the student's status to <strong>ON BREAK</strong> and notify them in chat.
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {/* Reorder Details */}
+                                                {req.type === 'reorder' && (
+                                                    <div className="space-y-3 text-xs">
+                                                        <div className="bg-[#efe9dc]/50 p-4 rounded-2xl space-y-2">
+                                                            <span className="text-[10px] font-bold text-[#6f6754] uppercase block">Proposed New Course / Subject Sequence</span>
+                                                            {req.details?.proposedOrder && req.details.proposedOrder.length > 0 ? (
+                                                                <div className="flex flex-wrap items-center gap-2 pt-1">
+                                                                    {req.details.proposedOrder.map((subjId: string, idx: number) => {
+                                                                        const displayName = req.details?.namesMap?.[subjId] || subjId;
+                                                                        return (
+                                                                            <div key={subjId} className="flex items-center gap-1.5">
+                                                                                <span className="px-3 py-1.5 bg-[#fdfbf6] border border-[#ddd4c1] rounded-xl font-bold text-xs text-[#1d3557] shadow-xs">
+                                                                                    <span className="text-[#8a3b2e] mr-1">#{idx + 1}</span> {displayName}
+                                                                                </span>
+                                                                                {idx < req.details.proposedOrder.length - 1 && (
+                                                                                    <span className="text-[#6f6754] font-bold">→</span>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-xs text-[#6f6754]">Custom sequence proposed.</p>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[11px] text-[#6f6754]">
+                                                            ℹ Approving will update the student's roadmap and carousel task cards to this exact sequence.
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {/* Pause Intimation Details */}
+                                                {req.type === 'pause_intimation' && (
+                                                    <div className="space-y-2 text-xs">
+                                                        <div className="bg-[#efe9dc]/50 p-4 rounded-2xl space-y-2">
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-[10px] font-bold text-[#6f6754] uppercase">Subject Paused</span>
+                                                                <span className="font-bold text-[#8a3b2e] bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                                                                    {req.details?.subjectName || 'Current Module'}
+                                                                </span>
+                                                            </div>
+                                                            {req.reason && (
+                                                                <div>
+                                                                    <span className="text-[10px] font-bold text-[#6f6754] uppercase block">Reason</span>
+                                                                    <p className="text-xs text-[#221f1a] italic bg-[#fdfbf6] p-2.5 rounded-xl border border-[#ddd4c1] mt-1">
+                                                                        &ldquo;{req.reason}&rdquo;
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[11px] text-[#6f6754]">
+                                                            ℹ Student has paused this subject. They can resume anytime from their Roadmap dashboard.
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {/* Action Buttons for Pending */}
+                                                {isPending && (
+                                                    <div className="flex items-center justify-end gap-3 pt-2">
+                                                        <button
+                                                            disabled={isReviewingId === req._id}
+                                                            onClick={() => handleReviewRequest(req._id, 'reject')}
+                                                            className="px-4 py-2 border border-rose-300 text-rose-700 bg-white hover:bg-rose-50 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                                                        >
+                                                            {isReviewingId === req._id ? 'Processing...' : 'Reject Request'}
+                                                        </button>
+                                                        <button
+                                                            disabled={isReviewingId === req._id}
+                                                            onClick={() => handleReviewRequest(req._id, 'approve')}
+                                                            className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                                                        >
+                                                            <span>✓</span>
+                                                            <span>
+                                                                {isReviewingId === req._id
+                                                                    ? 'Approving...'
+                                                                    : req.type === 'pause_intimation'
+                                                                    ? 'Acknowledge'
+                                                                    : 'Approve Request'}
+                                                            </span>
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {!isPending && req.reviewedAt && (
+                                                    <div className="pt-2 text-right text-[10px] text-[#6f6754]">
+                                                        Reviewed on{' '}
+                                                        {new Date(req.reviewedAt).toLocaleDateString('en-IN', {
+                                                            day: 'numeric',
+                                                            month: 'short',
+                                                            year: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit',
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* ----------------- 3. CHAT MODULE ----------------- */}
                 {activeTab === 'chat' && (
                     <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-3xl shadow-sm overflow-hidden grid grid-cols-1 md:grid-cols-3 min-h-[520px]">
                         {/* Threads Sidebar */}
@@ -446,7 +880,9 @@ export default function MentorDashboard() {
                                                 }`}
                                             >
                                                 <div>
-                                                    <p className="text-xs font-bold text-[#221f1a]">{r.name}</p>
+                                                    <p className="text-xs font-bold text-[#221f1a]">
+                                                        {r.displayName && r.displayName !== 'Student' ? r.displayName : (r.phone ? `Student (${r.phone})` : r.name)}
+                                                    </p>
                                                     <p className="text-[10px] text-[#6f6754]">{r.posSubject} • {r.posTasks}</p>
                                                 </div>
                                                 <button
@@ -469,7 +905,11 @@ export default function MentorDashboard() {
                             <div className="border-b border-[#eee6d4] pb-3 flex items-center justify-between">
                                 <div>
                                     <h3 className="font-serif font-bold text-base text-[#1d3557]">
-                                        {rosterData.find((r) => r.id === openThreadId)?.name || 'Select Student'}
+                                        {(() => {
+                                            const r = rosterData.find((x) => x.id === openThreadId);
+                                            if (!r) return 'Select Student';
+                                            return r.displayName && r.displayName !== 'Student' ? r.displayName : (r.phone ? `Student (${r.phone})` : r.name);
+                                        })()}
                                     </h3>
                                     <p className="text-[10px] text-[#6f6754]">Assigned Mentee Thread</p>
                                 </div>
@@ -490,9 +930,28 @@ export default function MentorDashboard() {
 
                             {/* Messages List */}
                             <div className="space-y-3 flex-1 overflow-y-auto max-h-[360px] pr-2">
-                                {chatMessages
-                                    .filter((m) => m.student === openThreadId || m.senderRole)
-                                    .map((m, idx) => {
+                                {(() => {
+                                    const threadMessages = chatMessages.filter(
+                                        (m) => String(m.student?._id || m.student || '') === String(openThreadId)
+                                    );
+                                    if (threadMessages.length === 0) {
+                                        return (
+                                            <div className="h-full flex flex-col items-center justify-center text-center p-8 text-[#8f8876]">
+                                                <p className="text-xs font-medium">No messages in this mentee thread yet.</p>
+                                                <p className="text-[11px] mt-1 text-[#6f6754]">Send a message to reach out to this mentee.</p>
+                                            </div>
+                                        );
+                                    }
+                                    return threadMessages.map((m, idx) => {
+                                        if (m.senderRole === 'system') {
+                                            return (
+                                                <div key={idx} className="flex justify-center my-2">
+                                                    <div className="bg-[#ede7d9] text-[#554e41] text-[11px] px-3.5 py-1.5 rounded-full border border-[#ddd4c1] max-w-[85%] text-center">
+                                                        🔔 {m.text}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
                                         const mine = m.senderRole === 'mentor';
                                         return (
                                             <div key={idx} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
@@ -510,7 +969,8 @@ export default function MentorDashboard() {
                                                 </div>
                                             </div>
                                         );
-                                    })}
+                                    });
+                                })()}
                             </div>
 
                             {/* Reply Input */}
@@ -578,24 +1038,64 @@ export default function MentorDashboard() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#eee6d4] text-xs">
-                                    {evalSubmissions.map((sub) => (
-                                        <tr key={sub._id} className="hover:bg-[#efe9dc]/50">
-                                            <td className="py-3.5 px-4 font-bold text-[#221f1a]">{sub.student?.name || 'Ananya Deshpande'}</td>
-                                            <td className="py-3.5 px-4 font-semibold text-[#1d3557]">{sub.testTitle || 'GS-2 • Test 14'}</td>
-                                            <td className="py-3.5 px-4 text-[#6f6754]">1 day ago</td>
-                                            <td className="py-3.5 px-4 font-bold text-[#4a4437]">Rohit Nambiar</td>
-                                            <td className="py-3.5 px-4">
-                                                <span className="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-full text-[10px] font-bold border border-amber-200">
-                                                    Pending
-                                                </span>
-                                            </td>
-                                            <td className="py-3.5 px-4 text-center">
-                                                <button className="px-3 py-1.5 bg-[#1d3557] text-white text-[11px] font-bold rounded-lg hover:bg-[#152c4a]">
-                                                    Claim Copy
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {(() => {
+                                        const filteredSubs = evalSubmissions.filter((sub) => {
+                                            if (evalFilter === 'Pending') return sub.status !== 'evaluated';
+                                            if (evalFilter === 'Evaluated') return sub.status === 'evaluated';
+                                            if (evalFilter === 'Open pool') return !sub.mentor;
+                                            return true;
+                                        });
+
+                                        if (filteredSubs.length === 0) {
+                                            return (
+                                                <tr>
+                                                    <td colSpan={6} className="py-12 text-center text-[#6f6754] text-xs">
+                                                        No test copies found in this category.
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
+
+                                        return filteredSubs.map((sub) => {
+                                            const studentName = sub.student?.name || 'Student';
+                                            const testName = sub.testTitle || 'Mains Practice Test';
+                                            const dateStr = sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recent';
+                                            const evaluatorName = sub.mentor?.name || 'Unassigned (Open pool)';
+                                            const isEvaluated = sub.status === 'evaluated';
+
+                                            return (
+                                                <tr key={sub._id} className="hover:bg-[#efe9dc]/50">
+                                                    <td className="py-3.5 px-4 font-bold text-[#221f1a]">{studentName}</td>
+                                                    <td className="py-3.5 px-4 font-semibold text-[#1d3557]">{testName}</td>
+                                                    <td className="py-3.5 px-4 text-[#6f6754]">{dateStr}</td>
+                                                    <td className="py-3.5 px-4 font-bold text-[#4a4437]">{evaluatorName}</td>
+                                                    <td className="py-3.5 px-4">
+                                                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                                                            isEvaluated
+                                                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                                                : 'bg-amber-100 text-amber-800 border-amber-200'
+                                                        }`}>
+                                                            {isEvaluated ? 'Evaluated' : 'Pending'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3.5 px-4 text-center">
+                                                        {sub.answerSheetUrls?.[0] ? (
+                                                            <a
+                                                                href={sub.answerSheetUrls[0]}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="px-3 py-1.5 bg-[#1d3557] text-white text-[11px] font-bold rounded-lg hover:bg-[#152c4a] inline-block shadow-xs"
+                                                            >
+                                                                Open Sheet ↗
+                                                            </a>
+                                                        ) : (
+                                                            <span className="text-xs text-[#6f6754]">—</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        });
+                                    })()}
                                 </tbody>
                             </table>
                         </div>
@@ -714,11 +1214,23 @@ export default function MentorDashboard() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#eee6d4] text-xs">
-                                        {rosterData
-                                            .filter((r) => r.deltaTasks >= 5 || r.deltaLog >= 7)
-                                            .map((r) => (
+                                        {(() => {
+                                            const atRisk = rosterData.filter((r) => r.deltaTasks >= 5 || r.deltaLog >= 7);
+                                            if (atRisk.length === 0) {
+                                                return (
+                                                    <tr>
+                                                        <td colSpan={5} className="py-12 text-center text-[#6f6754] text-xs">
+                                                            ✓ No students currently at risk (all students are actively logging tasks and study hours).
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            }
+                                            return atRisk.map((r) => (
                                                 <tr key={r.id} className="hover:bg-[#efe9dc]/50">
-                                                    <td className="py-3.5 px-4 font-bold text-[#221f1a]">{r.name}</td>
+                                                    <td className="py-3.5 px-4 font-bold text-[#221f1a]">
+                                                        <div>{r.displayName && r.displayName !== 'Student' ? r.displayName : (r.phone ? `Student (${r.phone})` : r.name)}</div>
+                                                        {r.phone && <span className="text-[10px] text-[#6f6754] font-mono block">📱 {r.phone}</span>}
+                                                    </td>
                                                     <td className="py-3.5 px-4 text-[#6f6754]">{r.posSubject} • {r.posTasks}</td>
                                                     <td className="py-3.5 px-4 text-right font-bold text-[#8a3b2e]">{r.deltaTasks} d</td>
                                                     <td className="py-3.5 px-4 text-right font-bold text-[#8a3b2e]">{r.deltaLog} d</td>
@@ -737,7 +1249,8 @@ export default function MentorDashboard() {
                                                         )}
                                                     </td>
                                                 </tr>
-                                            ))}
+                                            ));
+                                        })()}
                                     </tbody>
                                 </table>
                             </div>
@@ -746,52 +1259,168 @@ export default function MentorDashboard() {
                 )}
 
                 {/* ----------------- 6. MENTEE DOSSIER MODULE ----------------- */}
-                {activeTab === 'mentee' && selectedStudent && (
-                    <div className="space-y-6">
-                        {/* Header Banner */}
-                        <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                            <div>
-                                <span className="text-[10px] font-bold text-[#6f6754] uppercase tracking-wider">STUDENT DOSSIER</span>
-                                <h2 className="text-2xl font-serif font-bold text-[#1d3557]">{selectedStudent.name}</h2>
-                                <p className="text-xs text-[#6f6754]">
-                                    {selectedStudent.id} • {selectedStudent.optional} Optional • Joined {selectedStudent.startDate}
-                                </p>
-                            </div>
-                            <div className="flex gap-2">
-                                <span className="px-3 py-1 bg-amber-100 text-amber-800 border border-amber-200 rounded-full text-xs font-bold">
-                                    {selectedStudent.posSubject} • {selectedStudent.posTasks}
-                                </span>
-                            </div>
+                {activeTab === 'mentee' && (
+                    !selectedStudent ? (
+                        <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-3xl p-12 text-center space-y-3">
+                            <h3 className="font-serif font-bold text-base text-[#1d3557]">No Mentee Selected</h3>
+                            <p className="text-xs text-[#6f6754]">
+                                Please select a student from the Student Roster tab to inspect their dossier, logged hours, and session notes.
+                            </p>
                         </div>
+                    ) : (
+                        <div className="space-y-6">
+                            {/* Header Banner */}
+                            <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div>
+                                    <span className="text-[10px] font-bold text-[#6f6754] uppercase tracking-wider">STUDENT DOSSIER</span>
+                                    <h2 className="text-2xl font-serif font-bold text-[#1d3557]">
+                                        {selectedStudent.displayName && selectedStudent.displayName !== 'Student' ? selectedStudent.displayName : (selectedStudent.phone ? `Student (${selectedStudent.phone})` : selectedStudent.name)}
+                                    </h2>
+                                    <p className="text-xs text-[#6f6754]">
+                                        ID: {selectedStudent.id} {selectedStudent.phone ? `• 📱 ${selectedStudent.phone}` : ''} • Joined: {selectedStudent.startDate} {selectedStudent.email ? `• ${selectedStudent.email}` : ''}
+                                    </p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <span className="px-3 py-1 bg-amber-100 text-amber-800 border border-amber-200 rounded-full text-xs font-bold">
+                                        {selectedStudent.posSubject} • {selectedStudent.posTasks}
+                                    </span>
+                                </div>
+                            </div>
 
-                        {/* Session Notes Composer */}
-                        <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-3xl p-6 shadow-sm space-y-4">
-                            <h4 className="text-sm font-serif font-bold text-[#1d3557]">1-on-1 Session Note Composer</h4>
-                            <textarea
-                                rows={3}
-                                placeholder="Add summary after 1-on-1 mentor session (visible to student)..."
-                                value={sessionNoteInput}
-                                onChange={(e) => setSessionNoteInput(e.target.value)}
-                                className="w-full p-3 bg-[#efe9dc] border border-[#ddd4c1] rounded-2xl text-xs font-semibold focus:outline-none focus:border-[#1d3557]"
-                            />
-                            <h4 className="text-sm font-serif font-bold text-[#1d3557]">Internal Private Mentor Note (Mentors Only)</h4>
-                            <textarea
-                                rows={2}
-                                placeholder="Internal private observations (not shared with student)..."
-                                value={internalNoteInput}
-                                onChange={(e) => setInternalNoteInput(e.target.value)}
-                                className="w-full p-3 bg-[#efe9dc] border border-[#ddd4c1] rounded-2xl text-xs font-semibold focus:outline-none focus:border-[#1d3557]"
-                            />
-                            <div className="flex justify-end">
-                                <button
-                                    onClick={handleSaveMenteeNotes}
-                                    className="px-6 py-2.5 bg-[#1d3557] text-white text-xs font-bold rounded-xl hover:bg-[#152c4a]"
-                                >
-                                    Save Notes to MongoDB ↗
-                                </button>
+                            {/* Session Notes Composer */}
+                            <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-3xl p-6 shadow-sm space-y-4">
+                                <h4 className="text-sm font-serif font-bold text-[#1d3557]">1-on-1 Session Note Composer</h4>
+                                <textarea
+                                    rows={3}
+                                    placeholder="Add summary after 1-on-1 mentor session (visible to student on their dashboard)..."
+                                    value={sessionNoteInput}
+                                    onChange={(e) => setSessionNoteInput(e.target.value)}
+                                    className="w-full p-3 bg-[#efe9dc] border border-[#ddd4c1] rounded-2xl text-xs font-semibold focus:outline-none focus:border-[#1d3557]"
+                                />
+                                <h4 className="text-sm font-serif font-bold text-[#1d3557]">Internal Private Mentor Note (Mentors Only)</h4>
+                                <textarea
+                                    rows={2}
+                                    placeholder="Internal private observations (not shared with student)..."
+                                    value={internalNoteInput}
+                                    onChange={(e) => setInternalNoteInput(e.target.value)}
+                                    className="w-full p-3 bg-[#efe9dc] border border-[#ddd4c1] rounded-2xl text-xs font-semibold focus:outline-none focus:border-[#1d3557]"
+                                />
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={handleSaveMenteeNotes}
+                                        className="px-6 py-2.5 bg-[#1d3557] text-white text-xs font-bold rounded-xl hover:bg-[#152c4a] shadow-xs"
+                                    >
+                                        Save Notes to MongoDB ↗
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Past Session Notes */}
+                            <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-3xl p-6 shadow-sm space-y-4">
+                                <h4 className="text-sm font-serif font-bold text-[#1d3557]">Logged 1-on-1 Session Notes</h4>
+                                {dossierData?.sessionNotes && dossierData.sessionNotes.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {dossierData.sessionNotes.map((note: any, idx: number) => (
+                                            <div key={idx} className="p-4 rounded-2xl bg-[#efe9dc]/50 border border-[#ddd4c1] space-y-1">
+                                                <div className="flex items-center justify-between text-xs">
+                                                    <span className="font-bold text-[#1d3557]">1-on-1 Review Note</span>
+                                                    <span className="text-[#6f6754] text-[11px]">{note.date || 'Recent'}</span>
+                                                </div>
+                                                <p className="text-xs text-[#221f1a] leading-relaxed">{note.text}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-[#6f6754] italic">No session notes logged yet for this mentee.</p>
+                                )}
+                            </div>
+
+                            {/* Study Logs History (Last 30 Days) */}
+                            <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-3xl p-6 shadow-sm space-y-4">
+                                <h4 className="text-sm font-serif font-bold text-[#1d3557]">Daily Study Hours Log (Recent Entries)</h4>
+                                {dossierData?.logs && dossierData.logs.length > 0 ? (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse text-xs">
+                                            <thead>
+                                                <tr className="bg-[#efe9dc] border-b border-[#ddd4c1] text-[10px] font-bold text-[#6f6754] uppercase tracking-wider">
+                                                    <th className="py-2.5 px-3">Date</th>
+                                                    <th className="py-2.5 px-3">Logged Hours</th>
+                                                    <th className="py-2.5 px-3">Reason / Remarks</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-[#eee6d4]">
+                                                {dossierData.logs.map((log: any, idx: number) => (
+                                                    <tr key={idx} className="hover:bg-[#efe9dc]/40">
+                                                        <td className="py-2.5 px-3 font-semibold text-[#1d3557]">{log.date}</td>
+                                                        <td className="py-2.5 px-3 font-bold text-[#221f1a]">{log.hours} hrs</td>
+                                                        <td className="py-2.5 px-3 text-[#6f6754]">{log.reason || '—'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-[#6f6754] italic">No study logs recorded by this mentee yet.</p>
+                                )}
+                            </div>
+
+                            {/* Submissions History */}
+                            <div className="bg-[#fdfbf6] border border-[#ddd4c1] rounded-3xl p-6 shadow-sm space-y-4">
+                                <h4 className="text-sm font-serif font-bold text-[#1d3557]">Mains Test Answer Submissions</h4>
+                                {dossierData?.submissions && dossierData.submissions.length > 0 ? (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse text-xs">
+                                            <thead>
+                                                <tr className="bg-[#efe9dc] border-b border-[#ddd4c1] text-[10px] font-bold text-[#6f6754] uppercase tracking-wider">
+                                                    <th className="py-2.5 px-3">Test Title</th>
+                                                    <th className="py-2.5 px-3">Submitted</th>
+                                                    <th className="py-2.5 px-3">Status</th>
+                                                    <th className="py-2.5 px-3">Score</th>
+                                                    <th className="py-2.5 px-3 text-center">Answer Sheet</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-[#eee6d4]">
+                                                {dossierData.submissions.map((sub: any) => (
+                                                    <tr key={sub._id} className="hover:bg-[#efe9dc]/40">
+                                                        <td className="py-2.5 px-3 font-semibold text-[#1d3557]">{sub.testTitle}</td>
+                                                        <td className="py-2.5 px-3 text-[#6f6754]">
+                                                            {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                                        </td>
+                                                        <td className="py-2.5 px-3">
+                                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                                                sub.status === 'evaluated'
+                                                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                                                    : 'bg-amber-100 text-amber-800 border-amber-200'
+                                                            }`}>
+                                                                {sub.status || 'Submitted'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 font-bold text-[#221f1a]">{sub.score !== undefined ? sub.score : '—'}</td>
+                                                        <td className="py-2.5 px-3 text-center">
+                                                            {sub.answerSheetUrls?.[0] ? (
+                                                                <a
+                                                                    href={sub.answerSheetUrls[0]}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="px-2.5 py-1 bg-[#1d3557] text-white text-[10px] font-bold rounded-lg hover:bg-[#152c4a] inline-block"
+                                                                >
+                                                                    View ↗
+                                                                </a>
+                                                            ) : (
+                                                                <span className="text-[#6f6754]">—</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-[#6f6754] italic">No answer copies submitted by this mentee yet.</p>
+                                )}
                             </div>
                         </div>
-                    </div>
+                    )
                 )}
             </main>
 

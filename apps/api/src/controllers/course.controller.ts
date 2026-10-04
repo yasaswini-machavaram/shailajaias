@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import mongoose from 'mongoose';
-import { CourseNode } from '../models/index.js';
+import { CourseNode, TestSeries, MainsTestSeries } from '../models/index.js';
 
 // @desc    Get all root-level courses (tree structure)
 // @route   GET /api/courses
@@ -260,3 +260,179 @@ export const deleteCourse = async (req: Request, res: Response): Promise<void> =
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
+
+// @desc    Get configured task cards sequence for a course node
+// @route   GET /api/courses/:id/task-cards
+// @access  Private/Admin
+export const getCourseTaskCards = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const course = await CourseNode.findById(req.params.id);
+        if (!course) {
+            res.status(404).json({ success: false, message: 'Course node not found' });
+            return;
+        }
+
+        let cards = course.taskCards && course.taskCards.length > 0 ? course.taskCards : [];
+
+        // If taskCards is empty, seed from videos if available
+        if (cards.length === 0 && course.videos && course.videos.length > 0) {
+            cards = course.videos.map((v: any, idx: number) => ({
+                cardType: 'video',
+                order: idx,
+                title: v.title || `Video #${idx + 1}`,
+                description: v.description || '',
+                dayNumber: idx + 1,
+                videoProvider: v.videoProvider || 'youtube',
+                videoUrl: v.videoUrl || '',
+                notesText: v.notesText || '',
+                pdfFiles: v.pdfFiles || [],
+                prelimsQuizId: v.prelimsQuizId || null,
+                prelimsDiscussionVideoUrl: v.prelimsDiscussionVideoUrl || '',
+                prelimsDiscussionVideoProvider: v.prelimsDiscussionVideoProvider || 'youtube',
+                mainsPracticeTestId: v.mainsPracticeTestId || null,
+                mainsQuestionText: v.mainsQuestionText || '',
+                mainsModelAnswer: v.mainsModelAnswer || '',
+                mainsDiscussionVideoUrl: v.mainsDiscussionVideoUrl || '',
+                mainsDiscussionVideoProvider: v.mainsDiscussionVideoProvider || 'youtube',
+                helpContactInfo: v.helpContactInfo || '',
+                faqs: v.faqs || [],
+                isPracticeLocked: v.isPracticeLocked || false,
+                isHelpLocked: v.isHelpLocked || false,
+            })) as any;
+        }
+
+        res.json({
+            success: true,
+            data: {
+                courseId: course._id,
+                courseTitle: course.title,
+                mentorTags: course.mentorTags || [],
+                taskCards: cards,
+            },
+        });
+    } catch (error) {
+        console.error('getCourseTaskCards error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @desc    Update configured task cards sequence for a course node
+// @route   PUT /api/courses/:id/task-cards
+// @access  Private/Admin
+export const updateCourseTaskCards = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { taskCards } = req.body;
+        const course = await CourseNode.findById(req.params.id);
+        if (!course) {
+            res.status(404).json({ success: false, message: 'Course node not found' });
+            return;
+        }
+
+        if (!Array.isArray(taskCards)) {
+            res.status(400).json({ success: false, message: 'taskCards must be an array' });
+            return;
+        }
+
+        // Normalize orders & clean up empty string IDs
+        const normalizedCards = taskCards.map((c: any, index: number) => {
+            const card: any = {
+                ...c,
+                order: index,
+                dayNumber: index + 1,
+                title: (c.title || `Card #${index + 1}`).trim(),
+            };
+
+            if (card.cardType === 'video') {
+                if (card.prelimsQuizId && (!mongoose.Types.ObjectId.isValid(card.prelimsQuizId) || String(card.prelimsQuizId).trim() === '')) {
+                    card.prelimsQuizId = null;
+                }
+                if (card.mainsPracticeTestId && (!mongoose.Types.ObjectId.isValid(card.mainsPracticeTestId) || String(card.mainsPracticeTestId).trim() === '')) {
+                    card.mainsPracticeTestId = null;
+                }
+            } else if (card.cardType === 'pts_test') {
+                if (card.ptsSeriesId && (!mongoose.Types.ObjectId.isValid(card.ptsSeriesId) || String(card.ptsSeriesId).trim() === '')) {
+                    card.ptsSeriesId = null;
+                }
+                if (card.ptsQuizId && (!mongoose.Types.ObjectId.isValid(card.ptsQuizId) || String(card.ptsQuizId).trim() === '')) {
+                    card.ptsQuizId = null;
+                }
+            } else if (card.cardType === 'mts_test') {
+                if (card.mtsSeriesId && (!mongoose.Types.ObjectId.isValid(card.mtsSeriesId) || String(card.mtsSeriesId).trim() === '')) {
+                    card.mtsSeriesId = null;
+                }
+            }
+
+            return card;
+        });
+
+        course.taskCards = normalizedCards;
+        await course.save();
+
+        res.json({
+            success: true,
+            data: {
+                courseId: course._id,
+                taskCards: course.taskCards,
+            },
+            message: 'Task cards sequence updated successfully',
+        });
+    } catch (error) {
+        console.error('updateCourseTaskCards error:', error);
+        res.status(500).json({ success: false, message: (error as Error).message || 'Server error' });
+    }
+};
+
+// @desc    Get catalog of PTS and MTS test series with individual tests for dropdowns
+// @route   GET /api/courses/tests-catalog
+// @access  Private/Admin
+export const getTestsCatalog = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const ptsList = await TestSeries.find({}).sort({ createdAt: -1 }).lean();
+        const mtsList = await MainsTestSeries.find({}).sort({ createdAt: -1 }).lean();
+
+        const formattedPts = ptsList.map((pts: any) => ({
+            _id: pts._id,
+            uniqueId: pts.uniqueId,
+            title: pts.title,
+            tests: (pts.tests || []).map((t: any, idx: number) => ({
+                index: idx,
+                title: t.title,
+                date: t.date,
+                quizId: t.quizId,
+                syllabus: t.syllabus,
+                questionPaperUrl: t.questionPaperUrl,
+                solutionPaperUrl: t.solutionPaperUrl,
+                discussionVideoUrl: t.discussionVideoUrl,
+                subjectTags: t.subjectTags || [],
+            })),
+        }));
+
+        const formattedMts = mtsList.map((mts: any) => ({
+            _id: mts._id,
+            uniqueId: mts.uniqueId,
+            title: mts.title,
+            tests: (mts.tests || []).map((t: any, idx: number) => ({
+                index: idx,
+                title: t.title,
+                date: t.date,
+                subjectCategory: t.subjectCategory,
+                syllabus: t.syllabus,
+                questionPaperUrl: t.questionPaperUrl,
+                solutionPaperUrl: t.solutionPaperUrl,
+                discussionVideoUrl: t.discussionVideoUrl,
+            })),
+        }));
+
+        res.json({
+            success: true,
+            data: {
+                pts: formattedPts,
+                mts: formattedMts,
+            },
+        });
+    } catch (error) {
+        console.error('getTestsCatalog error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+

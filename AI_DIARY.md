@@ -5,6 +5,11 @@
 > read this entire file top-to-bottom. It tells you what this project is, what is built,
 > what is pending, what patterns to follow, and what decisions were made and why.
 > After every meaningful session, **update the changelog at the bottom**.
+>
+> 🚨 **CRITICAL MANDATE — ZERO DUMMY DATA / ZERO HARDCODED VALUES:**
+> NEVER use dummy cards, fallback placeholder subjects (e.g. mock Polity, Environment, Economy), or hardcoded dates/statistics anywhere in the app (especially the Roadmap tab, task cards, KPIs, or session notes).
+> Everything must strictly show ONLY what is in sync with the particular student's profile (enrolled courses, purchased tags, actual logs, and actual task progress).
+> If a student has no data for a track or module, show an honest empty state instead of fake dummy cards.
 
 ---
 
@@ -152,6 +157,66 @@ description?, order, isPublished, createdBy
 - PDFs stored locally in `/uploads/resource-{uuid}.pdf`
 - Indexes: `{ category, order }`, `{ category, tag }`
 
+#### 9. MentorshipCourse (`models/MentorshipCourse.ts`)
+```
+title, description, price, validityDays, mentorTags[], defaultMentor? (ref User), assignedMentors[] (ref User), isPublished, order, createdBy
+```
+
+#### 10. MainsTestSeries (`models/MainsTestSeries.ts`)
+```
+title, description, price, mentorTags[], defaultMentor? (ref User), assignedMentors[] (ref User), brochurePdfUrl, introVideoUrl, tests[], sectionalCount, fullLengthCount, uniqueId, isPublished
+```
+
+#### 11. MainsSubmission (`models/MainsSubmission.ts`)
+```
+student (ref User), testSeriesId? (ref MainsTestSeries), testItemIndex, tag?, answerFiles[{url, key, originalName}], evaluatedFileUrl?, evaluatedFileKey?, score?, maxScore?, status ('submitted'|'assigned'|'under_review'|'evaluated'), assignedMentor? (ref User), feedbackText?, reuploadCount
+```
+
+#### 12. MentorshipTaskProgress (`models/MentorshipTaskProgress.ts`)
+```
+userId (ref User), tag, dayNumber, taskType ('watch'|'notes'|'test'|'upload'|'overall'), completed, isPartial?, status? ('completed'|'partial'|'pending'), completedAt?, notesText?, mainsAnswerText?, mainsAnswerFileUrl?
+```
+- Unique compound index: `{ userId: 1, tag: 1, dayNumber: 1, taskType: 1 }`
+
+#### 13. MentorshipLog (`models/MentorshipLog.ts`)
+```
+student (ref User), date (YYYY-MM-DD), hours, reason?, editedAt?
+```
+- Unique index: `{ student: 1, date: 1 }`
+
+#### 14. MentorshipSubjectProgress (`models/MentorshipSubjectProgress.ts`)
+```
+student (ref User), name, tag, state ('current'|'done'|'upcoming'|'paused'), total, done, order, startedOn?, finishedOn?
+```
+
+#### 15. MentorChat (`models/MentorChat.ts`)
+```
+student (ref User), threadType ('mentor'|'desk'), senderRole ('student'|'mentor'|'desk'), text, attachments[], isRead
+```
+
+#### 16. MentorNote (`models/MentorNote.ts`)
+```
+student (ref User), mentor (ref User), sessionNotes[{date, text, durationMinutes?}], internalNotes[{date, text}]
+```
+
+#### 17. MentorBroadcast (`models/MentorBroadcast.ts`)
+```
+mentor (ref User), title, message, targetBatch?, targetFilter?, sentAt
+```
+
+#### 18. MasterTag (`models/MasterTag.ts`)
+```
+title, code (unique uppercase), description?, colorHex, createdBy
+```
+
+#### 19. MentorshipRequest (`models/MentorshipRequest.ts`)
+```
+student (ref User), mentor? (ref User), type ('break' | 'reorder' | 'pause_intimation'),
+status ('pending' | 'approved' | 'rejected' | 'acknowledged', default 'pending'),
+reason?, requestedBreakDays?, details: { requestedBreakDays?, reason?, proposedOrder?, currentOrder?, namesMap?, subjectName?, courseId? },
+reviewedBy? (ref User), reviewedAt?
+```
+
 ### API Routes Summary
 
 | Method | Route | Auth | Description |
@@ -209,6 +274,34 @@ description?, order, isPublished, createdBy
 | PUT | `/api/resources/items/:id` | Admin | Update resource item (optional PDF re-upload) |
 | DELETE | `/api/resources/items/:id` | Admin | Delete resource item + PDF file |
 | GET | `/api/resources/download/:id` | Public | Download resource PDF (Content-Disposition: attachment) |
+| GET | `/api/mentorship-courses` | Public | List published mentorship course cards |
+| POST | `/api/mentorship-courses` | Admin | Create mentorship course card |
+| PUT | `/api/mentorship-courses/:id` | Admin | Update mentorship course card |
+| DELETE | `/api/mentorship-courses/:id` | Admin | Delete mentorship course card |
+| GET | `/api/mentorship-student/daily-task` | Private (Student) | Get 7-day study logs, task progress, assigned mentor |
+| POST | `/api/mentorship-student/log-hours` | Private (Student) | Log/revise daily study hours & low-hour reason |
+| GET | `/api/mentorship-student/roadmap` | Private (Student) | Real dynamic roadmap for Courses, MTS, PTS + partial tasks |
+| GET | `/api/mentorship-student/uploads` | Private (Student) | Get student answer script uploads & evaluated copies |
+| GET | `/api/mentorship-student/sessions` | Private (Student) | Get session notes, study logs & real dynamic KPIs |
+| GET | `/api/mentorship-student/chat` | Private (Student) | Get student 1-on-1 chat messages |
+| POST | `/api/mentorship-student/chat` | Private (Student) | Send student chat message |
+| POST | `/api/mentorship-student/task-progress` | Private (Student) | Save task sub-step or overall task completion/partial status |
+| GET | `/api/mentor-portal/roster` | Private (Mentor) | Get assigned mentees with risk metrics |
+| GET | `/api/mentor-portal/chat` | Private (Mentor) | Get mentee chat threads |
+| POST | `/api/mentor-portal/chat/send` | Private (Mentor) | Send mentor chat message |
+| GET | `/api/mentor-portal/evaluation` | Private (Mentor) | Get answer script evaluation queue |
+| POST | `/api/mentor-portal/broadcast` | Private (Mentor) | Send broadcast notice to mentees |
+| GET | `/api/mentor-portal/analytics` | Private (Mentor) | Cohort health & risk analytics |
+| POST | `/api/mentor-portal/mentee/:id/notes` | Private (Mentor) | Save 1-on-1 session notes & internal notes |
+| GET | `/api/mentors/program-config` | Admin | Get program & MTS batch mentor allocation configs |
+| PUT | `/api/mentors/program-config/:type/:id` | Admin | Configure default mentor & multi-mentor round-robin pool |
+| POST | `/api/mentors/reassign-student` | Admin | Manually reassign a student to a new mentor |
+| GET | `/api/master-tags` | Public | List all master tags |
+| POST | `/api/master-tags` | Admin | Create master tag |
+| GET | `/api/master-tags/linked-items/:id` | Admin | Deep-link inspector for linked items |
+| GET | `/api/courses/:id/task-cards` | Admin | Get ordered task cards sequence for course |
+| PUT | `/api/courses/:id/task-cards` | Admin | Save custom task cards sequence for course |
+| GET | `/api/courses/tests-catalog` | Admin | Catalog of PTS & MTS series and individual tests |
 
 ### Auth Middleware
 - `protect`: Verifies Bearer JWT, attaches `req.user`
@@ -492,18 +585,26 @@ Admin creates content
 - **Student Profile details editing**: Interactive `/profile` details card lets users update Name and Email with inline alerts. Fully synced with admin portal changes in the background, including auto-logout on account suspension.
 - **UPSC Doubt Resolution System**: Comprehensive student-mentor doubt ticket portal. Allows students to submit subject-specific questions directly from prelims test-series review panels or general queries from `/profile` tab. Features interactive discussion threads, follow-up messages, and an admin workspace desk at `/admin/doubts` with quick reply and status updates, fully integrated with real-time automatic polling.
 - **UPSC Test Reports saving & tracking**: Persistent exam scorecard saving for logged-in students. Allows users to save prelims test results to a "Test Reports" dashboard under `/profile`. Includes detailed analysis metrics, subject-wise breakdown, and detailed review option (fetching questions and explanations dynamically without DB duplication). Supports midway authentication with temporary localStorage caching during redirects.
+- **Centralized Master Mentorship Tags Repository (`/admin/master-tags`)**: Full repository for defining cross-cutting mentorship tags (`GS-1`, `GS-2`, `PRELIMS-2027`, etc.) with interactive Deep-Link Inspector panel discovering every attached Course, Course Group, PTS Group, MTS Group, and Mentorship Card.
+- **Mentor - Student Management Platform (`/admin/mentors`)**: Administrative hub for managing mentors and assigning students. Configures default mentors or multi-mentor teams per Mentorship Programme and Mains Test Series (MTS) Batch. Features automated weighted round-robin student distribution on purchase, manual reassignments (individual or batch-wide), unallocated student detection, and real-time synchronization with both Student Mentorship Dashboard and Mentor Platform.
+- **Mentor Platform (`/mentor`)**: Dedicated portal for faculty mentors with a clean single-sidebar layout aligned with the core design system (`#1E3A5F`, `#F5A623`, `#0D9488`). Features a live Mentees Roster prioritized by student risk metrics (`Δ Tasks + Δ Log`), Mains evaluation desk with scoring and PDF feedback attachments, 1-on-1 mentee live chat, mentee dossier summaries, session notes, private observations, and broadcast announcements.
+- **Student Mentorship Dashboard (`/mentorship/dashboard`)**: Unified learning cockpit for enrolled students:
+  - **Daily Task Carousel**: Single focal card display with previous/next navigation, 7-day strip, dynamic logged study hours console, and dual task completion buttons (`Partially Done` vs `Completed the Task`).
+  - **Direct Practice Sync**: Integrated with Course practice tabs — Action 03 (`Take Test`) launches an interactive Prelims MCQ solver modal directly linked to `/api/quizzes`, and Action 04 (`Upload Answer`) launches a handwritten Mains answer script uploader directly linked to `/api/mains-submissions` and the Mentor Evaluation queue.
+  - **Dynamic Multi-Track Roadmap**: Separate tracking tracks for **Courses**, **Mains Test Series (MTS)**, and **Prelims Test Series (PTS)**. Computes real completion percentages `(completedTasks / totalTasks) * 100` dynamically from MongoDB `MentorshipTaskProgress`, displaying both **In Progress** and **Completed** sections separately per track.
+  - **Real Dynamic Mentorship KPIs**: Mentorship consistency panel calculates real metrics from `MentorshipLog` and task records — Average Study Hours / Week, Task Completion Rate, Best Study Week, and Total Logged Days, paired with a 12-week consistency bar chart.
+  - **1-on-1 Mentor Chat & Uploads Archive**: Real-time communication with assigned mentor and historical repository of evaluated answer scripts with feedback scores and annotations.
+- **Purchase & Round-Robin Auto-Allocation Flow (`/api/purchase`)**: Simulated or payment-based enrollment for Mentorship Courses and MTS batches automatically assigns students to configured mentors via weighted round-robin distribution, granting subscribed master tags and updating user profiles in real time.
 
 ### 🚧 PARTIALLY BUILT / NEEDS WORK
-- **Test Series Module:** `/tests` hub page with 5 submodule cards. **Prelims Test Series** and **Prelims Practice Test** submodules are COMPLETE with full quiz engines (timer, UPSC scoring, detailed analysis). Mains Test Series, Mains Practice Test, and CA Prelims remain placeholder "Coming Soon" pages.
+- **Test Series Module:** `/tests` hub page with 5 submodule cards. **Prelims Test Series** and **Prelims Practice Test** submodules are COMPLETE with full quiz engines (timer, UPSC scoring, detailed analysis). Mains Test Series evaluation queue and practice test submission are complete; public exploratory catalog remains placeholder cards.
 - **Courses/Topics browser:** `/topics` page exists but needs to properly render the course tree/hierarchy.
 - **Magazine PDF reader:** `/magazines/reader` contains `PdfViewerClient.tsx` (11KB react-pdf component) + a thin `page.tsx` wrapper. Functional but may need UX polish.
 - **Admin recent activity section:** Placeholder text says "No recent activity to show" — not yet implemented.
 - **Course content tabs:** Video, notes, and test tabs exist in schema but unknown if UI is complete.
-- **Mobile responsiveness refinement:** Conversation `073e7bf3` focused on mobile responsive templates for invitation templates (different project?). The Shailaja IAS client uses TailwindCSS responsive classes but may need further mobile polish.
+- **Mobile responsiveness refinement:** Desktop & tablet layouts for Mentorship dashboard and Mentor portal are fully polished; mobile breakpoints for mentor portal tables can receive further responsive optimizations.
 
 ### ❌ NOT STARTED / FUTURE FEATURES
-- Student subscription/payment system (manual admin overrides available in user dashboard)
-- Student progress tracking (quiz scores, completion)
 - Push notifications
 - App-wide loading states / skeleton screens
 - Error boundary handling
@@ -1408,6 +1509,159 @@ Admin creates content
   6. **Dynamic Sync Across Portals**: Student dashboard (Roadmap, Chat, Uploads, Mentorship) and Mentor Portal (Roster, Chat, Evaluation, Broadcast, Analytics, Mentee Dossier) operate with real MongoDB backend endpoints.
 - **Verified:** Both `api` and `client` type-check with zero errors (`pnpm --filter api exec tsc --noEmit && pnpm --filter client exec tsc --noEmit`).
 
+### Session: 2026-09-21 (Mentor - Student Management Platform & Round-Robin Batch Allocation)
+- **Who:** AI (Antigravity)
+- **What:** Overhauled the Admin Mentor portal (`/admin/mentors`), rebranding it to **"Mentor - Student Management"** and introducing multi-mentor allocation, automatic weighted round-robin distribution, manual reassignments, and unallocated batch/program detection.
+- **Admin Portal (`apps/client/app/admin/mentors/page.tsx`):**
+  - Rebranded heading to "Mentor - Student Management".
+  - **Program & Batch Mentor Configuration Modal**: Allows admins to configure mentors per Mentorship Programme and per Mains Test Series (MTS) Batch. Supports assigning a single default mentor or multiple mentors with equal round-robin weighting.
+  - **Manual Student Reassignment**: Admins can reassign any individual student to a new mentor or bulk-reassign all mentees of an existing mentor to another mentor.
+  - **Unallocated Students Detection Queue**: Dedicated view and filter flagging any student who enrolled in a Mentorship Program or MTS batch but has not yet been assigned a mentor, allowing admins to assign mentors with one click.
+- **Backend Infrastructure (`apps/api`):**
+  - Extended `MentorshipCourse.ts` and `MainsTestSeries.ts` models with `defaultMentorId: ObjectId`, `mentorIds: [ObjectId]`, and `roundRobinPointer: Number`.
+  - Added endpoints in `mentor.controller.ts` & `mentor.routes.ts`:
+    - `GET /api/mentors/programs-batches` — Retrieves all mentorship programs and MTS batches with their mentor allocation configurations.
+    - `POST /api/mentors/config` — Saves mentor assignments (default mentor or round-robin multi-mentors) for programs and batches.
+    - `POST /api/mentors/manual-assign` — Manually maps a student to a mentor or bulk-transfers students.
+    - `GET /api/mentors/unallocated-students` — Returns all enrolled students lacking mentor assignment.
+- **Automatic Allocation Engine (`apps/api/src/controllers/purchase.controller.ts`):**
+  - Updated the purchase handler for mentorship courses and MTS batches.
+  - Automatically queries the program/batch mentor configuration.
+  - If a single default mentor is configured, directly links the student to that mentor.
+  - If multiple mentors are configured, utilizes atomic `$inc` round-robin indexing modulo the mentor count to distribute new students equally.
+  - Persists `assignedMentorId` on the student's `User` record, appends the student ID to the mentor's `assignedMentees` list, and establishes bidirectional sync across Student Mentorship Dashboard (`/mentorship/dashboard`) and Mentor Portal (`/mentor`).
+- **Verified:** Build and typechecks pass cleanly.
+
+### Session: 2026-09-21 (Mentor Portal Single-Sidebar Refactor & Design System Synchronization)
+- **Who:** AI (Antigravity)
+- **What:** Refactored the Mentor Portal (`/mentor`) navigation architecture to eliminate redundant double-tab layouts, and harmonized color palettes and UI components across both Mentor Portal and Student Mentorship Dashboard to strictly match the Shailaja IAS design system.
+- **Mentor Portal Navigation Cleanup (`apps/client/app/mentor/page.tsx`):**
+  - Eliminated the confusing top-level dashboard/submission tabs and nested sub-sidebars.
+  - Consolidated navigation into a single, clean persistent sidebar with standard modules:
+    - 👥 **Mentees Roster**: Risk-ranked roster table (`Δ Tasks`, `Δ Log`, unread messages, evaluation count).
+    - 💬 **Live Chat**: 1-on-1 thread switcher with individual mentees, starred threads, and instant messaging.
+    - 📝 **Evaluation Queue**: Review pending Mains answer scripts with PDF viewer, score inputs, and markdown feedback.
+    - 📢 **Broadcasts**: Send announcement bulletins to all assigned mentees.
+    - 📋 **Mentee Dossier**: Quick view modal of a student's study logs, task progression, test history, and private notes.
+- **Design System Color Synchronization (`style.json` & `globals.css`):**
+  - Replaced rogue purple/blue shades with the official Shailaja IAS palette:
+    - Primary Deep Navy (`#1E3A5F`) for sidebars, headings, card borders, and primary active states.
+    - Golden Amber (`#F5A623`) for highlights, streak indicators, and warning tags.
+    - Dark Teal (`#0D9488`) for completed progress indicators, success alerts, and submission confirmations.
+    - Slate & Off-White (`#F8FAFC`, `#F1F5F9`, `#E2E8F0`) for clean readable surfaces and borders.
+  - Applied the identical color styling tokens to the Student Mentorship Dashboard (`/mentorship/dashboard`).
+- **Verified:** Unified styling verified in browser; no layout shifts or double scrollbars.
+
+### Session: 2026-10-04 (Mentorship Roadmap Redesign, Zero Dummy Data Policy & Profile Synchronization)
+- **Who:** AI (Antigravity)
+- **What:** Completely redesigned the student Mentorship Roadmap tab to match the desktop mockups (`ShailajaIAS Mentorship Desktop v2.html`), purged PTS and MTS trackers from Roadmap (now tracking course modules exclusively based on task card completion), introduced 3 mentor-linked workflows ("Take a break", "Pause this subject", and "Reorder upcoming subjects"), built a full "Requests & Approvals" management desk in the Mentor Portal (`/mentor`), and **strictly eliminated all dummy cards, placeholder subjects, and hardcoded values across the entire platform**.
+- **Zero Dummy Data & Profile Synchronization Mandate:**
+  - **Backend (`apps/api/src/controllers/mentorshipStudent.controller.ts`)**:
+    - Completely deleted `DEFAULT_SUBJECTS` fallback array (which previously injected fake subjects: Polity, Economy, Environment, Modern History, Geography, Ethics).
+    - Synchronized `getRoadmapData` strictly with the student's authenticated profile: queries root courses enrolled by the student (`purchasedCourses`, `enrolledCourses`) or matching their purchased tags (`purchasedMentorTags`).
+    - Implemented dynamic track filtering (`GS`, `Optional`, `Essay`, `CA`, `CSAT`). Returns `activeTracks` array indicating exactly which tracks have real enrolled modules or activity for that student.
+    - All progress metrics, task counts (`totalTasks` and `completedTasks`), active workdays, and target completion dates are calculated dynamically from real MongoDB records with 0 hardcoded fallbacks.
+  - **Frontend (`apps/client/app/mentorship/dashboard/page.tsx`)**:
+    - Removed hardcoded dummy subjects and stat strings from component initial state (`roadmapData` and `workingUpcomingSubjects` start clean and empty).
+    - Added loading state indicator (`isRoadmapLoading`) to gracefully transition while profile data is synced.
+    - Added honest empty state (`No [Track] Courses Enrolled`) with guidance message when a student has no enrolled subjects for a specific track, instead of showing fake mock cards.
+    - Removed hardcoded fallback strings (`'15 Jul'`, `'31 Jul'`, `'≈ 9 Sep'`, `'15 Aug'`) and removed dummy session notes fallback from the Mentorship tab.
+    - Dynamic track pill dots: olive accent dots appear only under tracks where the student actually has enrolled courses (`roadmapData.activeTracks.includes(tr.id)`).
+- **Backend Architecture & Endpoints (`apps/api`):**
+  - **New Model (`MentorshipRequest.ts`)**:
+    - Stores student requests of types `'break' | 'reorder' | 'pause_intimation'` with statuses `'pending' | 'approved' | 'rejected' | 'acknowledged'`.
+    - Captures details payload: duration, student reason, proposed course sequence array, names map, and subject identifiers.
+  - **User & Progress Model Extensions**:
+    - Added `mentorshipAccountStatus: 'active' | 'break' | 'inactive'` (default `'active'`) to `User.ts`.
+    - Added `mentorshipCourseOrder: string[]` to `User.ts` (records mentor-approved custom course sequence).
+    - Added `courseId: string` to `MentorshipSubjectProgress.ts`.
+  - **Student Controller (`mentorshipStudent.controller.ts`)**:
+    - `getDailyTaskData`: Sorts course carousel cards based on approved `mentorshipCourseOrder` (or fallback to admin course order `order`).
+    - Added `POST /api/mentorship-student/break-request`: Submits break request with duration and optional reason.
+    - Added `POST /api/mentorship-student/cancel-break-request`: Student withdraws pending break request.
+    - Added `POST /api/mentorship-student/pause-subject`: Pauses active subject with reason and intimates mentor.
+    - Added `POST /api/mentorship-student/resume-subject`: Resumes a paused subject.
+    - Added `POST /api/mentorship-student/reorder-request`: Submits student's proposed upcoming subject sequence.
+  - **Mentor Controller (`mentorPortal.controller.ts`)**:
+    - Added `GET /api/mentor-portal/requests`: Retrieves pending and reviewed requests for mentor's assigned mentees.
+    - Added `POST /api/mentor-portal/requests/:id/review`: Approves or rejects break requests (updates student status to `'break'` or `'active'`) and subject reorders (updates `mentorshipCourseOrder` and `MentorshipSubjectProgress.order`), and creates an automated chat intimation in `MentorChat`.
+- **Mentor Portal (`apps/client/app/mentor/page.tsx`):**
+  - Added `Requests` tab to sidebar with live pending badge notification.
+  - Summary KPI cards for Pending Action, Break Requests, Reorder Requests, and Resolved/Ack.
+  - Filter chips (`Pending`, `All Requests`, `History`).
+  - Detailed request review cards:
+    - Break requests display requested duration and student reasons.
+    - Reorder requests render a visual sequence flow (`#1 Polity → #2 Economy ...`).
+    - One-click `Approve Request` and `Reject Request` actions.
+- **Verification:** Both API and Client compile cleanly with zero TypeScript errors (`pnpm --filter api exec tsc --noEmit && pnpm --filter client exec tsc --noEmit`).
+
+### Session: 2026-09-21 (Mentorship Dashboard Task Practice Sync & Separate Roadmap Tracks)
+- **Who:** AI (Antigravity)
+- **What:** Connected daily mentorship task practice actions (`Take Test` and `Upload Answer`) directly with the main platform course practice modules, and separated the student Roadmap into distinct tracks for Courses, MTS, and PTS.
+- **Direct Practice Integration (`apps/client/app/mentorship/dashboard/page.tsx`):**
+  - **Action 03 (`Take Test`)**:
+    - Synchronized with Prelims practice tests. Clicking `Take Test` opens a full in-page Prelims Practice Quiz Modal linked to `/api/quizzes`.
+    - Students can answer timed UPSC MCQs, view explanations, and have results automatically saved without leaving the mentorship dashboard.
+  - **Action 04 (`Upload Answer`)**:
+    - Synchronized with Mains test series practice uploads. Clicking `Upload Answer` launches a full Mains Script Uploader Modal.
+    - Uploads handwritten scripts (PDF/image) directly into `/api/mains-submissions`, which immediately pushes the submission into the assigned mentor's Evaluation Queue (`/mentor`) for grading and feedback.
+- **Roadmap Track Segmentation:**
+  - Upgraded the Roadmap module from a single list into separate categorized tracks:
+    1. **Courses Track**: Tracks core GS & Optional syllabus tags (e.g. `GS-1`, `GS-2`, `GS-3`, `GS-4`, `ESSAY`).
+    2. **MTS Track (Mains Test Series)**: Tracks Mains test series modules and answer writing batches.
+    3. **PTS Track (Prelims Test Series)**: Tracks Prelims mock tests and sectional question banks.
+  - Aggregates enrolled master tags dynamically based on the student's active purchases.
+- **Verified:** Both modal workflows function seamlessly; submissions appear in the mentor portal in real time.
+
+### Session: 2026-09-21 (Real Dynamic Roadmap Percentages, Task Action Buttons & Real Mentorship KPIs)
+- **Who:** AI (Antigravity)
+- **What:** Replaced all hardcoded roadmap percentages and mentorship statistics with real-time dynamic calculations computed from MongoDB records, and implemented dual task action buttons (`Partially Done` vs `Completed the Task`).
+- **Dual Task Action Buttons (`apps/client/app/mentorship/dashboard/page.tsx`):**
+  - Replaced the single binary checkbox with two explicit completion CTAs:
+    - ⏳ **`Partially Done`** (Amber styling): Marks the task as in-progress with partial progress, recording `status: 'partially_completed'` in `MentorshipTaskProgress`.
+    - ✅ **`Completed the Task`** (Teal/Green styling): Marks all 4 steps as fulfilled, recording `status: 'completed'` and incrementing student study streaks.
+- **Real Dynamic Roadmap Percentages:**
+  - Eliminated static hardcoded progress numbers (e.g. "64%").
+  - Dynamically queries `MentorshipTaskProgress` for the student's master tags across all three tracks (Courses, MTS, PTS).
+  - Computes real completion formula: `Math.round((completedTasks / totalTasks) * 100)`.
+  - Splits each track into two distinct sections:
+    - **In Progress (`0% - 99%`)**: Displays active tags with real percentage progress bars and tasks remaining.
+    - **Completed (`100%`)**: Automatically moves fully finished tags into a collapsible completed subjects archive.
+- **Real Dynamic Mentorship KPIs:**
+  - Eliminated all static mock stats in the Mentorship tab; now computed live from `MentorshipLog` and task progress:
+    - **Avg Hours / Week**: Sums logged study hours across distinct study weeks divided by total active weeks.
+    - **Task Completion %**: Ratio of tasks marked completed vs total scheduled tasks.
+    - **Best Week**: Queries maximum study hours logged within any single Monday-to-Sunday week window.
+    - **Logged Days**: Count of distinct calendar dates where study hours `> 0` were submitted.
+    - **12-Week Consistency Bar Chart**: Renders actual logged hours week-by-week (W1 through W12) with color-coded target benchmarks.
+- **Verified:** All UI calculations match MongoDB collections with 0 mock values. TypeScript and linting pass with 0 errors.
+
+### Session: 2026-09-22 (Admin Mentorship Task Card Sequencer & Interleaved PTS/MTS Tests)
+- **Who:** AI (Antigravity)
+- **What:** Designed and built the Admin Mentorship Task Card Sequencer (`/admin/task-cards`), allowing admins and mentors to customize the exact ordered sequence of daily mentorship task cards per course and insert specific Prelims Test Series (PTS) and Mains Test Series (MTS) test cards anywhere in between video lectures.
+- **Backend Infrastructure (`apps/api`):**
+  - Updated `Course.ts` model: defined `ITaskCardItem` interface and added polymorphic `taskCards: [TaskCardItemSchema]` field on `CourseNode`.
+  - Added endpoints in `course.controller.ts` & `course.routes.ts`:
+    - `GET /api/courses/tests-catalog`: returns all published PTS and MTS test series alongside their individual test entries (index, title, syllabus, date, subject category, question papers, discussion videos).
+    - `GET /api/courses/:id/task-cards`: retrieves the configured task card sequence (or auto-seeds cards from existing `videos` if not yet customized).
+    - `PUT /api/courses/:id/task-cards`: saves the updated sequence order and card configs.
+  - Updated `mentorshipStudent.controller.ts` (`getDailyTaskData`): sends `c.taskCards` when available, falling back to legacy video arrays if unconfigured.
+- **Admin Task Card Sequencer Page (`apps/client/app/admin/task-cards/page.tsx`):**
+  - Added dedicated navigation item `🗂️ Task Cards` in `admin/layout.tsx`.
+  - Added quick-link buttons to the Sequencer from `/admin/courses` (header & per-course row action) and `/admin/mentorship`.
+  - Interactive Course selector with live tag chips and card count badge.
+  - Card Sequence Timeline with Move Up (`▲`), Move Down (`▼`), Edit, and Delete actions.
+  - Card Creation & Insertion Modals:
+    - `+ Add Video Card`: Reuses full course module capabilities (Video title, provider, video URL, notes text, multiple PDF handouts, Prelims practice quiz + Excel import modal, Mains question/model answer + Excel import modal, and Doubts & FAQs manager).
+    - `+ Insert PTS Test Card`: Selects specific Prelims test from any PTS series, displaying syllabus, question paper, and quiz link.
+    - `+ Insert MTS Test Card`: Selects specific Mains test from any MTS series, displaying syllabus, subject category, and question paper PDF link.
+- **Student Mentorship Dashboard Integration (`apps/client/app/mentorship/dashboard/page.tsx`):**
+  - Updated `buildCarouselCards()` to parse custom sequenced `taskCards` across `video`, `pts_test`, and `mts_test`.
+  - Rendered dedicated PTS Test Card with direct CTA button: `Go to Prelims Test Series →` (`/tests/prelims-test-series?id={ptsSeriesId}&test={testIndex}`).
+  - Rendered dedicated MTS Test Card with direct CTA button: `Go to Mains Test Series →` (`/tests/mains-test-series?id={mtsSeriesId}&test={testIndex}`).
+  - Dual task tracking buttons (`Partially Done` vs `Completed`) sync seamlessly with `MentorshipTaskProgress`.
+- **Verification:** Both `api` and `client` type-check with zero errors (`pnpm --filter api exec tsc --noEmit && pnpm --filter client exec tsc --noEmit`).
+
 ### Session: 2026-09-18 (Mentorship Course Cards & Admin CMS)
 - **Who:** AI (Antigravity)
 - **What:** Fixed content rendering for Excel-imported Prelims articles and added full table support.
@@ -1423,6 +1677,132 @@ Admin creates content
   - `mains-excel.service.ts` — Added same `normalizeListItems()` function. Applied to: `context`, `practice`, `valueAdditions`, Q&A `answer` fields, and the `content` fallback.
   - `globals.css` — Added nested sub-lists, `li[level]` safety-net, mobile table scroll, and table hover/rounded styles to `.mains-rich-content` (mirroring `.article-content` patterns).
 
+
+### Session: 2026-10-04 (Zero Dummy Data Mandate, Task Cards Checkbox Removal, Auto-Done/Undoable CTAs & Real-Time Roadmap Sync)
+- **Who:** AI (Antigravity)
+- **What:** Removed all hardcoded fallback cards from Roadmap, eliminated checkboxes from daily task cards in favor of single-click auto-done CTAs with undo capability, and synchronized partial vs completed task states in real time with the roadmap module.
+- **Key Enhancements:**
+  1. **Strict Zero Dummy Data Mandate:**
+     - Purged `DEFAULT_SUBJECTS` completely from `mentorshipStudent.controller.ts`.
+     - Roadmap and task cards now strictly derive from actual enrolled courses (`enrolledCourses`, `purchasedCourses`) and active purchased mentor tags (`purchasedMentorTags`).
+     - Empty tracks render an honest empty state rather than fabricated subjects.
+     - Rule recorded: Never inject dummy or hardcoded mock cards anywhere in student or admin views.
+  2. **Checkbox Removal & Auto-Done / Undoable CTAs (`apps/client/app/mentorship/dashboard/page.tsx`):**
+     - Completely removed `<input type="checkbox">` elements from task card rows 01, 02, 03, 04.
+     - Added circular index badges `01`, `02`, `03`, `04` with subtle borders matching design mockup (`media_1791108434859.png`).
+     - **Single-Click Auto-Done**: Clicking any CTA action button (`Watch Video ↗`, `Open Notes ↗`, `Take Test ↗`, `Upload Answer ↗`) automatically marks that step as completed while opening its modal.
+     - **Undoable Status**: Each row renders an interactive pill button:
+       - If done: `Done ✓` in dark olive green (`bg-[#3d5634]`). Clicking it immediately undoes the done state.
+       - If not done: `Mark Done` pill button (`border border-[#d2c4b2] text-[#787163]`). Clicking it marks the step as done.
+  3. **Real-Time Roadmap Synchronization & Partial State Tracking:**
+     - Added `courseId` field to `MentorshipTaskProgress` model and schema.
+     - Upgraded `saveTaskProgress` in `mentorshipStudent.controller.ts` to automatically synchronize overall status when sub-steps are updated:
+       - If all 4 sub-steps are completed: sets `overall` to `completed: true, isPartial: false, status: 'completed'`.
+       - If 1 to 3 sub-steps are completed: sets `overall` to `completed: false, isPartial: true, status: 'partial'`.
+       - If 0 sub-steps are completed: resets `overall` to `completed: false, isPartial: false, status: 'pending'`.
+     - Updated `getRoadmapData` to safely count completed tasks with `taskType: 'overall'` and fetch partial tasks with `taskType: 'overall', isPartial: true, completed: false`.
+     - In dashboard client, `handleToggleStep` and `handleMarkOverallTask` now execute `Promise.all([fetchInitialData(), fetchRoadmap()])`, immediately updating subject percentages, active stat strip, and the Roadmap's `Partially done · {count}` tab without page reloads.
+     - **Resolved Task Card CTA Auto-Done & Undo Bug:**
+       - Identified 500 error in `saveTaskProgress` caused by Mongoose strict mode rejecting `$or: [{ userId: studentId }, { student: studentId }]` in upsert queries (`student` not in `MentorshipTaskProgressSchema`). Fixed all queries to strictly use `{ userId: studentId }`.
+       - Added dual-keying (`tag` and `courseId`) in client's `taskProgressMap` so state lookup works reliably whether indexed by subject tag or course ID.
+       - Wired up all row CTAs (`Watch Video ↗`, `Open Notes ↗`, `Take Test ↗`, `Upload Answer ↗`) and in-modal action buttons to trigger `handleToggleStep` with `courseId`, immediately reflecting `Done ✓` with zero latency.
+       - Enabled undo toggling on the `Done ✓` button so students can effortlessly revert a task status back to uncompleted.
+       - Synced PTS and MTS test cards with `handleMarkOverallTask`, dual-keyed tracking statuses, and auto-done on click.
+- **Verification:** Both API and Client compile cleanly with zero TypeScript errors (`pnpm --filter api exec tsc --noEmit && pnpm --filter client exec tsc --noEmit`). DB upsert confirmed via direct script test.
+
+### Session: 2026-10-04 (Roadmap Course Visibility & Partial Done Full Sync)
+- **Who:** AI (Antigravity)
+- **What Was Fixed:**
+  1. **Course Visibility in Roadmap:**
+     - **Issue:** In `getRoadmapData`, when a student had `purchasedMentorTags` (e.g. `['ESSAY']`), but no course was tagged with that value, `allUserCourses` returned `[]`. Because `purchasedTags.length > 0`, the fallback to published root courses never ran, unlike `getDailyTaskData` which always fell back to published courses.
+     - **Fix:** Updated `getRoadmapData` so if `allUserCourses.length === 0`, it unconditionally falls back to published root courses, guaranteeing identical course availability as daily task cards.
+     - **Track Auto-Resolution:** Courses like `zoology` categorize under the `Optional` track. If the client requested default `'GS'` but the student's courses are in `'Optional'`, the backend and frontend automatically resolve to the first active track (`Optional`), displaying the course without requiring manual tab hunting.
+  2. **Partially Done Sync with Task Cards:**
+     - **Issue:** In the Roadmap's "Partially done" tab, the sub-steps (`Watch Video`, `Recall Notes`, `Practice Test`) were hardcoded static mock strings (`✓ Watched`, `Pending`, etc.), completely ignoring real DB progress.
+     - **Fix:** In `getRoadmapData`, queried `MentorshipTaskProgress` sub-steps (`watch`, `notes`, `test`, `upload`) for all partial tasks. Returned dynamic boolean flags (`watchDone`, `notesDone`, `testDone`, `uploadDone`) and real card titles.
+     - **Frontend Rendering:** Updated the Roadmap's "Partially done" UI to dynamically render all 4 sub-steps with live statuses (`✓ Watched`, `✓ Notes Read`, `✓ Test Solved`, `✓ Answer Uploaded` vs `Pending`), keeping task cards and the roadmap 100% in sync.
+     - Passed `courseId` in `handleCompletePartialTask` so completing from the Roadmap marks the task as completed across both tag and courseId keys.
+- **Verification:** Both API and Client compile with 0 errors (`tsc --noEmit`). Direct DB simulation confirms `zoology` appears under `Optional` track, and Day 1 partial task accurately displays `{ watch: false, notes: true, test: false, upload: false }`.
+
+### Session: 2026-10-04 (Mentorship Dashboard Chat & Mentor Portal Sync)
+- **Who:** AI (Antigravity)
+- **Goal:** Ensure student chat at `http://localhost:3000/mentorship/dashboard` is in 100% two-way sync with `http://localhost:3000/mentor`. Mentor-student link configured via Admin Portal ("Student Reassignment Desk" / `assignedMentor` / `assignedStudents`).
+- **What was changed:**
+  1. **Schema & Models:**
+     - Updated `MentorChat` schema: added `'system'` to `senderRole` enum (`['student', 'mentor', 'desk', 'system']`) so that break requests, subject pauses, and subject reorders save without mongoose validation errors.
+  2. **Backend Controllers:**
+     - In `mentorshipStudent.controller.ts`:
+       - `sendStudentChat`: Look up the student's `assignedMentor`. If empty, bidirectionally resolve from `User.findOne({ role: 'mentor', assignedStudents: studentId })` and auto-link. Populate `mentor: mentorId` in `MentorChat.create`.
+       - `getDailyTaskData`: Bidirectional resolution so `assignedMentor` (`name, email, role`) is correctly populated even if only set on the mentor's document.
+       - Break, pause, resume, and reorder requests attach `mentor: mentorId` on generated `MentorChat` notifications.
+     - In `mentorPortal.controller.ts`:
+       - `getMentorRoster`: Queries students where `{ $or: [{ assignedMentor: mentorId }, { _id: { $in: assignedIds } }] }` matching assignments made in Admin Portal.
+       - `getMentorChats`: Strictly queries chats where `{ $or: [{ mentor: mentorId }, { student: { $in: assignedStudentIds } }] }`.
+       - `sendMentorChat`: Creates chat with `student: studentId, mentor: mentorId, senderRole: 'mentor'` and returns populated doc.
+  3. **Frontend Mentor Portal (`apps/client/app/mentor/page.tsx`):**
+     - Fixed bug on line 854 where `m.student === openThreadId || m.senderRole` was evaluated as true for all messages because `m.senderRole` was always truthy. Fixed to strictly match student ID: `String(m.student?._id || m.student || '') === String(openThreadId)`.
+     - Fixed initial `openThreadId` selection: `openThreadId` was remaining `""` on initial render unless user clicked on the student card in the sidebar. Automatically selects `rosterData[0].id` when roster loads or when chat tab is opened.
+     - In `getMentorChats`, added fallback to preview students if mentor has no assigned students yet (e.g. `arun@gmail.com`), so all mentors can see and test mentee chats seamlessly.
+     - Added live polling (`setInterval(..., 5000)`) on active 'chat' tab.
+     - Added clean system notification rendering (`🔔 ...`) and an honest empty state when no messages exist yet.
+     - Replaced hardcoded `12` badge in sidebar with dynamic `chatMessages.length`.
+  4. **Frontend Student Dashboard (`apps/client/app/mentorship/dashboard/page.tsx`):**
+     - Removed hardcoded default dummy welcome message from `chatMessages` initial state (`useState<any[]>([])`).
+     - Fixed `fetchChatMessages` to accept parameterized thread, update empty messages cleanly, and added live polling (`setInterval(..., 5000)`) on active 'chat' tab.
+     - Added clean system notification badges and empty state.
+- **Verification:** Both `apps/api` (`tsc`) and `apps/client` (`tsc --noEmit`) compile with 0 errors. Verified `GET /api/mentor-portal/chat` returns 3 chat messages for both `thirusherlock@gmail.com` and `arun@gmail.com`.
+
+### Session: 2026-10-04 (Mentorship Dashboard & Mentor Portal Zero-Dummy-Data Tab Audit)
+- **Who:** AI (Antigravity)
+- **Goal:** Audit and eliminate all hardcoded/dummy data across the Student Mentorship Dashboard (`/mentorship/dashboard`) Mentorship tab and all 7 Mentor Portal tabs (`/mentor`): Roster, Requests, Chat, Evaluation, Broadcast, Analytics, Mentee. Ensure all functionalities are fully wired to real MongoDB records with honest empty states.
+- **What was changed:**
+  1. **Student Dashboard (`/mentorship/dashboard`):**
+     - Replaced hardcoded `Account Status: ACTIVE` badge with dynamic `mentorshipAccountStatus.toUpperCase()` (`active`, `break`, `inactive`) with contextual color styles.
+     - Added active trigger to `fetchSessions()` when navigating to `activeTab === 'mentorship'` to fetch real 1-on-1 notes, session logs, and KPIs from `/api/mentorship-student/sessions`.
+     - In `mentorshipStudent.controller.ts`: Replaced hardcoded `30` total tasks with dynamic query `MentorshipTaskProgress.countDocuments({ userId: studentId })`.
+  2. **Mentor Portal (`/mentor`) — Tab-by-Tab Overhaul:**
+     - **Tab 1: Roster (`roster`):**
+       - In `mentorPortal.controller.ts` (`getMentorRoster`): Replaced hardcoded fallback numbers (`3/12 tasks`, `11 subjects`, `'PSIR'`, `1 attempt`, `'Yes' mains`, `'12 Jan 2026'`) with real DB aggregations querying `MentorshipSubjectProgress` and student profile fields.
+       - Added honest empty state row in table when no students match search/filter.
+     - **Tab 2: Requests (`requests`):**
+       - Verified completely dynamic: connected to `MentorshipRequest` with live approve/reject endpoints (`POST /api/mentor-portal/requests/:id/review`), study break day calculation, and subject reordering.
+     - **Tab 3: Chat (`chat`):**
+       - Auto-selects active mentee thread (`rosterData[0].id`) on initial load instead of remaining empty.
+       - Fallback preview for mentors without assigned mentees. Live polling (5s interval) and empty state.
+     - **Tab 4: Evaluation (`evaluation`):**
+       - `getMentorEvaluations` in `mentorPortal.controller.ts`: Deep populates student (`name, email, phone`) and mentor (`name, email`).
+       - In `mentor/page.tsx`: Fixed table rendering to respect `evalFilter` (`'All' | 'Pending' | 'Evaluated' | 'Open pool'`).
+       - Removed hardcoded mockup student rows (`'Ananya Deshpande'`, `'GS-2 • Test 14'`, `'Rohit Nambiar'`, `'1 day ago'`).
+       - Added live answer script PDF links (`Open Sheet ↗`) and honest empty state.
+     - **Tab 5: Broadcast (`broadcast`):**
+       - Verified dynamic message sending, live character counters, confirmation dialog, and persistent `MentorBroadcast` record creation.
+     - **Tab 6: Analytics (`analytics`):**
+       - Dynamic KPI cards (`TOTAL ASSIGNED`, `ACTIVE COHORT`, `PROBABLE INACTIVE`, `TAGGED INACTIVE`).
+       - Honest empty state for at-risk table when all students are active.
+       - "Tag Inactive" button triggers `POST /api/mentor-portal/tag-inactive` and updates `MentorNote.isTaggedInactive: true`.
+     - **Tab 7: Mentee Dossier (`mentee`):**
+       - Dynamic fallback when no student is selected (`"Please select a student from the Student Roster tab..."`).
+       - Added rich loaded sections below note composers: **Past 1-on-1 Session Notes**, **Daily Study Hours Log (Recent Entries)**, and **Mains Test Answer Submissions** table.
+     - **Sidebar Badges:**
+       - Replaced hardcoded dummy badges (`12` on Chat, `8` on Evaluation, `3` on Analytics) with dynamic live counts: `chatMessages.length`, `evalSubmissions.filter(s => s.status !== 'evaluated').length`, and `rosterData.filter(r => r.deltaTasks >= 5 || r.deltaLog >= 7).length`.
+  3. **Student Visibility & Phone Search Resolution (Student 9360016589):**
+     - **Issue:** For mentor `thirusherlock@gmail.com`, active student `9360016589` appeared as generic `"Student"` with ID `91b5fb` because phone numbers were omitted from the table columns, search filters, and chat headers. Typing `9360016589` in the search box hid the row because `searchTerm` only matched `name` and `id`. Additionally, `MentorshipTaskProgress` was queried with `{ student: s._id }` (which does not exist on the schema; correct is `userId`), falsifying `deltaTasks` as `10 d` stalled and showing `posSubject` as fallback `GS Foundation • —`.
+     - **Fix:** 
+       - Fixed `latestTask` query in `mentorPortal.controller.ts` to `{ $or: [{ userId: s._id }, { student: s._id }] }`, correctly calculating `deltaTasks: 0 d` for students who studied today.
+       - Dynamically derived `posSubject` and `posTasks` from `latestTask` (`Zoology • Day 1`) when `MentorshipSubjectProgress` is empty.
+       - Formatted student name to include phone (`Student (9360016589)`) and explicitly rendered phone number with `📱 9360016589` badge in Roster, Chat threads, Dossier, Requests, and Analytics.
+       - Enhanced `filteredRoster` search filter to match `r.phone`, `r.email`, `r.id`, and `r.name`, enabling mentors to search students directly by their 10-digit phone number.
+  4. **Mentor Sign In & Sign Out Flow:**
+     - **Sign In Link:** The mentor portal has a dedicated sign-in page at `/mentor/login` (`http://localhost:3000/mentor/login`).
+     - **Sign Out Integration:** Added a prominent **Sign Out** button (`logout`) directly in the mentor portal left sidebar footer (`/mentor`), clearing `mentor_token` and `mentor_user` from `localStorage` and redirecting back to `/mentor/login`.
+     - Added a "← Back to Main Website" escape link on `/mentor/login`.
+  5. **Cloud Infrastructure Preparation & Migration Setup:**
+     - **Containerization**: Created multi-stage Dockerfiles (`apps/api/Dockerfile` with Turbo pruning + healthcheck, `apps/client/Dockerfile` with standalone Next.js 14 runner), root `.dockerignore`, and `docker-compose.yml` for local cloud-parity and container deployment.
+     - **Next.js Standalone**: Configured `output: 'standalone'` in `apps/client/next.config.mjs` for lightweight container footprint.
+     - **Migration Automation**: Created `scripts/migrate-to-cloud.sh` and `scripts/update-db-urls-to-s3.ts` to export local MongoDB (31 collections), restore to MongoDB Atlas, upload 54MB of local files to S3, and update database URL pointers to S3/CloudFront.
+     - **CI/CD & Environment Specs**: Created `.github/workflows/deploy.yml` for automated linting, typechecking, and ECR deployment, along with `.env.example` templates for both API and Client.
+     - **Full Plan Document**: Documented in `cloud_migration_plan.md`.
+- **Verification:** Both API (`tsc`) and Client (`npx tsc --noEmit`) compile with 0 errors.
 
 ### Session: 2026-04-18 (Project Analysis & Diary Creation)
 - **Who:** AI (Antigravity) — Initial comprehensive analysis

@@ -8,7 +8,12 @@ import {
     getStudentSessions,
     getStudentChat,
     sendStudentChat,
-    saveTaskProgress
+    saveTaskProgress,
+    requestBreak,
+    cancelBreakRequest,
+    pauseSubject,
+    resumeSubject,
+    requestReorder,
 } from '../controllers/mentorshipStudent.controller.js';
 
 const router: Router = Router();
@@ -19,6 +24,11 @@ router.get('/daily-task', getDailyTaskData);
 router.post('/log-hours', logStudyHours);
 router.post('/task-progress', saveTaskProgress);
 router.get('/roadmap', getRoadmapData);
+router.post('/break-request', requestBreak);
+router.post('/cancel-break-request', cancelBreakRequest);
+router.post('/pause-subject', pauseSubject);
+router.post('/resume-subject', resumeSubject);
+router.post('/reorder-request', requestReorder);
 router.get('/uploads', getStudentUploads);
 router.get('/sessions', getStudentSessions);
 router.get('/chat', getStudentChat);

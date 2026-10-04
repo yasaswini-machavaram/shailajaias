@@ -54,7 +54,7 @@ export default function MentorshipDashboardPage() {
     const [activeModal, setActiveModal] = useState<{
         type: 'video' | 'notes' | 'test' | 'upload';
         item: any;
-        cardContext: { tag: string; dayNumber: number };
+        cardContext: { tag: string; dayNumber: number; courseId?: string };
     } | null>(null);
 
     const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
@@ -171,109 +171,54 @@ export default function MentorshipDashboardPage() {
         }
     }, [activeModal]);
 
-    // Roadmap state
-    const [subscribedTags, setSubscribedTags] = useState<string[]>([]);
-    const [roadmapCategoryFilter, setRoadmapCategoryFilter] = useState<'all' | 'courses' | 'mts' | 'pts' | 'partial'>('all');
+    // Roadmap state (Courses only; PTS & MTS trackers removed)
+    const [selectedTrack, setSelectedTrack] = useState<'GS' | 'Optional' | 'Essay' | 'CA' | 'CSAT'>('GS');
+    const [roadmapSubTab, setRoadmapSubTab] = useState<'subjects' | 'partial'>('subjects');
+    const [reorderMode, setReorderMode] = useState(false);
+    const [pausedAccordionOpen, setPausedAccordionOpen] = useState<string | null>(null);
 
-    const [coursesRoadmap, setCoursesRoadmap] = useState<{ inProgress: any[]; completed: any[] }>({
-        inProgress: [
-            {
-                _id: 'c_prog_1',
-                title: 'General Studies Paper I — Environment & Ecology',
-                tag: 'GS-3',
-                totalTasks: 15,
-                completedTasks: 5,
-                percentage: 33,
-                ptsGroupCode: 'PTS-ENV-2026',
-                mtsGroupCode: 'MTS-ENV-2026',
-                startedOn: '01 Aug 2026',
-            },
-            {
-                _id: 'c_prog_2',
-                title: 'Indian Economy & Macro Development',
-                tag: 'GS-3',
-                totalTasks: 18,
-                completedTasks: 9,
-                percentage: 50,
-                ptsGroupCode: 'PTS-ECO-2026',
-                mtsGroupCode: 'MTS-ECO-2026',
-                startedOn: '10 Aug 2026',
-            }
-        ],
-        completed: [
-            {
-                _id: 'c_comp_1',
-                title: 'Indian Polity & Constitutional Governance',
-                tag: 'GS-2',
-                totalTasks: 14,
-                completedTasks: 14,
-                percentage: 100,
-                finishedOn: '31 Jul 2026',
-                ptsGroupCode: 'PTS-POLITY-2026',
-                mtsGroupCode: 'MTS-POLITY-2026',
-            }
-        ]
+    // Mentorship Account & Requests state
+    const [mentorshipAccountStatus, setMentorshipAccountStatus] = useState<'active' | 'break' | 'inactive'>('active');
+    const [pendingBreakRequest, setPendingBreakRequest] = useState<any | null>(null);
+    const [pendingReorderRequest, setPendingReorderRequest] = useState<any | null>(null);
+
+    // Roadmap Data
+    const [roadmapData, setRoadmapData] = useState<{
+        track: string;
+        statStrip: string;
+        completedSubjects: any[];
+        currentSubject: any;
+        pausedSubjects: any[];
+        upcomingSubjects: any[];
+        activeTracks?: string[];
+    }>({
+        track: 'GS',
+        statStrip: '',
+        completedSubjects: [],
+        currentSubject: null,
+        pausedSubjects: [],
+        upcomingSubjects: [],
+        activeTracks: [],
     });
 
-    const [mtsRoadmap, setMtsRoadmap] = useState<{ inProgress: any[]; completed: any[] }>({
-        inProgress: [
-            {
-                _id: 'mts_prog_1',
-                title: 'Mains Test Series 2026 — GS Paper II Focus Batch',
-                tag: 'MTS-GS2',
-                totalTests: 12,
-                completedTests: 4,
-                percentage: 33,
-                lastSubmission: '18 Sep 2026',
-            }
-        ],
-        completed: [
-            {
-                _id: 'mts_comp_1',
-                title: 'Mains Test Series 2026 — Ethics & Essay Foundation Batch',
-                tag: 'MTS-ETHICS',
-                totalTests: 8,
-                completedTests: 8,
-                percentage: 100,
-                finishedOn: '10 Aug 2026',
-            }
-        ]
-    });
-
-    const [ptsRoadmap, setPtsRoadmap] = useState<{ inProgress: any[]; completed: any[] }>({
-        inProgress: [
-            {
-                _id: 'pts_prog_1',
-                title: 'Prelims Test Series 2026 — All India Mock Series',
-                tag: 'PTS-AIMS',
-                totalTests: 25,
-                completedTests: 8,
-                percentage: 32,
-                lastAttempt: '19 Sep 2026',
-            }
-        ],
-        completed: [
-            {
-                _id: 'pts_comp_1',
-                title: 'Prelims Test Series 2026 — Sectional Static Revision',
-                tag: 'PTS-STATIC',
-                totalTests: 10,
-                completedTests: 10,
-                percentage: 100,
-                finishedOn: '05 Aug 2026',
-            }
-        ]
-    });
-
-    const [subjectsList, setSubjectsList] = useState<any[]>([
-        { name: 'Polity', state: 'done', total: 14, done: 14, startedOn: '15 Jul', finishedOn: '31 Jul' },
-        { name: 'Economy', state: 'done', total: 16, done: 16, startedOn: '01 Aug', finishedOn: '14 Aug' },
-        { name: 'Environment & Ecology', state: 'current', total: 15, done: 4, startDate: new Date() },
-        { name: 'Modern History', state: 'upcoming', total: 12, done: 0 },
-        { name: 'Geography', state: 'upcoming', total: 10, done: 0 },
-        { name: 'Ethics (GS-IV)', state: 'upcoming', total: 9, done: 0 },
-    ]);
+    const [workingUpcomingSubjects, setWorkingUpcomingSubjects] = useState<any[]>([]);
     const [partialTasks, setPartialTasks] = useState<any[]>([]);
+    const [isRoadmapLoading, setIsRoadmapLoading] = useState(false);
+
+    // Modals state
+    const [isBreakModalOpen, setIsBreakModalOpen] = useState(false);
+    const [breakReason, setBreakReason] = useState('Health');
+    const [breakMode, setBreakMode] = useState<'fixed' | 'open'>('fixed');
+    const [breakReturnDate, setBreakReturnDate] = useState('');
+    const [isSubmittingBreak, setIsSubmittingBreak] = useState(false);
+
+    const [isPauseModalOpen, setIsPauseModalOpen] = useState(false);
+    const [pauseReason, setPauseReason] = useState('Health');
+    const [pauseNote, setPauseNote] = useState('');
+    const [isSubmittingPause, setIsSubmittingPause] = useState(false);
+
+    const [isReorderModalOpen, setIsReorderModalOpen] = useState(false);
+    const [isSubmittingReorder, setIsSubmittingReorder] = useState(false);
     const [kpis, setKpis] = useState<{
         avgHoursPerWeek: string;
         taskCompletionPct: number;
@@ -290,9 +235,7 @@ export default function MentorshipDashboardPage() {
 
     // Chat state
     const [activeThread, setActiveThread] = useState<'mentor' | 'desk'>('mentor');
-    const [chatMessages, setChatMessages] = useState<any[]>([
-        { from: 'them', text: 'Welcome to your mentorship program! Keep logging your daily study hours and complete your tasks.', meta: '10:00 AM' },
-    ]);
+    const [chatMessages, setChatMessages] = useState<any[]>([]);
     const [chatInput, setChatInput] = useState('');
 
     // Uploads state
@@ -337,32 +280,53 @@ export default function MentorshipDashboardPage() {
                     const pMap: Record<string, boolean> = {};
                     dataDaily.data.taskProgress.forEach((tp: any) => {
                         pMap[`${tp.tag}_${tp.dayNumber}_${tp.taskType}`] = tp.completed;
+                        if (tp.courseId) {
+                            pMap[`${tp.courseId}_${tp.dayNumber}_${tp.taskType}`] = tp.completed;
+                        }
+                        if (tp.taskType === 'overall' && tp.isPartial) {
+                            pMap[`${tp.tag}_${tp.dayNumber}_partial`] = true;
+                            if (tp.courseId) {
+                                pMap[`${tp.courseId}_${tp.dayNumber}_partial`] = true;
+                            }
+                        }
                     });
                     setTaskProgressMap(pMap);
                 }
+                if (dataDaily.data.mentorshipAccountStatus) {
+                    setMentorshipAccountStatus(dataDaily.data.mentorshipAccountStatus);
+                }
+                if (dataDaily.data.pendingBreakRequest !== undefined) {
+                    setPendingBreakRequest(dataDaily.data.pendingBreakRequest);
+                }
+                if (dataDaily.data.pendingReorderRequest !== undefined) {
+                    setPendingReorderRequest(dataDaily.data.pendingReorderRequest);
+                }
             }
 
-            // 2. Roadmap data
-            const resRoadmap = await fetch(`${API_URL}/api/mentorship-student/roadmap`, {
+            // 2. Roadmap data (Courses only)
+            const resRoadmap = await fetch(`${API_URL}/api/mentorship-student/roadmap?track=${selectedTrack}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const dataRoadmap = await resRoadmap.json();
             if (dataRoadmap.success && dataRoadmap.data) {
-                setSubscribedTags(dataRoadmap.data.subscribedTags || []);
-                if (dataRoadmap.data.subjects?.length > 0) {
-                    setSubjectsList(dataRoadmap.data.subjects);
-                }
-                if (dataRoadmap.data.coursesRoadmap) {
-                    setCoursesRoadmap(dataRoadmap.data.coursesRoadmap);
-                }
-                if (dataRoadmap.data.mtsRoadmap) {
-                    setMtsRoadmap(dataRoadmap.data.mtsRoadmap);
-                }
-                if (dataRoadmap.data.ptsRoadmap) {
-                    setPtsRoadmap(dataRoadmap.data.ptsRoadmap);
+                setRoadmapData(dataRoadmap.data);
+                if (dataRoadmap.data.track && dataRoadmap.data.track !== selectedTrack) {
+                    setSelectedTrack(dataRoadmap.data.track);
                 }
                 if (dataRoadmap.data.partialTasks) {
                     setPartialTasks(dataRoadmap.data.partialTasks);
+                }
+                if (dataRoadmap.data.upcomingSubjects) {
+                    setWorkingUpcomingSubjects(dataRoadmap.data.upcomingSubjects);
+                }
+                if (dataRoadmap.data.pendingBreakRequest !== undefined) {
+                    setPendingBreakRequest(dataRoadmap.data.pendingBreakRequest);
+                }
+                if (dataRoadmap.data.pendingReorderRequest !== undefined) {
+                    setPendingReorderRequest(dataRoadmap.data.pendingReorderRequest);
+                }
+                if (dataRoadmap.data.mentorshipAccountStatus) {
+                    setMentorshipAccountStatus(dataRoadmap.data.mentorshipAccountStatus);
                 }
             }
 
@@ -376,6 +340,17 @@ export default function MentorshipDashboardPage() {
             }
 
             // 4. Sessions data & KPIs
+            fetchSessions();
+
+            // 5. Chat data
+            fetchChatMessages();
+        } catch (e) {
+            console.error('Fetch initial mentorship data error:', e);
+        }
+    };
+
+    const fetchSessions = async () => {
+        try {
             const resSessions = await fetch(`${API_URL}/api/mentorship-student/sessions`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
@@ -386,27 +361,38 @@ export default function MentorshipDashboardPage() {
                     setKpis(dataSessions.data.kpis);
                 }
             }
-
-            // 5. Chat data
-            fetchChatMessages();
         } catch (e) {
-            console.error('Fetch initial mentorship data error:', e);
+            console.error('Fetch sessions error:', e);
         }
     };
 
-    const fetchChatMessages = async () => {
+    useEffect(() => {
+        if (!token || activeTab !== 'mentorship') return;
+        fetchSessions();
+    }, [token, activeTab]);
+
+    const fetchChatMessages = async (thread = activeThread) => {
         try {
-            const res = await fetch(`${API_URL}/api/mentorship-student/chat?threadType=${activeThread}`, {
+            const res = await fetch(`${API_URL}/api/mentorship-student/chat?threadType=${thread}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
-            if (data.success && data.data?.length > 0) {
-                setChatMessages(data.data);
+            if (data.success) {
+                setChatMessages(data.data || []);
             }
         } catch (e) {
             console.error('Fetch chat error:', e);
         }
     };
+
+    useEffect(() => {
+        if (!token || activeTab !== 'chat') return;
+        fetchChatMessages(activeThread);
+        const interval = setInterval(() => {
+            fetchChatMessages(activeThread);
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [token, activeTab, activeThread]);
 
     const handleSaveHours = async () => {
         const h = parseFloat(hoursInput);
@@ -434,9 +420,22 @@ export default function MentorshipDashboardPage() {
         }
     };
 
-    const handleToggleStep = async (tag: string, dayNumber: number, taskType: 'watch' | 'notes' | 'test' | 'upload', completed: boolean, notesText?: string, mainsUrl?: string) => {
+    const handleToggleStep = async (
+        tag: string,
+        dayNumber: number,
+        taskType: 'watch' | 'notes' | 'test' | 'upload',
+        completed: boolean,
+        notesText?: string,
+        mainsUrl?: string,
+        courseId?: string
+    ) => {
         const key = `${tag}_${dayNumber}_${taskType}`;
-        setTaskProgressMap((prev) => ({ ...prev, [key]: completed }));
+        const keyCourse = courseId ? `${courseId}_${dayNumber}_${taskType}` : '';
+        setTaskProgressMap((prev) => ({
+            ...prev,
+            [key]: completed,
+            ...(keyCourse ? { [keyCourse]: completed } : {}),
+        }));
 
         try {
             await fetch(`${API_URL}/api/mentorship-student/task-progress`, {
@@ -445,27 +444,47 @@ export default function MentorshipDashboardPage() {
                 body: JSON.stringify({
                     tag: String(tag),
                     dayNumber: Number(dayNumber),
+                    courseId,
                     taskType,
                     completed,
                     notesText,
                     mainsAnswerFileUrl: mainsUrl,
                 }),
             });
-            fetchInitialData();
+            await Promise.all([fetchInitialData(), fetchRoadmap()]);
         } catch (e) {
             console.error('Save task progress error:', e);
         }
     };
 
-    const handleMarkOverallTask = async (tag: string, dayNumber: number, status: 'partial' | 'completed') => {
-        const isComp = status === 'completed';
-        const isPart = status === 'partial';
+    const handleMarkOverallTask = async (
+        tag: string,
+        dayNumber: number,
+        status?: 'partial' | 'completed' | 'pending',
+        courseId?: string
+    ) => {
+        const isCurrentlyComp = !!taskProgressMap[`${tag}_${dayNumber}_overall`] || (courseId ? !!taskProgressMap[`${courseId}_${dayNumber}_overall`] : false);
+        const isCurrentlyPart = !!taskProgressMap[`${tag}_${dayNumber}_partial`] || (courseId ? !!taskProgressMap[`${courseId}_${dayNumber}_partial`] : false);
+
+        // Toggle if user clicks on the already active status:
+        let targetStatus = status || (isCurrentlyComp ? 'pending' : 'completed');
+        if (status === 'completed' && isCurrentlyComp) {
+            targetStatus = 'pending';
+        } else if (status === 'partial' && isCurrentlyPart && !isCurrentlyComp) {
+            targetStatus = 'pending';
+        }
+
+        const isComp = targetStatus === 'completed';
+        const isPart = targetStatus === 'partial';
 
         setTaskProgressMap((prev) => {
             const next = { ...prev };
             ['watch', 'notes', 'test', 'upload', 'overall'].forEach((st) => {
                 next[`${tag}_${dayNumber}_${st}`] = isComp;
+                if (courseId) next[`${courseId}_${dayNumber}_${st}`] = isComp;
             });
+            next[`${tag}_${dayNumber}_partial`] = isPart;
+            if (courseId) next[`${courseId}_${dayNumber}_partial`] = isPart;
             return next;
         });
 
@@ -476,12 +495,13 @@ export default function MentorshipDashboardPage() {
                 body: JSON.stringify({
                     tag: String(tag),
                     dayNumber: Number(dayNumber),
+                    courseId,
                     taskType: 'overall',
                     completed: isComp,
                     isPartial: isPart,
                 }),
             });
-            fetchInitialData();
+            await Promise.all([fetchInitialData(), fetchRoadmap()]);
         } catch (e) {
             console.error('Save overall task progress error:', e);
         }
@@ -492,29 +512,31 @@ export default function MentorshipDashboardPage() {
         const text = chatInput.trim();
         setChatInput('');
 
-        setChatMessages((prev) => [
-            ...prev,
-            { from: 'me', senderRole: 'student', text, meta: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
-        ]);
-
         try {
-            await fetch(`${API_URL}/api/mentorship-student/chat`, {
+            const res = await fetch(`${API_URL}/api/mentorship-student/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ text, threadType: activeThread }),
             });
+            const data = await res.json();
+            if (data.success && data.data) {
+                setChatMessages((prev) => [...prev, data.data]);
+            } else {
+                fetchChatMessages(activeThread);
+            }
         } catch (e) {
             console.error('Send chat error:', e);
+            fetchChatMessages(activeThread);
         }
     };
 
-    const handleMainsUploadSubmit = async (cardContext: { tag: string; dayNumber: number }, itemTitle: string) => {
+    const handleMainsUploadSubmit = async (cardContext: { tag: string; dayNumber: number; courseId?: string }, itemTitle: string) => {
         setIsSubmittingUpload(true);
         setUploadMsg('');
         try {
             const simulatedUrl = uploadFile ? `/uploads/${uploadFile.name}` : `https://shailajaias.com/uploads/mains-submission-${Date.now()}.pdf`;
             
-            await handleToggleStep(cardContext.tag, cardContext.dayNumber, 'upload', true, 'Submitted practice answer script', simulatedUrl);
+            await handleToggleStep(cardContext.tag, cardContext.dayNumber, 'upload', true, 'Submitted practice answer script', simulatedUrl, cardContext.courseId);
 
             setUploadsList((prev) => [
                 {
@@ -537,6 +559,181 @@ export default function MentorshipDashboardPage() {
             console.error('Mains upload error:', e);
             setIsSubmittingUpload(false);
         }
+    };
+
+    const fetchRoadmap = async (track = selectedTrack) => {
+        setIsRoadmapLoading(true);
+        try {
+            const resRoadmap = await fetch(`${API_URL}/api/mentorship-student/roadmap?track=${track}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const dataRoadmap = await resRoadmap.json();
+            if (dataRoadmap.success && dataRoadmap.data) {
+                setRoadmapData(dataRoadmap.data);
+                if (dataRoadmap.data.track && dataRoadmap.data.track !== selectedTrack) {
+                    setSelectedTrack(dataRoadmap.data.track);
+                }
+                setPartialTasks(dataRoadmap.data.partialTasks || []);
+                setWorkingUpcomingSubjects(dataRoadmap.data.upcomingSubjects || []);
+                if (dataRoadmap.data.pendingBreakRequest !== undefined) {
+                    setPendingBreakRequest(dataRoadmap.data.pendingBreakRequest);
+                }
+                if (dataRoadmap.data.pendingReorderRequest !== undefined) {
+                    setPendingReorderRequest(dataRoadmap.data.pendingReorderRequest);
+                }
+                if (dataRoadmap.data.mentorshipAccountStatus) {
+                    setMentorshipAccountStatus(dataRoadmap.data.mentorshipAccountStatus);
+                }
+            }
+        } catch (e) {
+            console.error('Fetch roadmap error:', e);
+        } finally {
+            setIsRoadmapLoading(false);
+        }
+    };
+
+    const handleSelectTrack = (track: 'GS' | 'Optional' | 'Essay' | 'CA' | 'CSAT') => {
+        setSelectedTrack(track);
+        fetchRoadmap(track);
+    };
+
+    const handleRequestBreak = async () => {
+        if (!breakReason) return;
+        setIsSubmittingBreak(true);
+        try {
+            const res = await fetch(`${API_URL}/api/mentorship-student/break-request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    reason: breakReason,
+                    mode: breakMode,
+                    returnDate: breakMode === 'fixed' ? breakReturnDate : undefined,
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPendingBreakRequest(data.data);
+                setIsBreakModalOpen(false);
+            }
+        } catch (e) {
+            console.error('Request break error:', e);
+        } finally {
+            setIsSubmittingBreak(false);
+        }
+    };
+
+    const handleCancelBreakRequest = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/mentorship-student/cancel-break-request`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPendingBreakRequest(null);
+            }
+        } catch (e) {
+            console.error('Cancel break request error:', e);
+        }
+    };
+
+    const handleTellMentorReady = async () => {
+        try {
+            await fetch(`${API_URL}/api/mentorship-student/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    text: "Hello mentor, I have completed my break and am ready to resume my daily mentorship tasks. Please reactivate my daily schedule.",
+                    threadType: 'mentor',
+                }),
+            });
+            setActiveTab('chat');
+        } catch (e) {
+            console.error('Tell mentor ready error:', e);
+        }
+    };
+
+    const handlePauseSubject = async () => {
+        if (!roadmapData.currentSubject) return;
+        setIsSubmittingPause(true);
+        try {
+            const res = await fetch(`${API_URL}/api/mentorship-student/pause-subject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    subjectName: roadmapData.currentSubject.name,
+                    courseId: roadmapData.currentSubject.courseId,
+                    reason: pauseReason,
+                    note: pauseNote,
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setIsPauseModalOpen(false);
+                setPauseNote('');
+                fetchRoadmap();
+            }
+        } catch (e) {
+            console.error('Pause subject error:', e);
+        } finally {
+            setIsSubmittingPause(false);
+        }
+    };
+
+    const handleResumeSubject = async (subject: any) => {
+        try {
+            const res = await fetch(`${API_URL}/api/mentorship-student/resume-subject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    subjectName: subject.name,
+                    courseId: subject.courseId,
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                fetchRoadmap();
+            }
+        } catch (e) {
+            console.error('Resume subject error:', e);
+        }
+    };
+
+    const handleMoveUpcoming = (fromIdx: number, toIdx: number) => {
+        setWorkingUpcomingSubjects((prev) => {
+            const next = [...prev];
+            const [item] = next.splice(fromIdx, 1);
+            next.splice(toIdx, 0, item);
+            return next;
+        });
+    };
+
+    const handleSubmitReorder = async () => {
+        setIsSubmittingReorder(true);
+        try {
+            const proposedOrder = workingUpcomingSubjects.map((s) => s.courseId ? s.courseId : s.name);
+            const res = await fetch(`${API_URL}/api/mentorship-student/reorder-request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ proposedOrder }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setIsReorderModalOpen(false);
+                setReorderMode(false);
+                setPendingReorderRequest(data.data);
+                fetchRoadmap();
+            }
+        } catch (e) {
+            console.error('Submit reorder error:', e);
+        } finally {
+            setIsSubmittingReorder(false);
+        }
+    };
+
+    const handleCompletePartialTask = async (pt: any) => {
+        await handleMarkOverallTask(pt.tag, pt.dayNumber, 'completed', pt.courseId);
+        setPartialTasks((prev) => prev.filter((t) => t._id !== pt._id));
     };
 
     if (!isLoggedIn) {
@@ -633,39 +830,95 @@ export default function MentorshipDashboardPage() {
 
         const cards: any[] = [];
         subscribedCourses.forEach((c: any) => {
-            const vList = c.videos && c.videos.length > 0 ? c.videos : [{ title: c.title, nodeTitle: c.title }];
-            vList.forEach((v: any, vIdx: number) => {
+            // Check if course has custom sequenced taskCards configured by admin
+            if (Array.isArray(c.taskCards) && c.taskCards.length > 0) {
+                c.taskCards.forEach((tc: any, tcIdx: number) => {
+                    if (tc.cardType === 'pts_test') {
+                        cards.push({
+                            type: 'pts_test',
+                            id: `${c._id}_pts_${tcIdx}`,
+                            courseId: c._id,
+                            courseTitle: c.title,
+                            tag: c.mentorTags?.[0] || 'PTS',
+                            dayNumber: tc.dayNumber || (tcIdx + 1),
+                            title: tc.title || tc.ptsTestTitle || `PTS Test #${tcIdx + 1}`,
+                            ptsSeriesId: tc.ptsSeriesId,
+                            ptsTestIndex: tc.ptsTestIndex ?? 0,
+                            ptsTestTitle: tc.ptsTestTitle,
+                            ptsQuizId: tc.ptsQuizId,
+                            ptsQuestionPaperUrl: tc.ptsQuestionPaperUrl,
+                            ptsSolutionPaperUrl: tc.ptsSolutionPaperUrl,
+                            ptsDiscussionVideoUrl: tc.ptsDiscussionVideoUrl,
+                            ptsSyllabus: tc.ptsSyllabus,
+                        });
+                    } else if (tc.cardType === 'mts_test') {
+                        cards.push({
+                            type: 'mts_test',
+                            id: `${c._id}_mts_${tcIdx}`,
+                            courseId: c._id,
+                            courseTitle: c.title,
+                            tag: c.mentorTags?.[0] || 'MTS',
+                            dayNumber: tc.dayNumber || (tcIdx + 1),
+                            title: tc.title || tc.mtsTestTitle || `MTS Test #${tcIdx + 1}`,
+                            mtsSeriesId: tc.mtsSeriesId,
+                            mtsTestIndex: tc.mtsTestIndex ?? 0,
+                            mtsTestTitle: tc.mtsTestTitle,
+                            mtsSubjectCategory: tc.mtsSubjectCategory || 'General Studies',
+                            mtsQuestionPaperUrl: tc.mtsQuestionPaperUrl,
+                            mtsSolutionPaperUrl: tc.mtsSolutionPaperUrl,
+                            mtsDiscussionVideoUrl: tc.mtsDiscussionVideoUrl,
+                            mtsSyllabus: tc.mtsSyllabus,
+                        });
+                    } else {
+                        // Video card
+                        cards.push({
+                            type: 'task',
+                            id: `${c._id}_tc_${tcIdx}`,
+                            courseId: c._id,
+                            courseTitle: c.title,
+                            tag: c.mentorTags?.[0] || c.title || 'GS Foundation',
+                            dayNumber: tc.dayNumber || (tcIdx + 1),
+                            title: tc.title || `Task #${tcIdx + 1}`,
+                            video: tc,
+                            ptsGroupCode: c.ptsGroupCode || 'PTS-2026-01',
+                            mtsGroupCode: c.mtsGroupCode || 'MTS-2026-01',
+                        });
+                    }
+                });
+            } else {
+                // Fallback to legacy videos array + revision card
+                const vList = c.videos && c.videos.length > 0 ? c.videos : [{ title: c.title, nodeTitle: c.title }];
+                vList.forEach((v: any, vIdx: number) => {
+                    cards.push({
+                        type: 'task',
+                        id: `${c._id}_v_${vIdx}`,
+                        courseId: c._id,
+                        courseTitle: c.title,
+                        tag: c.mentorTags?.[0] || c.title || 'GS Foundation',
+                        dayNumber: vIdx + 1,
+                        title: v.nodeTitle || v.title || `Task #${vIdx + 1}`,
+                        video: v,
+                        ptsGroupCode: c.ptsGroupCode || 'PTS-2026-01',
+                        mtsGroupCode: c.mtsGroupCode || 'MTS-2026-01',
+                    });
+                });
+                // Revision Card at end of module
                 cards.push({
-                    type: 'task',
-                    id: `${c._id}_v_${vIdx}`,
+                    type: 'revision',
+                    id: `${c._id}_rev`,
+                    courseId: c._id,
                     courseTitle: c.title,
                     tag: c.mentorTags?.[0] || c.title || 'GS Foundation',
-                    dayNumber: vIdx + 1,
-                    title: v.nodeTitle || v.title || `Task #${vIdx + 1}`,
-                    video: v,
                     ptsGroupCode: c.ptsGroupCode || 'PTS-2026-01',
                     mtsGroupCode: c.mtsGroupCode || 'MTS-2026-01',
                 });
-            });
-            // Revision Card at end of module
-            cards.push({
-                type: 'revision',
-                id: `${c._id}_rev`,
-                courseTitle: c.title,
-                tag: c.mentorTags?.[0] || c.title || 'GS Foundation',
-                ptsGroupCode: c.ptsGroupCode || 'PTS-2026-01',
-                mtsGroupCode: c.mtsGroupCode || 'MTS-2026-01',
-            });
+            }
         });
         return cards;
     };
 
     const carouselCards = buildCarouselCards();
     const activeCard = carouselCards[Math.min(currentCardIndex, carouselCards.length - 1)];
-
-    const activeSubject = subjectsList.find((s) => s.state === 'current') || subjectsList[2];
-    const completedSubjects = subjectsList.filter((s) => s.state === 'done');
-    const upcomingSubjects = subjectsList.filter((s) => s.state === 'upcoming');
 
     const userHasMentorshipPurchased = (user?.purchasedMentorTags && user.purchasedMentorTags.length > 0) || isMentorshipStudent;
 
@@ -684,16 +937,42 @@ export default function MentorshipDashboardPage() {
                     <div className="flex items-center gap-4">
                         <div className="text-right hidden sm:block">
                             <p className="text-xs font-bold text-slate-800">{user?.name || 'Student'}</p>
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> ACTIVE
-                            </span>
+                            {mentorshipAccountStatus === 'break' ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> ON BREAK
+                                </span>
+                            ) : pendingBreakRequest ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-800 bg-orange-100 px-2.5 py-0.5 rounded-full border border-orange-300">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" /> BREAK REQUESTED
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> ACTIVE
+                                </span>
+                            )}
                         </div>
-                        <button
-                            onClick={() => setShowBreakModal(true)}
-                            className="text-xs text-slate-500 hover:text-[#1E3A5F] font-semibold underline"
-                        >
-                            Take a break
-                        </button>
+                        {mentorshipAccountStatus === 'break' ? (
+                            <button
+                                onClick={handleTellMentorReady}
+                                className="text-xs text-[#8c491a] hover:underline font-bold px-3 py-1.5 rounded-full border border-[#dcd3c4] bg-[#f9f4ed]"
+                            >
+                                Tell mentor I’m ready
+                            </button>
+                        ) : pendingBreakRequest ? (
+                            <button
+                                onClick={handleCancelBreakRequest}
+                                className="text-xs text-rose-700 hover:underline font-bold px-3 py-1.5 rounded-full border border-rose-200 bg-rose-50"
+                            >
+                                Withdraw break request
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => setIsBreakModalOpen(true)}
+                                className="text-xs text-[#645c50] hover:text-[#8c491a] font-semibold underline px-2 py-1"
+                            >
+                                Take a break
+                            </button>
+                        )}
                     </div>
                 </div>
             </header>
@@ -897,16 +1176,25 @@ export default function MentorshipDashboardPage() {
                                         <button
                                             onClick={() => setCurrentCardIndex((p) => Math.max(0, p - 1))}
                                             disabled={currentCardIndex === 0}
-                                            className="w-9 h-9 rounded-full border border-[#e3d5bd] bg-[#f5ead8] text-[#3d3a34] font-bold hover:bg-[#b8502a] hover:text-white disabled:opacity-40 transition-colors flex items-center justify-center text-base"
+                                            className="w-9 h-9 rounded-full border border-[#e3d5bd] bg-[#f5ead8] text-[#3d3a34] font-bold hover:bg-[#b8502a] hover:text-white disabled:opacity-40 transition-colors flex items-center justify-center text-base cursor-pointer"
+                                            title="Previous Card"
                                         >
                                             ‹
                                         </button>
                                         <button
                                             onClick={() => setCurrentCardIndex((p) => Math.min(carouselCards.length - 1, p + 1))}
                                             disabled={currentCardIndex === carouselCards.length - 1}
-                                            className="w-9 h-9 rounded-full border border-[#e3d5bd] bg-[#f5ead8] text-[#3d3a34] font-bold hover:bg-[#b8502a] hover:text-white disabled:opacity-40 transition-colors flex items-center justify-center text-base"
+                                            className="w-9 h-9 rounded-full border border-[#e3d5bd] bg-[#f5ead8] text-[#3d3a34] font-bold hover:bg-[#b8502a] hover:text-white disabled:opacity-40 transition-colors flex items-center justify-center text-base cursor-pointer"
+                                            title="Next Card"
                                         >
                                             ›
+                                        </button>
+                                        <button
+                                            onClick={() => setCurrentCardIndex(0)}
+                                            className="px-3.5 py-1.5 rounded-full border border-[#e3d5bd] bg-[#f5ead8] text-[#3d3a34] hover:bg-[#b8502a] hover:text-white text-xs font-bold transition-colors cursor-pointer"
+                                            title="Jump to Today's Card"
+                                        >
+                                            Today
                                         </button>
                                         <span className="text-xs font-bold text-[#787163] uppercase tracking-wider ml-2">
                                             CARD {currentCardIndex + 1} OF {carouselCards.length}
@@ -925,38 +1213,65 @@ export default function MentorshipDashboardPage() {
                                     <div className="space-y-6">
                                         <div>
                                             <span className="text-[10px] font-bold text-[#b8502a] uppercase tracking-wider">
-                                                {activeCard.courseTitle} • TASK #{activeCard.dayNumber}
+                                                CURRENT TASK · DAY {activeCard.dayNumber}{activeCard.courseTitle ? ` · ${activeCard.courseTitle.toUpperCase()}` : ''}
                                             </span>
-                                            <h3 className="text-2xl font-serif font-bold text-[#3d3a34] mt-1">{activeCard.title}</h3>
+                                            <h3 className="text-2xl sm:text-3xl font-serif font-black text-[#2d2a24] mt-1 tracking-tight">
+                                                {activeCard.title}
+                                            </h3>
                                         </div>
 
-                                        <div className="divide-y divide-[#f0e6d4]">
+                                        <div className="divide-y divide-[#eee4d6] border-y border-[#eee4d6]">
                                             {/* Row 01: Watch Video */}
                                             {(() => {
                                                 const key = `${activeCard.tag}_${activeCard.dayNumber}_watch`;
-                                                const done = !!taskProgressMap[key];
+                                                const done = !!taskProgressMap[key] || (activeCard.courseId ? !!taskProgressMap[`${activeCard.courseId}_${activeCard.dayNumber}_watch`] : false);
                                                 return (
                                                     <div className="py-4 flex items-center justify-between gap-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={done}
-                                                                onChange={(e) => handleToggleStep(activeCard.tag, activeCard.dayNumber, 'watch', e.target.checked)}
-                                                                className="w-5 h-5 rounded text-[#b8502a] accent-[#b8502a] cursor-pointer"
-                                                            />
-                                                            <div>
-                                                                <p className="text-sm font-bold text-[#3d3a34]">01 Watch Video — {activeCard.video?.title || activeCard.title}</p>
+                                                        <div className="flex items-center gap-3.5 min-w-0">
+                                                            <span className="w-8 h-8 rounded-full border border-[#d2c4b2] bg-[#faf6f0] text-[#6d6455] text-xs font-mono font-bold flex items-center justify-center shrink-0">
+                                                                01
+                                                            </span>
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm sm:text-base font-bold text-[#2d2a24] truncate">
+                                                                    Watch Video — {activeCard.video?.title || activeCard.title}
+                                                                </p>
                                                                 <p className="text-xs text-[#787163]">Video Lecture • In-Page Player</p>
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-2">
-                                                            {done && <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-full">Done ✓</span>}
+                                                        <div className="flex items-center gap-2.5 shrink-0">
                                                             <button
-                                                                onClick={() => setActiveModal({ type: 'video', item: activeCard.video, cardContext: { tag: activeCard.tag, dayNumber: activeCard.dayNumber } })}
-                                                                className="text-xs font-bold text-[#b8502a] bg-[#fff5ea] hover:bg-[#ffe8d6] px-4 py-2 rounded-xl border border-[#ffd8c2]"
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    handleToggleStep(activeCard.tag, activeCard.dayNumber, 'watch', true, undefined, undefined, activeCard.courseId);
+                                                                    setActiveModal({ type: 'video', item: activeCard.video, cardContext: { tag: activeCard.tag, dayNumber: activeCard.dayNumber, courseId: activeCard.courseId } });
+                                                                }}
+                                                                className="h-9 px-3 sm:px-3.5 rounded-xl border border-[#d2c4b2] hover:border-[#b8502a] text-[#554e42] hover:text-[#b8502a] hover:bg-[#fff5ea] text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                                title="Watch Video (Auto-marks done)"
                                                             >
-                                                                Watch Video ↗
+                                                                <span className="hidden sm:inline">Watch Video</span>
+                                                                <span className="text-sm leading-none font-bold">↗</span>
                                                             </button>
+
+                                                            {done ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleToggleStep(activeCard.tag, activeCard.dayNumber, 'watch', false, undefined, undefined, activeCard.courseId)}
+                                                                    className="h-9 px-4 rounded-full bg-[#3d5634] hover:bg-[#2c3f25] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                                                                    title="Click to undo done status"
+                                                                >
+                                                                    <span>Done</span>
+                                                                    <span className="text-sm leading-none">✓</span>
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleToggleStep(activeCard.tag, activeCard.dayNumber, 'watch', true, undefined, undefined, activeCard.courseId)}
+                                                                    className="h-9 px-3.5 rounded-full border border-[#d2c4b2] hover:border-[#3d5634] text-[#787163] hover:text-[#3d5634] bg-white/70 hover:bg-white text-xs font-medium transition-all flex items-center gap-1 cursor-pointer"
+                                                                    title="Mark as done"
+                                                                >
+                                                                    <span>Mark Done</span>
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 );
@@ -965,29 +1280,54 @@ export default function MentorshipDashboardPage() {
                                             {/* Row 02: Recall Notes */}
                                             {(() => {
                                                 const key = `${activeCard.tag}_${activeCard.dayNumber}_notes`;
-                                                const done = !!taskProgressMap[key];
+                                                const done = !!taskProgressMap[key] || (activeCard.courseId ? !!taskProgressMap[`${activeCard.courseId}_${activeCard.dayNumber}_notes`] : false);
                                                 return (
                                                     <div className="py-4 flex items-center justify-between gap-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={done}
-                                                                onChange={(e) => handleToggleStep(activeCard.tag, activeCard.dayNumber, 'notes', e.target.checked)}
-                                                                className="w-5 h-5 rounded text-[#b8502a] accent-[#b8502a] cursor-pointer"
-                                                            />
-                                                            <div>
-                                                                <p className="text-sm font-bold text-[#3d3a34]">02 Recall Notes — Active Recall &amp; PDF Handout</p>
+                                                        <div className="flex items-center gap-3.5 min-w-0">
+                                                            <span className="w-8 h-8 rounded-full border border-[#d2c4b2] bg-[#faf6f0] text-[#6d6455] text-xs font-mono font-bold flex items-center justify-center shrink-0">
+                                                                02
+                                                            </span>
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm sm:text-base font-bold text-[#2d2a24] truncate">
+                                                                    Recall Notes — Active Recall &amp; PDF Handout
+                                                                </p>
                                                                 <p className="text-xs text-[#787163]">Study Handout • Printable Notes</p>
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-2">
-                                                            {done && <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-full">Done ✓</span>}
+                                                        <div className="flex items-center gap-2.5 shrink-0">
                                                             <button
-                                                                onClick={() => setActiveModal({ type: 'notes', item: activeCard.video, cardContext: { tag: activeCard.tag, dayNumber: activeCard.dayNumber } })}
-                                                                className="text-xs font-bold text-[#b8502a] bg-[#fff5ea] hover:bg-[#ffe8d6] px-4 py-2 rounded-xl border border-[#ffd8c2]"
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    handleToggleStep(activeCard.tag, activeCard.dayNumber, 'notes', true, undefined, undefined, activeCard.courseId);
+                                                                    setActiveModal({ type: 'notes', item: activeCard.video, cardContext: { tag: activeCard.tag, dayNumber: activeCard.dayNumber, courseId: activeCard.courseId } });
+                                                                }}
+                                                                className="h-9 px-3 sm:px-3.5 rounded-xl border border-[#d2c4b2] hover:border-[#b8502a] text-[#554e42] hover:text-[#b8502a] hover:bg-[#fff5ea] text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                                title="Open Notes (Auto-marks done)"
                                                             >
-                                                                Open Notes ↗
+                                                                <span className="hidden sm:inline">Open Notes</span>
+                                                                <span className="text-sm leading-none font-bold">↗</span>
                                                             </button>
+
+                                                            {done ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleToggleStep(activeCard.tag, activeCard.dayNumber, 'notes', false, undefined, undefined, activeCard.courseId)}
+                                                                    className="h-9 px-4 rounded-full bg-[#3d5634] hover:bg-[#2c3f25] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                                                                    title="Click to undo done status"
+                                                                >
+                                                                    <span>Done</span>
+                                                                    <span className="text-sm leading-none">✓</span>
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleToggleStep(activeCard.tag, activeCard.dayNumber, 'notes', true, undefined, undefined, activeCard.courseId)}
+                                                                    className="h-9 px-3.5 rounded-full border border-[#d2c4b2] hover:border-[#3d5634] text-[#787163] hover:text-[#3d5634] bg-white/70 hover:bg-white text-xs font-medium transition-all flex items-center gap-1 cursor-pointer"
+                                                                    title="Mark as done"
+                                                                >
+                                                                    <span>Mark Done</span>
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 );
@@ -996,33 +1336,56 @@ export default function MentorshipDashboardPage() {
                                             {/* Row 03: Take Test */}
                                             {(() => {
                                                 const key = `${activeCard.tag}_${activeCard.dayNumber}_test`;
-                                                const done = !!taskProgressMap[key];
+                                                const done = !!taskProgressMap[key] || (activeCard.courseId ? !!taskProgressMap[`${activeCard.courseId}_${activeCard.dayNumber}_test`] : false);
                                                 return (
                                                     <div className="py-4 flex items-center justify-between gap-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={done}
-                                                                onChange={(e) => handleToggleStep(activeCard.tag, activeCard.dayNumber, 'test', e.target.checked)}
-                                                                className="w-5 h-5 rounded text-[#b8502a] accent-[#b8502a] cursor-pointer"
-                                                            />
-                                                            <div>
-                                                                <p className="text-sm font-bold text-[#3d3a34]">03 Take Test — Sectional Topic Quiz</p>
+                                                        <div className="flex items-center gap-3.5 min-w-0">
+                                                            <span className="w-8 h-8 rounded-full border border-[#d2c4b2] bg-[#faf6f0] text-[#6d6455] text-xs font-mono font-bold flex items-center justify-center shrink-0">
+                                                                03
+                                                            </span>
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm sm:text-base font-bold text-[#2d2a24] truncate">
+                                                                    Take Test — Sectional Topic Quiz
+                                                                </p>
                                                                 <p className="text-xs text-[#787163]">Prelims MCQ Solver In-Modal</p>
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-2">
-                                                            {done && <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-full">Done ✓</span>}
+                                                        <div className="flex items-center gap-2.5 shrink-0">
                                                             <button
+                                                                type="button"
                                                                 onClick={() => {
+                                                                    handleToggleStep(activeCard.tag, activeCard.dayNumber, 'test', true, undefined, undefined, activeCard.courseId);
                                                                     setQuizAnswers({});
                                                                     setQuizSubmitted(false);
-                                                                    setActiveModal({ type: 'test', item: activeCard.video, cardContext: { tag: activeCard.tag, dayNumber: activeCard.dayNumber } });
+                                                                    setActiveModal({ type: 'test', item: activeCard.video, cardContext: { tag: activeCard.tag, dayNumber: activeCard.dayNumber, courseId: activeCard.courseId } });
                                                                 }}
-                                                                className="text-xs font-bold text-[#b8502a] bg-[#fff5ea] hover:bg-[#ffe8d6] px-4 py-2 rounded-xl border border-[#ffd8c2]"
+                                                                className="h-9 px-3 sm:px-3.5 rounded-xl border border-[#d2c4b2] hover:border-[#b8502a] text-[#554e42] hover:text-[#b8502a] hover:bg-[#fff5ea] text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                                title="Take Test (Auto-marks done)"
                                                             >
-                                                                Take Test ↗
+                                                                <span className="hidden sm:inline">Take Test</span>
+                                                                <span className="text-sm leading-none font-bold">↗</span>
                                                             </button>
+
+                                                            {done ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleToggleStep(activeCard.tag, activeCard.dayNumber, 'test', false, undefined, undefined, activeCard.courseId)}
+                                                                    className="h-9 px-4 rounded-full bg-[#3d5634] hover:bg-[#2c3f25] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                                                                    title="Click to undo done status"
+                                                                >
+                                                                    <span>Done</span>
+                                                                    <span className="text-sm leading-none">✓</span>
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleToggleStep(activeCard.tag, activeCard.dayNumber, 'test', true, undefined, undefined, activeCard.courseId)}
+                                                                    className="h-9 px-3.5 rounded-full border border-[#d2c4b2] hover:border-[#3d5634] text-[#787163] hover:text-[#3d5634] bg-white/70 hover:bg-white text-xs font-medium transition-all flex items-center gap-1 cursor-pointer"
+                                                                    title="Mark as done"
+                                                                >
+                                                                    <span>Mark Done</span>
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 );
@@ -1031,69 +1394,377 @@ export default function MentorshipDashboardPage() {
                                             {/* Row 04: Upload Answer */}
                                             {(() => {
                                                 const key = `${activeCard.tag}_${activeCard.dayNumber}_upload`;
-                                                const done = !!taskProgressMap[key];
+                                                const done = !!taskProgressMap[key] || (activeCard.courseId ? !!taskProgressMap[`${activeCard.courseId}_${activeCard.dayNumber}_upload`] : false);
                                                 return (
                                                     <div className="py-4 flex items-center justify-between gap-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={done}
-                                                                onChange={(e) => handleToggleStep(activeCard.tag, activeCard.dayNumber, 'upload', e.target.checked)}
-                                                                className="w-5 h-5 rounded text-[#b8502a] accent-[#b8502a] cursor-pointer"
-                                                            />
-                                                            <div>
-                                                                <p className="text-sm font-bold text-[#3d3a34]">04 Upload Answer — Mains Practice Script Submission</p>
+                                                        <div className="flex items-center gap-3.5 min-w-0">
+                                                            <span className="w-8 h-8 rounded-full border border-[#d2c4b2] bg-[#faf6f0] text-[#6d6455] text-xs font-mono font-bold flex items-center justify-center shrink-0">
+                                                                04
+                                                            </span>
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm sm:text-base font-bold text-[#2d2a24] truncate">
+                                                                    Upload Answer — Mains Practice Script Submission
+                                                                </p>
                                                                 <p className="text-xs text-[#787163]">Upload PDF Answer • Tracked in Uploads tab</p>
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-2">
-                                                            {done && <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-full">✓ Submitted</span>}
+                                                        <div className="flex items-center gap-2.5 shrink-0">
                                                             <button
+                                                                type="button"
                                                                 onClick={() => {
+                                                                    handleToggleStep(activeCard.tag, activeCard.dayNumber, 'upload', true, undefined, undefined, activeCard.courseId);
                                                                     setUploadFile(null);
                                                                     setUploadMsg('');
-                                                                    setActiveModal({ type: 'upload', item: activeCard.video, cardContext: { tag: activeCard.tag, dayNumber: activeCard.dayNumber } });
+                                                                    setActiveModal({ type: 'upload', item: activeCard.video, cardContext: { tag: activeCard.tag, dayNumber: activeCard.dayNumber, courseId: activeCard.courseId } });
                                                                 }}
-                                                                className="text-xs font-bold text-[#b8502a] bg-[#fff5ea] hover:bg-[#ffe8d6] px-4 py-2 rounded-xl border border-[#ffd8c2]"
+                                                                className="h-9 px-3 sm:px-3.5 rounded-xl border border-[#d2c4b2] hover:border-[#b8502a] text-[#554e42] hover:text-[#b8502a] hover:bg-[#fff5ea] text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                                title="Upload Answer (Auto-marks done)"
                                                             >
-                                                                Upload Answer ↗
+                                                                <span className="hidden sm:inline">Upload Answer</span>
+                                                                <span className="text-sm leading-none font-bold">↗</span>
                                                             </button>
+
+                                                            {done ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleToggleStep(activeCard.tag, activeCard.dayNumber, 'upload', false, undefined, undefined, activeCard.courseId)}
+                                                                    className="h-9 px-4 rounded-full bg-[#3d5634] hover:bg-[#2c3f25] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                                                                    title="Click to undo done status"
+                                                                >
+                                                                    <span>Done</span>
+                                                                    <span className="text-sm leading-none">✓</span>
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleToggleStep(activeCard.tag, activeCard.dayNumber, 'upload', true, undefined, undefined, activeCard.courseId)}
+                                                                    className="h-9 px-3.5 rounded-full border border-[#d2c4b2] hover:border-[#3d5634] text-[#787163] hover:text-[#3d5634] bg-white/70 hover:bg-white text-xs font-medium transition-all flex items-center gap-1 cursor-pointer"
+                                                                    title="Mark as done"
+                                                                >
+                                                                    <span>Mark Done</span>
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 );
                                             })()}
                                         </div>
 
-                                        {/* Card Footer Bar: Two explicit Buttons (Partially Done & Completed) */}
-                                        <div className="pt-5 border-t border-[#f0e6d4] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                            <span className="text-xs text-[#787163] font-medium">
-                                                Task Tracking Status: {taskProgressMap[`${activeCard.tag}_${activeCard.dayNumber}_overall`] ? 'Completed ✓' : 'In Progress'}
+                                        {/* Card Footer Bar: Two explicit Buttons (Partially Done & Completed with Undo) */}
+                                        {(() => {
+                                            const isOverallDone = !!taskProgressMap[`${activeCard.tag}_${activeCard.dayNumber}_overall`] || (activeCard.courseId ? !!taskProgressMap[`${activeCard.courseId}_${activeCard.dayNumber}_overall`] : false);
+                                            const isPartialDone = !!taskProgressMap[`${activeCard.tag}_${activeCard.dayNumber}_partial`] || (activeCard.courseId ? !!taskProgressMap[`${activeCard.courseId}_${activeCard.dayNumber}_partial`] : false);
+                                            return (
+                                                <div className="pt-5 border-t border-[#f0e6d4] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                                    <span className="text-xs text-[#787163] font-medium">
+                                                        Task Tracking Status:{' '}
+                                                        <strong className={isOverallDone ? 'text-emerald-700' : isPartialDone ? 'text-amber-700' : 'text-[#787163]'}>
+                                                            {isOverallDone
+                                                                ? 'Completed ✓'
+                                                                : isPartialDone
+                                                                ? 'Partially Done 🟡'
+                                                                : 'In Progress'}
+                                                        </strong>
+                                                    </span>
+                                                    <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                                                        <button
+                                                            onClick={() => handleMarkOverallTask(activeCard.tag, activeCard.dayNumber, 'partial', activeCard.courseId)}
+                                                            className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                                                isPartialDone && !isOverallDone
+                                                                    ? 'bg-amber-100 text-amber-900 border-2 border-amber-400 shadow-xs'
+                                                                    : 'bg-[#fff5ea] hover:bg-[#ffe8d6] text-[#b8502a] border border-[#ffd8c2] shadow-2xs'
+                                                            }`}
+                                                            title={isPartialDone ? 'Click to undo partially done' : 'Mark as partially done'}
+                                                        >
+                                                            <span>🟡</span> {isPartialDone && !isOverallDone ? 'Partially Done (Undo)' : 'Mark Partially Done'}
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => handleMarkOverallTask(activeCard.tag, activeCard.dayNumber, 'completed', activeCard.courseId)}
+                                                            className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                                                isOverallDone
+                                                                    ? 'bg-emerald-700 hover:bg-emerald-800 text-white ring-2 ring-emerald-400'
+                                                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                                            }`}
+                                                            title={isOverallDone ? 'Click to undo completed' : 'Mark as completed'}
+                                                        >
+                                                            <span>✓</span> {isOverallDone ? 'Completed ✓ (Click to Undo)' : 'Mark Completed'}
+                                                        </button>
+
+                                                        {currentCardIndex < carouselCards.length - 1 && (
+                                                            <button
+                                                                onClick={() => setCurrentCardIndex((p) => p + 1)}
+                                                                className="px-4 py-2.5 rounded-xl bg-[#1E3A5F] hover:bg-[#152a45] text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+                                                            >
+                                                                Next Task →
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                ) : activeCard.type === 'pts_test' ? (
+                                    /* PTS Prelims Test Card */
+                                    <div className="space-y-6">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-bold text-[#D97706] uppercase tracking-wider bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
+                                                📝 PRELIMS TEST SERIES (PTS) • TASK #{activeCard.dayNumber}
                                             </span>
-                                            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                                                <button
-                                                    onClick={() => handleMarkOverallTask(activeCard.tag, activeCard.dayNumber, 'partial')}
-                                                    className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-[#fff5ea] hover:bg-[#ffe8d6] text-[#b8502a] border border-[#ffd8c2] text-xs font-bold shadow-2xs transition-all flex items-center justify-center gap-1.5"
-                                                >
-                                                    <span>🟡</span> Mark Partially Done
-                                                </button>
+                                            <span className="text-xs font-bold text-amber-800 bg-amber-100 px-3 py-1 rounded-full">
+                                                Prelims Mock Test
+                                            </span>
+                                        </div>
 
-                                                <button
-                                                    onClick={() => handleMarkOverallTask(activeCard.tag, activeCard.dayNumber, 'completed')}
-                                                    className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5"
-                                                >
-                                                    <span>✓</span> Mark Completed
-                                                </button>
+                                        <div>
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                                {activeCard.courseTitle}
+                                            </span>
+                                            <h3 className="text-2xl font-serif font-bold text-slate-800 mt-1">
+                                                {activeCard.title}
+                                            </h3>
+                                        </div>
 
-                                                {currentCardIndex < carouselCards.length - 1 && (
-                                                    <button
-                                                        onClick={() => setCurrentCardIndex((p) => p + 1)}
-                                                        className="px-4 py-2.5 rounded-xl bg-[#1E3A5F] hover:bg-[#152a45] text-white text-xs font-bold shadow-sm transition-all"
-                                                    >
-                                                        Next Task →
-                                                    </button>
+                                        <div className="p-5 bg-white rounded-2xl border border-amber-200 space-y-4 shadow-xs">
+                                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                                                <div>
+                                                    <p className="text-xs font-bold text-slate-800">
+                                                        {activeCard.ptsTestTitle || activeCard.title}
+                                                    </p>
+                                                    <p className="text-[11px] text-slate-500">
+                                                        Full sectional MCQ practice paper with UPSC negative scoring and instant explanation analysis.
+                                                    </p>
+                                                </div>
+                                                {activeCard.ptsQuizId && (
+                                                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">
+                                                        Online Quiz Attached
+                                                    </span>
                                                 )}
                                             </div>
+
+                                            {activeCard.ptsSyllabus && (
+                                                <div className="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                                    <span className="font-bold text-slate-700">Test Syllabus: </span>
+                                                    {activeCard.ptsSyllabus}
+                                                </div>
+                                            )}
+
+                                            <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+                                                <div className="flex items-center gap-3">
+                                                    {activeCard.ptsQuestionPaperUrl && (
+                                                        <a
+                                                            href={activeCard.ptsQuestionPaperUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="text-xs font-bold text-slate-600 hover:text-slate-900 underline flex items-center gap-1"
+                                                        >
+                                                            📄 Download Paper
+                                                        </a>
+                                                    )}
+                                                    {activeCard.ptsDiscussionVideoUrl && (
+                                                        <a
+                                                            href={activeCard.ptsDiscussionVideoUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="text-xs font-bold text-slate-600 hover:text-slate-900 underline flex items-center gap-1"
+                                                        >
+                                                            🎥 Discussion Video
+                                                        </a>
+                                                    )}
+                                                </div>
+
+                                                <Link
+                                                    href={`/tests/prelims-test-series${activeCard.ptsSeriesId ? `?id=${activeCard.ptsSeriesId}&test=${activeCard.ptsTestIndex ?? 0}` : ''}`}
+                                                    onClick={() => handleMarkOverallTask(activeCard.tag, activeCard.dayNumber, 'completed', activeCard.courseId)}
+                                                    className="px-6 py-2.5 bg-[#D97706] hover:bg-[#B45309] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5"
+                                                >
+                                                    <span>📝</span> Go to Prelims Test Series →
+                                                </Link>
+                                            </div>
                                         </div>
+
+                                        {/* Tracking CTAs */}
+                                        {(() => {
+                                            const isOverallDone = !!taskProgressMap[`${activeCard.tag}_${activeCard.dayNumber}_overall`] || (activeCard.courseId ? !!taskProgressMap[`${activeCard.courseId}_${activeCard.dayNumber}_overall`] : false);
+                                            const isPartialDone = !!taskProgressMap[`${activeCard.tag}_${activeCard.dayNumber}_partial`] || (activeCard.courseId ? !!taskProgressMap[`${activeCard.courseId}_${activeCard.dayNumber}_partial`] : false);
+                                            return (
+                                                <div className="pt-4 border-t border-[#f0e6d4] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                                    <span className="text-xs text-[#787163] font-medium">
+                                                        Test Tracking:{' '}
+                                                        <strong className={isOverallDone ? 'text-emerald-700' : isPartialDone ? 'text-amber-700' : 'text-[#787163]'}>
+                                                            {isOverallDone
+                                                                ? 'Completed ✓'
+                                                                : isPartialDone
+                                                                ? 'Partially Done 🟡'
+                                                                : 'In Progress'}
+                                                        </strong>
+                                                    </span>
+                                                    <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                                                        <button
+                                                            onClick={() => handleMarkOverallTask(activeCard.tag, activeCard.dayNumber, 'partial', activeCard.courseId)}
+                                                            className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                                                isPartialDone && !isOverallDone
+                                                                    ? 'bg-amber-100 text-amber-900 border-2 border-amber-400 shadow-xs'
+                                                                    : 'bg-[#fff5ea] hover:bg-[#ffe8d6] text-[#b8502a] border border-[#ffd8c2] shadow-2xs'
+                                                            }`}
+                                                            title={isPartialDone ? 'Click to undo partially done' : 'Mark as partially done'}
+                                                        >
+                                                            <span>🟡</span> {isPartialDone && !isOverallDone ? 'Partially Done (Undo)' : 'Mark Partially Done'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleMarkOverallTask(activeCard.tag, activeCard.dayNumber, 'completed', activeCard.courseId)}
+                                                            className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                                                isOverallDone
+                                                                    ? 'bg-emerald-700 hover:bg-emerald-800 text-white ring-2 ring-emerald-400'
+                                                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                                            }`}
+                                                            title={isOverallDone ? 'Click to undo completed' : 'Mark as completed'}
+                                                        >
+                                                            <span>✓</span> {isOverallDone ? 'Completed ✓ (Click to Undo)' : 'Mark Completed'}
+                                                        </button>
+                                                        {currentCardIndex < carouselCards.length - 1 && (
+                                                            <button
+                                                                onClick={() => setCurrentCardIndex((p) => p + 1)}
+                                                                className="px-4 py-2.5 rounded-xl bg-[#1E3A5F] hover:bg-[#152a45] text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+                                                            >
+                                                                Next Task →
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                ) : activeCard.type === 'mts_test' ? (
+                                    /* MTS Mains Test Card */
+                                    <div className="space-y-6">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-bold text-[#0D9488] uppercase tracking-wider bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
+                                                ✍️ MAINS TEST SERIES (MTS) • TASK #{activeCard.dayNumber}
+                                            </span>
+                                            <span className="text-xs font-bold text-teal-800 bg-teal-100 px-3 py-1 rounded-full">
+                                                {activeCard.mtsSubjectCategory || 'Mains Evaluation'}
+                                            </span>
+                                        </div>
+
+                                        <div>
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                                {activeCard.courseTitle}
+                                            </span>
+                                            <h3 className="text-2xl font-serif font-bold text-slate-800 mt-1">
+                                                {activeCard.title}
+                                            </h3>
+                                        </div>
+
+                                        <div className="p-5 bg-white rounded-2xl border border-teal-200 space-y-4 shadow-xs">
+                                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                                                <div>
+                                                    <p className="text-xs font-bold text-slate-800">
+                                                        {activeCard.mtsTestTitle || activeCard.title}
+                                                    </p>
+                                                    <p className="text-[11px] text-slate-500">
+                                                        Handwritten answer writing test paper. Submit your PDF to your assigned mentor for line-by-line feedback.
+                                                    </p>
+                                                </div>
+                                                {activeCard.mtsSubjectCategory && (
+                                                    <span className="px-2.5 py-1 bg-teal-50 text-teal-800 border border-teal-200 text-[10px] font-bold rounded-full">
+                                                        {activeCard.mtsSubjectCategory}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {activeCard.mtsSyllabus && (
+                                                <div className="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                                    <span className="font-bold text-slate-700">Test Syllabus: </span>
+                                                    {activeCard.mtsSyllabus}
+                                                </div>
+                                            )}
+
+                                            <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+                                                <div className="flex items-center gap-3">
+                                                    {activeCard.mtsQuestionPaperUrl && (
+                                                        <a
+                                                            href={activeCard.mtsQuestionPaperUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="text-xs font-bold text-slate-600 hover:text-slate-900 underline flex items-center gap-1"
+                                                        >
+                                                            📄 Question Paper PDF
+                                                        </a>
+                                                    )}
+                                                    {activeCard.mtsDiscussionVideoUrl && (
+                                                        <a
+                                                            href={activeCard.mtsDiscussionVideoUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="text-xs font-bold text-slate-600 hover:text-slate-900 underline flex items-center gap-1"
+                                                        >
+                                                            🎥 Approach Video
+                                                        </a>
+                                                    )}
+                                                </div>
+
+                                                <Link
+                                                    href={`/tests/mains-test-series${activeCard.mtsSeriesId ? `?id=${activeCard.mtsSeriesId}&test=${activeCard.mtsTestIndex ?? 0}` : ''}`}
+                                                    onClick={() => handleMarkOverallTask(activeCard.tag, activeCard.dayNumber, 'completed', activeCard.courseId)}
+                                                    className="px-6 py-2.5 bg-[#0D9488] hover:bg-[#0A746B] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5"
+                                                >
+                                                    <span>✍️</span> Go to Mains Test Series →
+                                                </Link>
+                                            </div>
+                                        </div>
+
+                                        {/* Tracking CTAs */}
+                                        {(() => {
+                                            const isOverallDone = !!taskProgressMap[`${activeCard.tag}_${activeCard.dayNumber}_overall`] || (activeCard.courseId ? !!taskProgressMap[`${activeCard.courseId}_${activeCard.dayNumber}_overall`] : false);
+                                            const isPartialDone = !!taskProgressMap[`${activeCard.tag}_${activeCard.dayNumber}_partial`] || (activeCard.courseId ? !!taskProgressMap[`${activeCard.courseId}_${activeCard.dayNumber}_partial`] : false);
+                                            return (
+                                                <div className="pt-4 border-t border-[#f0e6d4] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                                    <span className="text-xs text-[#787163] font-medium">
+                                                        Test Tracking:{' '}
+                                                        <strong className={isOverallDone ? 'text-emerald-700' : isPartialDone ? 'text-amber-700' : 'text-[#787163]'}>
+                                                            {isOverallDone
+                                                                ? 'Completed ✓'
+                                                                : isPartialDone
+                                                                ? 'Partially Done 🟡'
+                                                                : 'In Progress'}
+                                                        </strong>
+                                                    </span>
+                                                    <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                                                        <button
+                                                            onClick={() => handleMarkOverallTask(activeCard.tag, activeCard.dayNumber, 'partial', activeCard.courseId)}
+                                                            className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                                                isPartialDone && !isOverallDone
+                                                                    ? 'bg-amber-100 text-amber-900 border-2 border-amber-400 shadow-xs'
+                                                                    : 'bg-[#fff5ea] hover:bg-[#ffe8d6] text-[#b8502a] border border-[#ffd8c2] shadow-2xs'
+                                                            }`}
+                                                            title={isPartialDone ? 'Click to undo partially done' : 'Mark as partially done'}
+                                                        >
+                                                            <span>🟡</span> {isPartialDone && !isOverallDone ? 'Partially Done (Undo)' : 'Mark Partially Done'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleMarkOverallTask(activeCard.tag, activeCard.dayNumber, 'completed', activeCard.courseId)}
+                                                            className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                                                isOverallDone
+                                                                    ? 'bg-emerald-700 hover:bg-emerald-800 text-white ring-2 ring-emerald-400'
+                                                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                                            }`}
+                                                            title={isOverallDone ? 'Click to undo completed' : 'Mark as completed'}
+                                                        >
+                                                            <span>✓</span> {isOverallDone ? 'Completed ✓ (Click to Undo)' : 'Mark Completed'}
+                                                        </button>
+                                                        {currentCardIndex < carouselCards.length - 1 && (
+                                                            <button
+                                                                onClick={() => setCurrentCardIndex((p) => p + 1)}
+                                                                className="px-4 py-2.5 rounded-xl bg-[#1E3A5F] hover:bg-[#152a45] text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+                                                            >
+                                                                Next Task →
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 ) : (
                                     /* Course Revision Checkpoint Card */
@@ -1168,379 +1839,427 @@ export default function MentorshipDashboardPage() {
 
                 {/* ----------------- 2. ROADMAP MODULE ----------------- */}
                 {activeTab === 'roadmap' && (
-                    <div className="space-y-6">
-                        {/* Roadmap Header Banner */}
-                        <div className="bg-[#fffdf8] border border-[#e3d5bd] rounded-3xl p-6 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-                            <div>
-                                <span className="text-[10px] font-bold text-[#787163] uppercase tracking-wider">PREPARATION ROADMAP • CSE 2027</span>
-                                <h1 className="text-2xl font-serif font-bold text-[#3d3a34]">Subscribed Courses, MTS, &amp; PTS Tracks</h1>
-                                <p className="text-xs text-[#787163] mt-0.5">Separate progress and completion tracking for all your subscribed modules.</p>
-                            </div>
-
-                            <div className="flex flex-wrap items-center bg-[#f5ead8] p-1 rounded-2xl border border-[#e3d5bd]">
-                                {[
-                                    { id: 'all', label: 'All Tracks' },
-                                    { id: 'courses', label: 'Courses' },
-                                    { id: 'mts', label: 'MTS (Mains)' },
-                                    { id: 'pts', label: 'PTS (Prelims)' },
-                                    { id: 'partial', label: `Partial Tasks (${partialTasks.length})` },
-                                ].map((tab) => (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => setRoadmapCategoryFilter(tab.id as any)}
-                                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                                            roadmapCategoryFilter === tab.id
-                                                ? 'bg-[#1E3A5F] text-white shadow-xs'
-                                                : 'text-[#787163] hover:text-[#3d3a34]'
-                                        }`}
-                                    >
-                                        {tab.label}
-                                    </button>
-                                ))}
+                    <div className="bg-[#f5ead8] border border-[#e3d5bd] rounded-3xl p-6 shadow-sm space-y-6">
+                        {/* Top Bar: Title & Date */}
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-2xl font-serif font-bold text-[#201e1d]">Roadmap</h2>
+                            <div className="text-base font-serif font-medium text-[#201e1d] tabular-nums">
+                                {today.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                             </div>
                         </div>
 
-                        {/* Subscribed Tags Banner */}
-                        <div className="bg-[#fffdf8] border border-[#e3d5bd] rounded-3xl p-5 shadow-sm">
-                            <h4 className="text-xs font-bold text-[#787163] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                <span>🔖</span> Subscribed Mentorship Tags (Synced via Subscribed Courses, MTS, &amp; PTS)
-                            </h4>
-                            <div className="flex flex-wrap gap-2">
-                                {subscribedTags.length > 0 ? (
-                                    subscribedTags.map((tag) => (
-                                        <span key={tag} className="px-3.5 py-1.5 bg-[#fff5ea] text-[#b8502a] border border-[#ffd8c2] rounded-full text-xs font-bold shadow-2xs flex items-center gap-1.5">
-                                            <span>#{tag}</span>
-                                            <span className="text-[10px] bg-[#b8502a] text-white px-1.5 py-0.2 rounded-full">Synced ✓</span>
-                                        </span>
-                                    ))
+                        {/* Track Pills: GS, Optional, Essay, CA, CSAT */}
+                        <div className="flex flex-wrap items-center gap-3">
+                            {[
+                                { id: 'GS', label: 'GS' },
+                                { id: 'Optional', label: 'Optional' },
+                                { id: 'Essay', label: 'Essay' },
+                                { id: 'CA', label: 'CA' },
+                                { id: 'CSAT', label: 'CSAT' },
+                            ].map((tr) => {
+                                const isSel = selectedTrack === tr.id;
+                                const hasDot = (roadmapData.activeTracks || []).includes(tr.id);
+                                return (
+                                    <div key={tr.id} className="flex flex-col items-center gap-1">
+                                        <button
+                                            onClick={() => handleSelectTrack(tr.id as any)}
+                                            className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${
+                                                isSel
+                                                    ? 'bg-[#7c3a1e] text-white border border-[#643312] shadow-xs'
+                                                    : 'bg-[#f9f4ed] text-[#645c50] border border-[#c0b6a5] hover:bg-[#eee7db]'
+                                            }`}
+                                        >
+                                            {tr.label}
+                                        </button>
+                                        <span
+                                            className={`w-1.5 h-1.5 rounded-full transition-opacity ${
+                                                hasDot ? 'bg-[#7a8a5e]' : 'bg-transparent'
+                                            }`}
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Subtabs: Subjects vs Partially done */}
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setRoadmapSubTab('subjects')}
+                                className={`flex-1 py-2.5 rounded-full text-xs font-bold text-center transition-all ${
+                                    roadmapSubTab === 'subjects'
+                                        ? 'bg-[#7c3a1e] text-white shadow-xs'
+                                        : 'border border-[#c0b6a5] bg-transparent text-[#645c50] hover:bg-[#f9f4ed]'
+                                }`}
+                            >
+                                Subjects
+                            </button>
+                            <button
+                                onClick={() => setRoadmapSubTab('partial')}
+                                className={`flex-1 py-2.5 rounded-full text-xs font-medium text-center transition-all ${
+                                    roadmapSubTab === 'partial'
+                                        ? 'bg-[#7c3a1e] text-white shadow-xs font-bold'
+                                        : 'border border-[#c0b6a5] bg-transparent text-[#645c50] hover:bg-[#f9f4ed]'
+                                }`}
+                            >
+                                Partially done · {partialTasks.length}
+                            </button>
+                        </div>
+
+                        {/* Main Tab Content */}
+                        {roadmapSubTab === 'subjects' ? (
+                            isRoadmapLoading ? (
+                                <div className="py-16 flex flex-col items-center justify-center space-y-3">
+                                    <div className="w-7 h-7 border-2 border-[#7c3a1e] border-t-transparent rounded-full animate-spin" />
+                                    <p className="text-xs text-[#787163] font-mono">Syncing profile roadmap...</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    {/* Summary Stat Strip */}
+                                    {roadmapData.statStrip && (
+                                        <div className="text-[11px] tracking-[0.08em] uppercase text-[#645c50] font-semibold pb-3 border-b border-[#c0b6a5]/60 font-mono">
+                                            {roadmapData.statStrip}
+                                        </div>
+                                    )}
+
+                                    {/* Empty State when no courses in this track */}
+                                    {!roadmapData.currentSubject &&
+                                        roadmapData.completedSubjects.length === 0 &&
+                                        roadmapData.pausedSubjects.length === 0 &&
+                                        workingUpcomingSubjects.length === 0 && (
+                                             <div className="border border-dashed border-[#c0b6a5] rounded-3xl p-10 text-center bg-[#fffdf8] space-y-2">
+                                                <div className="w-12 h-12 rounded-full bg-[#f5ead8] text-[#7c3a1e] flex items-center justify-center mx-auto text-xl font-bold">
+                                                    📚
+                                                </div>
+                                                <h3 className="font-serif text-base font-bold text-[#3d3a34]">
+                                                    No {selectedTrack} Courses Enrolled
+                                                </h3>
+                                                <p className="text-xs text-[#787163] max-w-md mx-auto">
+                                                    You currently have no {selectedTrack} subjects linked to your mentorship profile. When your mentor assigns or you subscribe to {selectedTrack} course modules, your roadmap and task schedule will appear here.
+                                                </p>
+                                            </div>
+                                        )}
+
+                                {/* COMPLETED SUBJECTS SECTION */}
+                                {roadmapData.completedSubjects.length > 0 && (
+                                    <div>
+                                        <div className="text-[10px] tracking-[0.14em] uppercase text-[#787163] font-bold mb-2">
+                                            COMPLETED SUBJECTS
+                                        </div>
+                                        <div className="divide-y divide-[#e3d5bd]/60">
+                                            {roadmapData.completedSubjects.map((subj, idx) => (
+                                                <div key={idx} className="flex items-center gap-3 py-2.5">
+                                                    <span className="w-5 h-5 rounded-full border border-[#ccdbb2] bg-[#f0fae1] text-[#56633f] flex items-center justify-center text-xs font-bold shrink-0">
+                                                        ✓
+                                                    </span>
+                                                    <span className="font-serif text-[15px] font-semibold text-[#201e1d]">
+                                                        {subj.name}
+                                                    </span>
+                                                    <span className="ml-auto text-xs text-[#787163] font-mono tabular-nums">
+                                                        {subj.totalTasks} tasks{subj.startedOn ? ` · ${subj.startedOn}` : ''}{subj.finishedOn ? ` – ${subj.finishedOn}` : ''}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* CURRENT SUBJECT SECTION */}
+                                {roadmapData.currentSubject && (
+                                    <div>
+                                        <div className="text-[10px] tracking-[0.14em] uppercase text-[#787163] font-bold mb-2">
+                                            CURRENT SUBJECT
+                                        </div>
+                                        <div className="border border-[#e3d5bd] rounded-3xl bg-[#fffdf8] p-6 shadow-sm">
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div>
+                                                    <span className="text-[10px] tracking-[0.14em] uppercase font-bold text-[#b8502a]">
+                                                        IN PROGRESS
+                                                    </span>
+                                                    <h3 className="font-serif text-2xl sm:text-3xl font-bold tracking-[0.34em] text-[#201e1d] uppercase mt-2">
+                                                        {roadmapData.currentSubject.name.split('').join(' ')}
+                                                    </h3>
+                                                </div>
+                                                <div className="text-right whitespace-nowrap">
+                                                    <div className="text-[10px] tracking-[0.12em] uppercase text-[#787163]">
+                                                        TAKE TEST
+                                                    </div>
+                                                    <div className="font-serif text-2xl text-[#201e1d] font-semibold mt-0.5 tabular-nums">
+                                                        {roadmapData.currentSubject.targetTestDate || 'To be scheduled'}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="text-xs text-[#787163] mt-2 font-mono tabular-nums">
+                                                {roadmapData.currentSubject.startedOn ? `Start Date: ${roadmapData.currentSubject.startedOn} | ` : ''}Days in this subject: {roadmapData.currentSubject.daysInSubject ?? 0} | Tasks Completed: {roadmapData.currentSubject.completedTasks}/{roadmapData.currentSubject.totalTasks}
+                                            </div>
+
+                                            <div className="mt-3 h-2.5 bg-[#eee7db] rounded-full overflow-hidden border border-[#dcd3c4]">
+                                                <div
+                                                    className="h-full bg-[#f6a06b] rounded-full transition-all duration-500"
+                                                    style={{ width: `${roadmapData.currentSubject.percentage || 0}%` }}
+                                                />
+                                            </div>
+
+                                            <div className="mt-1.5 flex justify-between text-xs text-[#787163] font-medium font-mono tabular-nums">
+                                                <span>{roadmapData.currentSubject.completedTasks} of {roadmapData.currentSubject.totalTasks} tasks complete</span>
+                                                <span className="font-bold">{roadmapData.currentSubject.percentage}%</span>
+                                            </div>
+
+                                            <div className="mt-4 flex items-center gap-3">
+                                                {roadmapData.currentSubject.state === 'paused' ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="px-3 py-1 bg-amber-100 border border-amber-300 text-amber-800 rounded-full text-xs font-bold">
+                                                            PAUSED ({roadmapData.currentSubject.pauseReason || 'Paused'})
+                                                        </span>
+                                                        <button
+                                                            onClick={() => handleResumeSubject(roadmapData.currentSubject)}
+                                                            className="px-4 py-1.5 bg-[#7c3a1e] text-white rounded-full text-xs font-bold hover:bg-[#643312] transition-colors"
+                                                        >
+                                                            Resume
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => setIsPauseModalOpen(true)}
+                                                        className="px-4 py-2 rounded-full border border-[#dcd3c4] bg-[#f9f4ed] hover:bg-[#eee7db] text-xs font-semibold text-[#3d3a34] transition-colors shadow-2xs"
+                                                    >
+                                                        Pause this subject
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* PAUSED SUBJECTS SECTION */}
+                                {roadmapData.pausedSubjects.length > 0 && (
+                                    <div>
+                                        <div className="text-[10px] tracking-[0.14em] uppercase text-[#787163] font-bold mb-2">
+                                            PAUSED SUBJECTS
+                                        </div>
+                                        <div className="space-y-2">
+                                            {roadmapData.pausedSubjects.map((ps, idx) => {
+                                                const isOpen = pausedAccordionOpen === (ps.courseId || ps.name);
+                                                return (
+                                                    <div key={idx} className="border border-[#e3d5bd] rounded-2xl bg-[#fffdf8] overflow-hidden">
+                                                        <button
+                                                            onClick={() => setPausedAccordionOpen(isOpen ? null : (ps.courseId || ps.name))}
+                                                            className="w-full px-5 py-3 flex items-center justify-between text-left hover:bg-[#f9f4ed]"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-lg text-[#7c3a1e] font-mono">{isOpen ? '▾' : '›'}</span>
+                                                                <span className="font-serif text-[15px] font-semibold text-[#201e1d]">{ps.name}</span>
+                                                            </div>
+                                                            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                                                                PAUSED
+                                                            </span>
+                                                        </button>
+                                                        {isOpen && (
+                                                            <div className="px-5 pb-4 pt-2 border-t border-[#f0e6d4] flex items-center justify-between text-xs text-[#787163] font-mono">
+                                                                <span>Tasks: {ps.completedTasks}/{ps.totalTasks} · Reason: {ps.pauseReason || 'Student request'}</span>
+                                                                <button
+                                                                    onClick={() => handleResumeSubject(ps)}
+                                                                    className="px-3.5 py-1 bg-[#7c3a1e] text-white rounded-full text-xs font-bold hover:bg-[#643312]"
+                                                                >
+                                                                    Resume
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* UPCOMING SUBJECTS SECTION */}
+                                {workingUpcomingSubjects.length > 0 && (
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-[10px] tracking-[0.14em] uppercase text-[#787163] font-bold">
+                                                    UPCOMING SUBJECTS
+                                                </span>
+                                                {pendingReorderRequest && (
+                                                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                                                        Reorder pending approval
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {!reorderMode && !pendingReorderRequest && workingUpcomingSubjects.length > 1 && (
+                                                <button
+                                                    onClick={() => setReorderMode(true)}
+                                                    className="text-xs font-bold text-[#8c491a] underline hover:opacity-80 cursor-pointer"
+                                                >
+                                                    Reorder
+                                                </button>
+                                            )}
+                                            {reorderMode && (
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            setReorderMode(false);
+                                                            setWorkingUpcomingSubjects(roadmapData.upcomingSubjects || []);
+                                                        }}
+                                                        className="text-xs font-bold text-[#787163] underline cursor-pointer"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setIsReorderModalOpen(true)}
+                                                        className="px-4 py-1.5 bg-[#7c3a1e] text-white rounded-full text-xs font-bold shadow-xs hover:bg-[#643312]"
+                                                    >
+                                                        Submit order
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            {workingUpcomingSubjects.map((subj, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    className="border border-[#e3d5bd] rounded-3xl bg-[#f9f4ed] p-6 shadow-2xs"
+                                                >
+                                                    <div className="flex items-start justify-between gap-4">
+                                                        <div>
+                                                            <span className="text-[10px] tracking-[0.14em] uppercase font-bold text-[#787163]">
+                                                                UPCOMING
+                                                            </span>
+                                                            <h4 className="font-serif text-xl sm:text-2xl font-bold tracking-[0.34em] text-[#3d3a34] uppercase mt-2">
+                                                                {subj.name.split('').join(' ')}
+                                                            </h4>
+                                                        </div>
+                                                        <div className="text-right whitespace-nowrap">
+                                                            <div className="text-[10px] tracking-[0.12em] uppercase text-[#787163]">
+                                                                TAKE TEST
+                                                            </div>
+                                                            <div className="font-serif text-2xl text-[#201e1d] font-semibold mt-0.5 tabular-nums">
+                                                                {subj.targetTestDate || 'To be scheduled'}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="text-xs text-[#787163] mt-2 font-mono tabular-nums">
+                                                        {subj.startedOn ? `Start Date: ${subj.startedOn} | ` : ''}Tasks: {subj.totalTasks} | Tasks Completed: {subj.completedTasks}/{subj.totalTasks}
+                                                    </div>
+
+                                                    <div className="mt-3 h-2.5 bg-[#eee7db] rounded-full overflow-hidden border border-[#dcd3c4]">
+                                                        <div
+                                                            className="h-full bg-[#f6a06b] rounded-full"
+                                                            style={{ width: `${subj.percentage || 0}%` }}
+                                                        />
+                                                    </div>
+
+                                                    <div className="mt-1.5 flex justify-between text-xs text-[#787163] font-medium font-mono tabular-nums">
+                                                        <span>{subj.completedTasks} of {subj.totalTasks} tasks complete</span>
+                                                        <span>{subj.percentage || 0}%</span>
+                                                    </div>
+
+                                                    {reorderMode && (
+                                                        <div className="mt-3 flex items-center gap-2 pt-2 border-t border-[#e3d5bd]">
+                                                            <button
+                                                                onClick={() => handleMoveUpcoming(idx, Math.max(0, idx - 1))}
+                                                                disabled={idx === 0}
+                                                                className="w-8 h-8 rounded-full border border-[#c0b6a5] bg-[#fffdf8] text-[#7c3a1e] flex items-center justify-center font-bold text-xs disabled:opacity-40"
+                                                                title="Move earlier"
+                                                            >
+                                                                ↑
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleMoveUpcoming(idx, Math.min(workingUpcomingSubjects.length - 1, idx + 1))}
+                                                                disabled={idx === workingUpcomingSubjects.length - 1}
+                                                                className="w-8 h-8 rounded-full border border-[#c0b6a5] bg-[#fffdf8] text-[#7c3a1e] flex items-center justify-center font-bold text-xs disabled:opacity-40"
+                                                                title="Move later"
+                                                            >
+                                                                ↓
+                                                            </button>
+                                                            <span className="text-xs text-[#787163] font-mono ml-2">
+                                                                Position {idx + 1} of {workingUpcomingSubjects.length}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )
+                    ) : (
+                            /* PARTIALLY DONE SUBTAB */
+                            <div className="space-y-4">
+                                {partialTasks.length === 0 ? (
+                                    <div className="border border-dashed border-[#c0b6a5] rounded-3xl p-8 text-center bg-[#fffdf8]">
+                                        <div className="font-serif text-lg font-bold text-[#3d3a34]">Nothing set aside</div>
+                                        <p className="text-xs text-[#787163] mt-1.5">
+                                            Tasks marked Partially Done wait here until they are finished.
+                                        </p>
+                                    </div>
                                 ) : (
-                                    <span className="text-xs text-[#787163]">No active mentorship tags subscribed yet across Courses, MTS, or PTS.</span>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Partial Tasks View */}
-                        {roadmapCategoryFilter === 'partial' ? (
-                            <div className="bg-[#fffdf8] border border-[#e3d5bd] rounded-3xl p-6 shadow-sm space-y-4">
-                                <h4 className="text-sm font-serif font-bold text-[#3d3a34]">Partially Done Tasks</h4>
-                                {partialTasks.map((pt, i) => (
-                                    <div key={i} className="p-4 rounded-2xl bg-[#fff5ea] border border-[#ffd8c2] space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs font-bold text-[#b8502a]">{pt.day}</span>
-                                            <button className="px-4 py-1.5 bg-[#b8502a] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#a04322] transition-colors">
-                                                Mark Completed
-                                            </button>
-                                        </div>
-                                        <h5 className="font-bold text-[#3d3a34] text-sm">{pt.title}</h5>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="space-y-8">
-                                {/* 1. COURSES ROADMAP SECTION */}
-                                {(roadmapCategoryFilter === 'all' || roadmapCategoryFilter === 'courses') && (
-                                    <div className="bg-[#fffdf8] border border-[#e3d5bd] rounded-3xl p-6 shadow-sm space-y-6">
-                                        <div className="flex items-center justify-between border-b border-[#f0e6d4] pb-4">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xl">📚</span>
-                                                <div>
-                                                    <h3 className="text-lg font-serif font-bold text-[#1E3A5F]">Subscribed Courses Roadmap</h3>
-                                                    <p className="text-xs text-[#787163]">Structured subject coverage &amp; daily study tasks</p>
-                                                </div>
-                                            </div>
-                                            <span className="text-xs font-bold text-[#1E3A5F] bg-[#eef2f6] px-3 py-1 rounded-full border border-[#cbd5e1]">
-                                                {coursesRoadmap.inProgress.length} In Progress • {coursesRoadmap.completed.length} Completed
-                                            </span>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            {/* In Progress Courses */}
-                                            <div className="space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-xs font-bold text-[#b8502a] bg-[#fff0e6] px-3 py-1 rounded-full border border-[#ffd8c2] uppercase tracking-wider flex items-center gap-1.5">
-                                                        <span className="w-2 h-2 rounded-full bg-[#b8502a] animate-pulse"></span>
-                                                        IN PROGRESS COURSES ({coursesRoadmap.inProgress.length})
+                                    <div className="space-y-4">
+                                        {partialTasks.map((pt, i) => (
+                                            <div
+                                                key={i}
+                                                className="border border-[#e3d5bd] rounded-3xl bg-[#fffdf8] p-6 shadow-sm space-y-4"
+                                            >
+                                                <div className="flex items-baseline justify-between">
+                                                    <div>
+                                                        <span className="text-xs font-mono text-[#787163] font-bold">{pt.day}</span>
+                                                        <h4 className="font-serif text-lg font-bold text-[#201e1d] mt-0.5">{pt.title}</h4>
+                                                    </div>
+                                                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold">
+                                                        Partially Done
                                                     </span>
                                                 </div>
 
-                                                {coursesRoadmap.inProgress.length > 0 ? (
-                                                    coursesRoadmap.inProgress.map((item) => (
-                                                        <div key={item._id} className="bg-white border-2 border-[#b8502a] rounded-2xl p-5 shadow-sm space-y-3">
-                                                            <div className="flex items-start justify-between gap-3">
-                                                                <div>
-                                                                    <span className="text-[10px] font-bold bg-[#fff0e6] text-[#b8502a] px-2 py-0.5 rounded-md border border-[#ffd8c2]">
-                                                                        #{item.tag}
-                                                                    </span>
-                                                                    <h4 className="text-base font-bold text-[#1E3A5F] mt-1">{item.title}</h4>
-                                                                </div>
-                                                                <span className="text-base font-extrabold text-[#b8502a] whitespace-nowrap">
-                                                                    {item.percentage}%
-                                                                </span>
-                                                            </div>
-
-                                                            <div className="w-full bg-[#f5ead8] rounded-full h-2.5 overflow-hidden border border-[#e3d5bd]">
-                                                                <div
-                                                                    className="bg-[#b8502a] h-full transition-all duration-500 rounded-full"
-                                                                    style={{ width: `${item.percentage}%` }}
-                                                                />
-                                                            </div>
-
-                                                            <div className="flex items-center justify-between text-xs text-[#787163] font-medium pt-1">
-                                                                <span>Tasks Done: {item.completedTasks} of {item.totalTasks}</span>
-                                                                <span>Started: {item.startedOn || '15 Jul 2026'}</span>
-                                                            </div>
-
-                                                            {(item.ptsGroupCode || item.mtsGroupCode) && (
-                                                                <div className="flex flex-wrap gap-2 pt-2 border-t border-[#f0e6d4] text-[11px]">
-                                                                    {item.ptsGroupCode && <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">PTS: #{item.ptsGroupCode}</span>}
-                                                                    {item.mtsGroupCode && <span className="bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-200">MTS: #{item.mtsGroupCode}</span>}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <p className="text-xs text-[#787163] p-4 bg-[#f8fafc] rounded-2xl border border-dashed border-[#cbd5e1]">No courses currently in progress.</p>
-                                                )}
-                                            </div>
-
-                                            {/* Completed Courses */}
-                                            <div className="space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 uppercase tracking-wider flex items-center gap-1.5">
-                                                        <span>✓</span> COMPLETED COURSES ({coursesRoadmap.completed.length})
-                                                    </span>
+                                                <div className="divide-y divide-[#eee7db] text-xs">
+                                                    <div className="py-2.5 flex items-center justify-between">
+                                                        <span className="flex items-center gap-2">
+                                                            <span className={`w-5 h-5 rounded-full border flex items-center justify-center font-mono text-[10px] ${pt.watchDone ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold' : 'bg-[#f9f4ed] border-[#dcd3c4] text-[#787163]'}`}>01</span>
+                                                            <span className="font-semibold text-[#3d3a34]">Watch Video</span>
+                                                        </span>
+                                                        <span className={pt.watchDone ? 'text-emerald-700 font-bold flex items-center gap-1' : 'text-[#787163]'}>
+                                                            {pt.watchDone ? '✓ Watched' : 'Pending'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="py-2.5 flex items-center justify-between">
+                                                        <span className="flex items-center gap-2">
+                                                            <span className={`w-5 h-5 rounded-full border flex items-center justify-center font-mono text-[10px] ${pt.notesDone ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold' : 'bg-[#f9f4ed] border-[#dcd3c4] text-[#787163]'}`}>02</span>
+                                                            <span className="font-semibold text-[#3d3a34]">Recall Notes</span>
+                                                        </span>
+                                                        <span className={pt.notesDone ? 'text-emerald-700 font-bold flex items-center gap-1' : 'text-[#787163]'}>
+                                                            {pt.notesDone ? '✓ Notes Read' : 'Pending'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="py-2.5 flex items-center justify-between">
+                                                        <span className="flex items-center gap-2">
+                                                            <span className={`w-5 h-5 rounded-full border flex items-center justify-center font-mono text-[10px] ${pt.testDone ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold' : 'bg-[#f9f4ed] border-[#dcd3c4] text-[#787163]'}`}>03</span>
+                                                            <span className="font-semibold text-[#3d3a34]">Practice Test</span>
+                                                        </span>
+                                                        <span className={pt.testDone ? 'text-emerald-700 font-bold flex items-center gap-1' : 'text-[#787163]'}>
+                                                            {pt.testDone ? '✓ Test Solved' : 'Pending'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="py-2.5 flex items-center justify-between">
+                                                        <span className="flex items-center gap-2">
+                                                            <span className={`w-5 h-5 rounded-full border flex items-center justify-center font-mono text-[10px] ${pt.uploadDone ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold' : 'bg-[#f9f4ed] border-[#dcd3c4] text-[#787163]'}`}>04</span>
+                                                            <span className="font-semibold text-[#3d3a34]">Mains Practice</span>
+                                                        </span>
+                                                        <span className={pt.uploadDone ? 'text-emerald-700 font-bold flex items-center gap-1' : 'text-[#787163]'}>
+                                                            {pt.uploadDone ? '✓ Answer Uploaded' : 'Pending'}
+                                                        </span>
+                                                    </div>
                                                 </div>
 
-                                                {coursesRoadmap.completed.length > 0 ? (
-                                                    coursesRoadmap.completed.map((item) => (
-                                                        <div key={item._id} className="bg-white border border-emerald-300 rounded-2xl p-5 shadow-xs space-y-3">
-                                                            <div className="flex items-start justify-between gap-3">
-                                                                <div>
-                                                                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">
-                                                                        #{item.tag}
-                                                                    </span>
-                                                                    <h4 className="text-base font-bold text-[#1E3A5F] mt-1">{item.title}</h4>
-                                                                </div>
-                                                                <span className="text-xs font-bold bg-emerald-600 text-white px-2.5 py-1 rounded-full whitespace-nowrap flex items-center gap-1">
-                                                                    ✓ 100% Done
-                                                                </span>
-                                                            </div>
-
-                                                            <div className="w-full bg-emerald-100 rounded-full h-2.5 overflow-hidden">
-                                                                <div className="bg-emerald-600 h-full rounded-full w-full" />
-                                                            </div>
-
-                                                            <div className="flex items-center justify-between text-xs text-[#787163] font-medium pt-1">
-                                                                <span>Completed {item.completedTasks} of {item.totalTasks} tasks</span>
-                                                                <span className="text-emerald-700 font-semibold">Finished: {item.finishedOn || '31 Jul 2026'}</span>
-                                                            </div>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <p className="text-xs text-[#787163] p-4 bg-[#f8fafc] rounded-2xl border border-dashed border-[#cbd5e1]">No completed courses yet.</p>
-                                                )}
+                                                <button
+                                                    onClick={() => handleCompletePartialTask(pt)}
+                                                    className="w-full py-3 rounded-full bg-[#7c3a1e] text-white font-serif text-xs font-bold shadow-xs hover:bg-[#643312] transition-colors"
+                                                >
+                                                    Yay! I completed this task 🎉
+                                                </button>
                                             </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* 2. MTS (MAINS TEST SERIES) ROADMAP SECTION */}
-                                {(roadmapCategoryFilter === 'all' || roadmapCategoryFilter === 'mts') && (
-                                    <div className="bg-[#fffdf8] border border-[#e3d5bd] rounded-3xl p-6 shadow-sm space-y-6">
-                                        <div className="flex items-center justify-between border-b border-[#f0e6d4] pb-4">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xl">✍️</span>
-                                                <div>
-                                                    <h3 className="text-lg font-serif font-bold text-[#1E3A5F]">Mains Test Series (MTS) Roadmap</h3>
-                                                    <p className="text-xs text-[#787163]">Answer writing practice, model answers &amp; mentor evaluation desk</p>
-                                                </div>
-                                            </div>
-                                            <span className="text-xs font-bold text-amber-800 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
-                                                {mtsRoadmap.inProgress.length} In Progress • {mtsRoadmap.completed.length} Completed
-                                            </span>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            {/* In Progress MTS */}
-                                            <div className="space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-xs font-bold text-amber-800 bg-amber-100 px-3 py-1 rounded-full border border-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                                                        <span className="w-2 h-2 rounded-full bg-amber-600 animate-pulse"></span>
-                                                        IN PROGRESS MTS ({mtsRoadmap.inProgress.length})
-                                                    </span>
-                                                </div>
-
-                                                {mtsRoadmap.inProgress.length > 0 ? (
-                                                    mtsRoadmap.inProgress.map((item) => (
-                                                        <div key={item._id} className="bg-white border-2 border-amber-500 rounded-2xl p-5 shadow-sm space-y-3">
-                                                            <div className="flex items-start justify-between gap-3">
-                                                                <div>
-                                                                    <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md">
-                                                                        #{item.tag}
-                                                                    </span>
-                                                                    <h4 className="text-base font-bold text-[#1E3A5F] mt-1">{item.title}</h4>
-                                                                </div>
-                                                                <span className="text-base font-extrabold text-amber-700 whitespace-nowrap">
-                                                                    {item.percentage}%
-                                                                </span>
-                                                            </div>
-
-                                                            <div className="w-full bg-amber-100 rounded-full h-2.5 overflow-hidden">
-                                                                <div
-                                                                    className="bg-amber-600 h-full transition-all duration-500 rounded-full"
-                                                                    style={{ width: `${item.percentage}%` }}
-                                                                />
-                                                            </div>
-
-                                                            <div className="flex items-center justify-between text-xs text-[#787163] font-medium pt-1">
-                                                                <span>Mains Tests Evaluated: {item.completedTests} of {item.totalTests}</span>
-                                                                <span>Last Active: {item.lastSubmission || 'Recently'}</span>
-                                                            </div>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <p className="text-xs text-[#787163] p-4 bg-[#f8fafc] rounded-2xl border border-dashed border-[#cbd5e1]">No MTS batches currently in progress.</p>
-                                                )}
-                                            </div>
-
-                                            {/* Completed MTS */}
-                                            <div className="space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 uppercase tracking-wider flex items-center gap-1.5">
-                                                        <span>✓</span> COMPLETED MTS ({mtsRoadmap.completed.length})
-                                                    </span>
-                                                </div>
-
-                                                {mtsRoadmap.completed.length > 0 ? (
-                                                    mtsRoadmap.completed.map((item) => (
-                                                        <div key={item._id} className="bg-white border border-emerald-300 rounded-2xl p-5 shadow-xs space-y-3">
-                                                            <div className="flex items-start justify-between gap-3">
-                                                                <div>
-                                                                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">
-                                                                        #{item.tag}
-                                                                    </span>
-                                                                    <h4 className="text-base font-bold text-[#1E3A5F] mt-1">{item.title}</h4>
-                                                                </div>
-                                                                <span className="text-xs font-bold bg-emerald-600 text-white px-2.5 py-1 rounded-full whitespace-nowrap flex items-center gap-1">
-                                                                    ✓ Finished
-                                                                </span>
-                                                            </div>
-
-                                                            <div className="w-full bg-emerald-100 rounded-full h-2.5 overflow-hidden">
-                                                                <div className="bg-emerald-600 h-full rounded-full w-full" />
-                                                            </div>
-
-                                                            <div className="flex items-center justify-between text-xs text-[#787163] font-medium pt-1">
-                                                                <span>Completed all {item.completedTests} of {item.totalTests} test papers</span>
-                                                                <span className="text-emerald-700 font-semibold">Finished: {item.finishedOn || '10 Aug 2026'}</span>
-                                                            </div>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <p className="text-xs text-[#787163] p-4 bg-[#f8fafc] rounded-2xl border border-dashed border-[#cbd5e1]">No completed MTS batches yet.</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* 3. PTS (PRELIMS TEST SERIES) ROADMAP SECTION */}
-                                {(roadmapCategoryFilter === 'all' || roadmapCategoryFilter === 'pts') && (
-                                    <div className="bg-[#fffdf8] border border-[#e3d5bd] rounded-3xl p-6 shadow-sm space-y-6">
-                                        <div className="flex items-center justify-between border-b border-[#f0e6d4] pb-4">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xl">🎯</span>
-                                                <div>
-                                                    <h3 className="text-lg font-serif font-bold text-[#1E3A5F]">Prelims Test Series (PTS) Roadmap</h3>
-                                                    <p className="text-xs text-[#787163]">Prelims MCQ practice tests, instant analysis &amp; score tracking</p>
-                                                </div>
-                                            </div>
-                                            <span className="text-xs font-bold text-sky-800 bg-sky-50 px-3 py-1 rounded-full border border-sky-200">
-                                                {ptsRoadmap.inProgress.length} In Progress • {ptsRoadmap.completed.length} Completed
-                                            </span>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            {/* In Progress PTS */}
-                                            <div className="space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-xs font-bold text-sky-800 bg-sky-100 px-3 py-1 rounded-full border border-sky-300 uppercase tracking-wider flex items-center gap-1.5">
-                                                        <span className="w-2 h-2 rounded-full bg-sky-600 animate-pulse"></span>
-                                                        IN PROGRESS PTS ({ptsRoadmap.inProgress.length})
-                                                    </span>
-                                                </div>
-
-                                                {ptsRoadmap.inProgress.length > 0 ? (
-                                                    ptsRoadmap.inProgress.map((item) => (
-                                                        <div key={item._id} className="bg-white border-2 border-sky-500 rounded-2xl p-5 shadow-sm space-y-3">
-                                                            <div className="flex items-start justify-between gap-3">
-                                                                <div>
-                                                                    <span className="text-[10px] font-bold bg-sky-100 text-sky-900 px-2 py-0.5 rounded-md">
-                                                                        #{item.tag}
-                                                                    </span>
-                                                                    <h4 className="text-base font-bold text-[#1E3A5F] mt-1">{item.title}</h4>
-                                                                </div>
-                                                                <span className="text-base font-extrabold text-sky-700 whitespace-nowrap">
-                                                                    {item.percentage}%
-                                                                </span>
-                                                            </div>
-
-                                                            <div className="w-full bg-sky-100 rounded-full h-2.5 overflow-hidden">
-                                                                <div
-                                                                    className="bg-sky-600 h-full transition-all duration-500 rounded-full"
-                                                                    style={{ width: `${item.percentage}%` }}
-                                                                />
-                                                            </div>
-
-                                                            <div className="flex items-center justify-between text-xs text-[#787163] font-medium pt-1">
-                                                                <span>Prelims Tests Attempted: {item.completedTests} of {item.totalTests}</span>
-                                                                <span>Last Attempt: {item.lastAttempt || 'Recently'}</span>
-                                                            </div>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <p className="text-xs text-[#787163] p-4 bg-[#f8fafc] rounded-2xl border border-dashed border-[#cbd5e1]">No PTS batches currently in progress.</p>
-                                                )}
-                                            </div>
-
-                                            {/* Completed PTS */}
-                                            <div className="space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 uppercase tracking-wider flex items-center gap-1.5">
-                                                        <span>✓</span> COMPLETED PTS ({ptsRoadmap.completed.length})
-                                                    </span>
-                                                </div>
-
-                                                {ptsRoadmap.completed.length > 0 ? (
-                                                    ptsRoadmap.completed.map((item) => (
-                                                        <div key={item._id} className="bg-white border border-emerald-300 rounded-2xl p-5 shadow-xs space-y-3">
-                                                            <div className="flex items-start justify-between gap-3">
-                                                                <div>
-                                                                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">
-                                                                        #{item.tag}
-                                                                    </span>
-                                                                    <h4 className="text-base font-bold text-[#1E3A5F] mt-1">{item.title}</h4>
-                                                                </div>
-                                                                <span className="text-xs font-bold bg-emerald-600 text-white px-2.5 py-1 rounded-full whitespace-nowrap flex items-center gap-1">
-                                                                    ✓ Finished
-                                                                </span>
-                                                            </div>
-
-                                                            <div className="w-full bg-emerald-100 rounded-full h-2.5 overflow-hidden">
-                                                                <div className="bg-emerald-600 h-full rounded-full w-full" />
-                                                            </div>
-
-                                                            <div className="flex items-center justify-between text-xs text-[#787163] font-medium pt-1">
-                                                                <span>Completed all {item.completedTests} of {item.totalTests} test papers</span>
-                                                                <span className="text-emerald-700 font-semibold">Finished: {item.finishedOn || '05 Aug 2026'}</span>
-                                                            </div>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <p className="text-xs text-[#787163] p-4 bg-[#f8fafc] rounded-2xl border border-dashed border-[#cbd5e1]">No completed PTS batches yet.</p>
-                                                )}
-                                            </div>
-                                        </div>
+                                        ))}
                                     </div>
                                 )}
                             </div>
@@ -1563,7 +2282,7 @@ export default function MentorshipDashboardPage() {
                                         key={t.id}
                                         onClick={() => {
                                             setActiveThread(t.id as any);
-                                            fetchChatMessages();
+                                            fetchChatMessages(t.id as any);
                                         }}
                                         className={`w-full text-left p-3 rounded-2xl border transition-all flex items-center gap-3 ${
                                             on ? 'bg-[#fffdf8] border-[#b8502a] shadow-xs' : 'border-transparent hover:bg-[#ebe0cb]'
@@ -1590,25 +2309,43 @@ export default function MentorshipDashboardPage() {
                             </div>
 
                             <div className="space-y-3 flex-1 overflow-y-auto max-h-[360px] pr-2">
-                                {chatMessages.map((m, idx) => {
-                                    const mine = m.from === 'me' || m.senderRole === 'student';
-                                    return (
-                                        <div key={idx} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                                            <div
-                                                className={`max-w-[75%] p-3.5 rounded-2xl text-xs leading-relaxed ${
-                                                    mine
-                                                        ? 'bg-[#b8502a] text-white rounded-br-xs'
-                                                        : 'bg-[#f5ead8] text-[#3d3a34] rounded-bl-xs border border-[#e3d5bd]'
-                                                }`}
-                                            >
-                                                <p>{m.text}</p>
-                                                <span className={`text-[9px] mt-1 block text-right ${mine ? 'text-white/70' : 'text-[#787163]'}`}>
-                                                    {m.meta || '10:00 AM'}
-                                                </span>
+                                {chatMessages.length === 0 ? (
+                                    <div className="h-full flex flex-col items-center justify-center text-center p-8 text-[#a89f91]">
+                                        <p className="text-xs font-medium">No messages in this thread yet.</p>
+                                        <p className="text-[11px] mt-1 text-[#8c8273]">
+                                            Send a message to start conversation with your {activeThread === 'mentor' ? (assignedMentor?.name || 'assigned mentor') : 'programme desk'}.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    chatMessages.map((m, idx) => {
+                                        if (m.senderRole === 'system') {
+                                            return (
+                                                <div key={idx} className="flex justify-center my-2">
+                                                    <div className="bg-[#ede4d3] text-[#5c5446] text-[11px] px-3.5 py-1.5 rounded-full border border-[#e3d5bd] max-w-[85%] text-center">
+                                                        🔔 {m.text}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        const mine = m.from === 'me' || m.senderRole === 'student';
+                                        return (
+                                            <div key={idx} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                                                <div
+                                                    className={`max-w-[75%] p-3.5 rounded-2xl text-xs leading-relaxed ${
+                                                        mine
+                                                            ? 'bg-[#b8502a] text-white rounded-br-xs'
+                                                            : 'bg-[#f5ead8] text-[#3d3a34] rounded-bl-xs border border-[#e3d5bd]'
+                                                    }`}
+                                                >
+                                                    <p>{m.text}</p>
+                                                    <span className={`text-[9px] mt-1 block text-right ${mine ? 'text-white/70' : 'text-[#787163]'}`}>
+                                                        {m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (m.meta || '')}
+                                                    </span>
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })
+                                )}
                             </div>
 
                             <div className="flex items-center gap-3 pt-3 border-t border-[#f0e6d4]">
@@ -1706,8 +2443,16 @@ export default function MentorshipDashboardPage() {
                                 <h1 className="text-2xl font-serif font-bold text-[#3d3a34]">Mentorship &amp; Sessions Log</h1>
                             </div>
 
-                            <span className="px-4 py-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-xs font-bold">
-                                Account Status: ACTIVE
+                            <span
+                                className={`px-4 py-1.5 rounded-full text-xs font-bold border ${
+                                    mentorshipAccountStatus === 'active'
+                                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                        : mentorshipAccountStatus === 'break'
+                                        ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                        : 'bg-rose-100 text-rose-800 border-rose-300'
+                                }`}
+                            >
+                                Account Status: {mentorshipAccountStatus.toUpperCase()}
                             </span>
                         </div>
 
@@ -1746,14 +2491,8 @@ export default function MentorshipDashboardPage() {
                                         </div>
                                     ))
                                 ) : (
-                                    <div className="p-4 rounded-2xl bg-[#f7f0e4] border border-[#e8dcc8] space-y-2">
-                                        <div className="flex items-center justify-between text-xs">
-                                            <span className="font-bold text-[#3d3a34]">Weekly review — answer structure</span>
-                                            <span className="text-[#787163]">23 Aug 2026 • 32 min</span>
-                                        </div>
-                                        <p className="text-xs text-[#787163] leading-relaxed">
-                                            Conclusions are the weak link. Fixed a three-line close: verdict, forward step, one committee.
-                                        </p>
+                                    <div className="p-6 text-center rounded-2xl bg-[#f7f0e4] border border-[#e8dcc8]">
+                                        <p className="text-xs text-[#787163]">No 1-on-1 mentor session notes logged yet.</p>
                                     </div>
                                 )}
                             </div>
@@ -1828,7 +2567,7 @@ export default function MentorshipDashboardPage() {
                                     </button>
                                     <button
                                         onClick={() => {
-                                            handleToggleStep(activeModal.cardContext.tag, activeModal.cardContext.dayNumber, 'watch', true);
+                                            handleToggleStep(activeModal.cardContext.tag, activeModal.cardContext.dayNumber, 'watch', true, undefined, undefined, activeModal.cardContext.courseId);
                                             setActiveModal(null);
                                         }}
                                         className="px-6 py-2.5 rounded-xl bg-[#b8502a] text-white text-xs font-bold shadow-md hover:bg-[#a04322]"
@@ -1880,7 +2619,7 @@ export default function MentorshipDashboardPage() {
                                     </button>
                                     <button
                                         onClick={() => {
-                                            handleToggleStep(activeModal.cardContext.tag, activeModal.cardContext.dayNumber, 'notes', true);
+                                            handleToggleStep(activeModal.cardContext.tag, activeModal.cardContext.dayNumber, 'notes', true, undefined, undefined, activeModal.cardContext.courseId);
                                             setActiveModal(null);
                                         }}
                                         className="px-6 py-2.5 rounded-xl bg-[#b8502a] text-white text-xs font-bold shadow-md hover:bg-[#a04322]"
@@ -1997,7 +2736,7 @@ export default function MentorshipDashboardPage() {
                                     ) : (
                                         <button
                                             onClick={() => {
-                                                handleToggleStep(activeModal.cardContext.tag, activeModal.cardContext.dayNumber, 'test', true);
+                                                handleToggleStep(activeModal.cardContext.tag, activeModal.cardContext.dayNumber, 'test', true, undefined, undefined, activeModal.cardContext.courseId);
                                                 setActiveModal(null);
                                             }}
                                             className="px-6 py-2.5 rounded-xl bg-[#b8502a] text-white text-xs font-bold shadow-md hover:bg-[#a04322]"
@@ -2119,27 +2858,178 @@ export default function MentorshipDashboardPage() {
                 </div>
             )}
 
-            {/* Break Request Modal */}
-            {showBreakModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowBreakModal(false)}>
+            {/* 1. Break Request Modal */}
+            {isBreakModalOpen && (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-2xs" onClick={() => setIsBreakModalOpen(false)}>
                     <div className="bg-[#fffdf8] rounded-3xl p-6 max-w-md w-full shadow-2xl border border-[#e3d5bd]" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-lg font-serif font-bold text-[#3d3a34] mb-2">Request a Break?</h3>
-                        <p className="text-xs text-[#787163] mb-4">
-                            Your mentor reviews break requests before your account status changes. Daily task deadlines will be paused.
+                        <h3 className="text-xl font-serif font-bold text-[#201e1d]">Request a break?</h3>
+                        <p className="text-xs text-[#787163] mt-2 leading-relaxed">
+                            Your mentor reviews break requests before your account changes. Daily tasks stay paused for the break.
                         </p>
-                        <div className="space-y-3">
-                            <select className="w-full border border-[#e3d5bd] bg-[#f5ead8] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none">
-                                <option value="Health">Health / Medical</option>
-                                <option value="Family">Family Emergency</option>
-                                <option value="Exams">University Exams</option>
-                            </select>
+
+                        <div className="mt-4 space-y-3">
+                            <div>
+                                <label className="block text-[10px] tracking-wider uppercase font-bold text-[#787163] mb-1.5">Reason</label>
+                                <select
+                                    value={breakReason}
+                                    onChange={(e) => setBreakReason(e.target.value)}
+                                    className="w-full border border-[#dcd3c4] bg-[#f9f4ed] rounded-xl px-4 py-2.5 text-xs font-semibold text-[#201e1d] focus:outline-none"
+                                >
+                                    <option value="Health">Health</option>
+                                    <option value="Family">Family</option>
+                                    <option value="Other exam">Other exam</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] tracking-wider uppercase font-bold text-[#787163] mb-1.5">Return</label>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setBreakMode('fixed')}
+                                        className={`flex-1 py-2 rounded-full text-xs font-bold transition-all ${
+                                            breakMode === 'fixed'
+                                                ? 'bg-[#7c3a1e] text-white shadow-xs'
+                                                : 'border border-[#dcd3c4] bg-transparent text-[#645c50]'
+                                        }`}
+                                    >
+                                        On a set date
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setBreakMode('open')}
+                                        className={`flex-1 py-2 rounded-full text-xs font-bold transition-all ${
+                                            breakMode === 'open'
+                                                ? 'bg-[#7c3a1e] text-white shadow-xs'
+                                                : 'border border-[#dcd3c4] bg-transparent text-[#645c50]'
+                                        }`}
+                                    >
+                                        Open-ended
+                                    </button>
+                                </div>
+
+                                {breakMode === 'fixed' ? (
+                                    <input
+                                        type="date"
+                                        value={breakReturnDate}
+                                        onChange={(e) => setBreakReturnDate(e.target.value)}
+                                        className="w-full mt-2 border border-[#dcd3c4] bg-[#f9f4ed] rounded-xl px-4 py-2 text-xs font-medium text-[#201e1d] focus:outline-none"
+                                    />
+                                ) : (
+                                    <p className="text-[11px] text-[#787163] mt-2 italic">
+                                        Your mentor resumes you when you tell them you are ready.
+                                    </p>
+                                )}
+                            </div>
                         </div>
-                        <div className="flex gap-3 mt-6">
-                            <button onClick={() => setShowBreakModal(false)} className="flex-1 py-3 rounded-xl border border-[#e3d5bd] text-xs font-bold text-[#787163]">
+
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button
+                                onClick={() => setIsBreakModalOpen(false)}
+                                className="px-5 py-2.5 rounded-full border border-[#dcd3c4] text-xs font-bold text-[#645c50] hover:bg-[#eee7db]"
+                            >
                                 Cancel
                             </button>
-                            <button onClick={() => setShowBreakModal(false)} className="flex-1 py-3 rounded-xl bg-[#b8502a] text-white text-xs font-bold shadow-md">
-                                Send Request
+                            <button
+                                onClick={handleRequestBreak}
+                                disabled={isSubmittingBreak || (breakMode === 'fixed' && !breakReturnDate)}
+                                className="px-6 py-2.5 rounded-full bg-[#7c3a1e] text-white text-xs font-bold shadow-md hover:bg-[#643312] disabled:opacity-50"
+                            >
+                                {isSubmittingBreak ? 'Sending...' : 'Send request'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 2. Pause Subject Modal */}
+            {isPauseModalOpen && (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-2xs" onClick={() => setIsPauseModalOpen(false)}>
+                    <div className="bg-[#fffdf8] rounded-3xl p-6 max-w-md w-full shadow-2xl border border-[#e3d5bd]" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-xl font-serif font-bold text-[#201e1d]">Pause this subject?</h3>
+                        <p className="text-xs text-[#787163] mt-2 leading-relaxed">
+                            Pausing <span className="font-bold text-[#201e1d]">{roadmapData.currentSubject?.name || 'this subject'}</span> will intimate your mentor. Your progress is kept, and the subject waits under Paused subjects.
+                        </p>
+
+                        <div className="mt-4 space-y-3">
+                            <div>
+                                <label className="block text-[10px] tracking-wider uppercase font-bold text-[#787163] mb-1.5">Reason</label>
+                                <select
+                                    value={pauseReason}
+                                    onChange={(e) => setPauseReason(e.target.value)}
+                                    className="w-full border border-[#dcd3c4] bg-[#f9f4ed] rounded-xl px-4 py-2.5 text-xs font-semibold text-[#201e1d] focus:outline-none"
+                                >
+                                    <option value="Health">Health</option>
+                                    <option value="Family">Family</option>
+                                    <option value="Other exam">Other exam</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] tracking-wider uppercase font-bold text-[#787163] mb-1.5">Optional Note for Mentor</label>
+                                <textarea
+                                    value={pauseNote}
+                                    onChange={(e) => setPauseNote(e.target.value)}
+                                    placeholder="Brief note on why you are pausing this module..."
+                                    rows={2}
+                                    className="w-full border border-[#dcd3c4] bg-[#f9f4ed] rounded-xl px-4 py-2 text-xs font-medium text-[#201e1d] focus:outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button
+                                onClick={() => setIsPauseModalOpen(false)}
+                                className="px-5 py-2.5 rounded-full border border-[#dcd3c4] text-xs font-bold text-[#645c50] hover:bg-[#eee7db]"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handlePauseSubject}
+                                disabled={isSubmittingPause}
+                                className="px-6 py-2.5 rounded-full bg-[#7c3a1e] text-white text-xs font-bold shadow-md hover:bg-[#643312] disabled:opacity-50"
+                            >
+                                {isSubmittingPause ? 'Pausing...' : 'Confirm pause'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 3. Reorder Confirmation Modal */}
+            {isReorderModalOpen && (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-2xs" onClick={() => setIsReorderModalOpen(false)}>
+                    <div className="bg-[#fffdf8] rounded-3xl p-6 max-w-md w-full shadow-2xl border border-[#e3d5bd]" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-xl font-serif font-bold text-[#201e1d]">Reordering needs mentor approval</h3>
+                        <p className="text-xs text-[#787163] mt-2 leading-relaxed">
+                            You can arrange the upcoming subjects and submit the order. Nothing changes until your mentor approves it — they may also adjust the order first.
+                        </p>
+
+                        <div className="mt-4 p-3 bg-[#f9f4ed] border border-[#e3d5bd] rounded-2xl space-y-1.5 text-xs font-mono">
+                            <div className="text-[10px] uppercase font-bold text-[#787163] tracking-wider mb-1">Proposed Sequence:</div>
+                            {workingUpcomingSubjects.map((s, idx) => (
+                                <div key={idx} className="flex items-center gap-2 text-[#201e1d]">
+                                    <span className="font-bold text-[#7c3a1e]">{idx + 1}.</span>
+                                    <span>{s.name}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button
+                                onClick={() => setIsReorderModalOpen(false)}
+                                className="px-5 py-2.5 rounded-full border border-[#dcd3c4] text-xs font-bold text-[#645c50] hover:bg-[#eee7db]"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSubmitReorder}
+                                disabled={isSubmittingReorder}
+                                className="px-6 py-2.5 rounded-full bg-[#7c3a1e] text-white text-xs font-bold shadow-md hover:bg-[#643312] disabled:opacity-50"
+                            >
+                                {isSubmittingReorder ? 'Submitting...' : 'Submit to mentor'}
                             </button>
                         </div>
                     </div>
